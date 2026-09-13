@@ -2,6 +2,15 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.1.2] - 2026-09-14
+
+### Corregido
+- `lib/db.ts`: se añade `sanitizeConnectionString()` (normaliza cualquier espacio Unicode — thin space U+2009, non-breaking space U+00A0, etc. — a espacio ASCII y recorta extremos) y `assertAscii()` (valida caracter a caracter y lanza un error descriptivo con la posición exacta si queda algún caracter no-ASCII). Causa raíz: al copiar `DATABASE_URL` desde el chat a Vercel se coló un caracter U+2009 en la variable de entorno, lo que producía el error de `undici`/Neon `Cannot convert argument to a ByteString...`.
+
+### Verificado
+- **Verificación end-to-end completada por el usuario**: búsqueda real ALC → Polonia, 04/12/2026 → 08/12/2026, 2 adultos + 1 niño, open-jaw activado. Resultado: **6 itinerarios** devueltos correctamente desde Neon (2 vuelos de ida ALC→KRK × 3 vuelos de vuelta KRK→ALC en los datos mock), confirmando que el pipeline completo GitHub → Vercel → Neon funciona en producción.
+- Pendiente conocido: los datos mock actuales solo cubren ALC→KRK como tramo de ida dentro del grupo `poland`; no hay legs de ida ALC→WRO/WAW/WMI para esas fechas, por lo que el open-jaw no se activa aún en este escenario concreto (no es un fallo del motor, es cobertura de datos de ejemplo).
+
 ## [0.1.1] - 2026-09-14
 
 ### Corregido
@@ -18,7 +27,7 @@ Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a 
 
 ### Notas de verificación
 - El build en Vercel completa correctamente (`state: READY`) usando el commit `8ed9e8e`.
-- La comprobación de la respuesta HTTP de `/api/meta` y `/api/search` desde fuera de Vercel no pudo completarse mediante las herramientas automatizadas disponibles, debido a la protección de despliegue (SSO) y a una limitación de permisos (`403 Forbidden: Not authorized ... scope "gsus1982s-projects"`) en las herramientas de logs/runtime del conector de Vercel usado. Verificación manual pendiente: abrir la URL de producción en el navegador estando autenticado en Vercel y confirmar que la tabla de resultados carga con los datos de `legs`.
+- La comprobación de la respuesta HTTP de `/api/meta` y `/api/search` desde fuera de Vercel no pudo completarse mediante las herramientas automatizadas disponibles, debido a la protección de despliegue (SSO) y a una limitación de permisos (`403 Forbidden: Not authorized ... scope "gsus1982s-projects"`) en las herramientas de logs/runtime del conector de Vercel usado. **Resuelto en 0.1.2** mediante verificación manual directa del usuario.
 
 ## [0.1.0] - 2026-09-14
 

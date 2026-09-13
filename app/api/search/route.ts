@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { searchItineraries } from '@/lib/search-engine';
 import type { SearchFilters } from '@/lib/types';
 
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Partial<SearchFilters>;
@@ -34,6 +37,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ count: itineraries.length, itineraries });
   } catch (err) {
     console.error(err);
-    return NextResponse.json({ error: 'Error interno buscando itinerarios' }, { status: 500 });
+    const message = err instanceof Error ? err.message : 'Error interno buscando itinerarios';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

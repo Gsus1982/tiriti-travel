@@ -7,11 +7,14 @@ export const runtime = 'nodejs';
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as Partial<SearchFilters>;
+    const body = (await req.json()) as Partial<SearchFilters> & { outboundDate?: string; inboundDate?: string };
 
-    if (!body.originIata || !body.destinationGroupId || !body.outboundDate || !body.inboundDate) {
+    const outboundDateFrom = body.outboundDateFrom ?? body.outboundDate;
+    const inboundDateFrom = body.inboundDateFrom ?? body.inboundDate;
+
+    if (!body.originIata || !body.destinationGroupId || !outboundDateFrom || !inboundDateFrom) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios: originIata, destinationGroupId, outboundDate, inboundDate' },
+        { error: 'Faltan campos obligatorios: originIata, destinationGroupId, outboundDateFrom, inboundDateFrom' },
         { status: 400 }
       );
     }
@@ -19,8 +22,10 @@ export async function POST(req: NextRequest) {
     const filters: SearchFilters = {
       originIata: body.originIata,
       destinationGroupId: body.destinationGroupId,
-      outboundDate: body.outboundDate,
-      inboundDate: body.inboundDate,
+      outboundDateFrom,
+      outboundDateTo: body.outboundDateTo ?? outboundDateFrom,
+      inboundDateFrom,
+      inboundDateTo: body.inboundDateTo ?? inboundDateFrom,
       pax: body.pax ?? { adults: 2, children: 1 },
       requireDirect: true,
       requireCabinBaggage: body.requireCabinBaggage ?? false,

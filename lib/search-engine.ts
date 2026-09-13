@@ -1,7 +1,7 @@
 import { sql } from './db';
 import type { Itinerary, Leg, SearchFilters } from './types';
 
-const AIRPORT_TO_AIRPORT_BUFFER_MIN = 120; // 2h de margen de aeropuerto, según reglas del proyecto
+const AIRPORT_TO_AIRPORT_BUFFER_MIN = 120;
 
 function hourOf(iso: string): number {
   return new Date(iso).getHours();
@@ -13,21 +13,14 @@ function addMinutes(iso: string, minutes: number): string {
   return d.toISOString();
 }
 
-/**
- * Motor de búsqueda de vuelos directos con soporte de open-jaw en destino.
- *
- * Regla clave del proyecto: el ORIGEN en España debe ser idéntico en ida y
- * vuelta. En destino, se permite entrar por un aeropuerto/ciudad y salir por
- * otro dentro del mismo grupo (misma ciudad con varios aeropuertos, o misma
- * país si allowOpenJaw + flexibilidad de país está activada), siempre que
- * ambos tramos sean vuelos directos.
- */
 export async function searchItineraries(filters: SearchFilters): Promise<Itinerary[]> {
   const {
     originIata,
     destinationGroupId,
-    outboundDate,
-    inboundDate,
+    outboundDateFrom,
+    outboundDateTo,
+    inboundDateFrom,
+    inboundDateTo,
     pax,
     requireCabinBaggage,
     allowOpenJaw,
@@ -50,7 +43,7 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
     SELECT * FROM legs
     WHERE origin_iata = ${originIata}
       AND destination_iata = ANY(${groupIatas})
-      AND departure_at::date = ${outboundDate}::date
+      AND departure_at::date BETWEEN ${outboundDateFrom}::date AND ${outboundDateTo}::date
       AND is_direct = TRUE
   `) as Leg[];
 
@@ -58,7 +51,7 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
     SELECT * FROM legs
     WHERE destination_iata = ${originIata}
       AND origin_iata = ANY(${groupIatas})
-      AND departure_at::date = ${inboundDate}::date
+      AND departure_at::date BETWEEN ${inboundDateFrom}::date AND ${inboundDateTo}::date
       AND is_direct = TRUE
   `) as Leg[];
 
@@ -67,20 +60,17 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
   const results: Itinerary[] = [];
 
   for (const outbound of outboundLegs) {
-    if (outboundNotBeforeHour !== undefined && hourOf(outbound.departure_at) < outboundNotBeforeHour) {
-      continue;
-    }
+    if (outboundNotBeforeHour !== undefined && hourOf(outbound.departure_at) < outboundNotBeforeHour) continue;
     if (airlinesInclude?.length && !airlinesInclude.includes(outbound.airline)) continue;
     if (airlinesExclude?.length && airlinesExclude.includes(outbound.airline)) continue;
     if (requireCabinBaggage && !outbound.cabin_baggage_included) continue;
 
     for (const inbound of inboundLegs) {
-      if (inboundNotBeforeHour !== undefined && hourOf(inbound.departure_at) < inboundNotBeforeHour) {
-        continue;
-      }
+      if (inboundNotBeforeHour !== undefined && hourOf(inbound.departure_at) < inboundNotBeforeHour) continue;
       if (airlinesInclude?.length && !airlinesInclude.includes(inbound.airline)) continue;
       if (airlinesExclude?.length && airlinesExclude.includes(inbound.airline)) continue;
       if (requireCabinBaggage && !inbound.cabin_baggage_included) continue;
+      if (new Date(inbound.departure_at) <= new Date(outbound.departure_at)) continue;
 
       const isOpenJaw = outbound.destination_iata !== inbound.origin_iata;
       if (isOpenJaw && !allowOpenJaw) continue;
@@ -110,10 +100,7 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
       `) as { airport_to_center_min: number }[];
       const airportTransferMinutes = transferRow[0]?.airport_to_center_min ?? 45;
 
-      const hotelCheckoutAt = addMinutes(
-        inbound.departure_at,
-        AIRPORT_TO_AIRPORT_BUFFER_MIN + airportTransferMinutes
-      );
+      const hotelCheckoutAt = addMinutes(inbound.departure_at, AIRPORT_TO_AIRPORT_BUFFER_MIN + airportTransferMinutes);
 
       const notes: string[] = [];
       if (isOpenJaw) {
@@ -152,7 +139,6 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
   filtered.sort((a, b) => {
     if (sortBy === 'price') return a.totalPrice - b.totalPrice;
     if (sortBy === 'duration') return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
-    // default: checkout_time -> preferimos salida del hotel más tarde (más cómoda)
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 

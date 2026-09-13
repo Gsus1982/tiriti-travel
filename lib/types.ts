@@ -6,14 +6,16 @@ export type Pax = {
 export type SearchFilters = {
   originIata: string;
   destinationGroupId: string;
-  outboundDate: string; // YYYY-MM-DD
-  inboundDate: string; // YYYY-MM-DD
+  outboundDateFrom: string;
+  outboundDateTo: string;
+  inboundDateFrom: string;
+  inboundDateTo: string;
   pax: Pax;
-  requireDirect: boolean; // siempre true, no negociable
+  requireDirect: boolean;
   requireCabinBaggage: boolean;
-  allowOpenJaw: boolean; // permitir entrar por un aeropuerto y salir por otro del mismo grupo/país
-  outboundNotBeforeHour?: number; // ej. 18 para "a partir de las 18:00"
-  inboundNotBeforeHour?: number; // ej. 6 para "no antes de las 06:00"
+  allowOpenJaw: boolean;
+  outboundNotBeforeHour?: number;
+  inboundNotBeforeHour?: number;
   maxPriceTotal?: number;
   airlinesInclude?: string[];
   airlinesExclude?: string[];
@@ -43,7 +45,19 @@ export type Itinerary = {
   interCityTransfer?: { mode: string; duration_min: number; price_eur: number | null } | null;
   pricePerPerson: number;
   totalPrice: number;
-  hotelCheckoutAt: string; // hora exacta de salida del hotel el día de vuelta
+  hotelCheckoutAt: string;
   airportTransferMinutes: number;
   notes: string[];
 };
+
+export function datesBetween(fromIso: string, toIso: string): string[] {
+  const from = new Date(fromIso + 'T00:00:00Z');
+  const to = new Date(toIso + 'T00:00:00Z');
+  const dates: string[] = [];
+  const cursor = new Date(from);
+  while (cursor <= to) {
+    dates.push(cursor.toISOString().slice(0, 10));
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return dates;
+}

@@ -1,14 +1,18 @@
 import { sql } from './db';
-import { searchOneWay, type IgnavItinerary } from './ignav';
+import { searchOneWay, type IgnavItinerary, type IgnavOneWayResponse } from './ignav';
 import type { Pax } from './types';
+import { datesBetween } from './types';
 
 const AIRPORT_BUFFER_MIN = 120;
+const MAX_DATE_RANGE_DAYS = 5;
 
 export type LiveFilters = {
   originIata: string;
   destinationGroupId: string;
-  outboundDate: string;
-  inboundDate: string;
+  outboundDateFrom: string;
+  outboundDateTo: string;
+  inboundDateFrom: string;
+  inboundDateTo: string;
   pax: Pax;
   requireCabinBaggage: boolean;
   allowOpenJaw: boolean;
@@ -49,6 +53,11 @@ export type LiveItinerary = {
   notes: string[];
 };
 
+export type LiveSearchResult = {
+  itineraries: LiveItinerary[];
+  warnings: string[];
+};
+
 function itineraryToLeg(it: IgnavItinerary): LiveLeg | null {
   const legObj = it.outbound;
   if (!legObj || legObj.segments.length !== 1) return null;
@@ -77,12 +86,27 @@ function addMinutes(iso: string, minutes: number): string {
   return d.toISOString();
 }
 
-export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveItinerary[]> {
+async function safeSearchOneWay(
+  params: Parameters<typeof searchOneWay>[0],
+  warnings: string[]
+): Promise<IgnavOneWayResponse> {
+  try {
+    return await searchOneWay(params);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error desconocido llamando a Ignav';
+    warnings.push(`${params.origin}->${params.destination} (${params.departure_date}): ${message}`);
+    return { origin: params.origin, destination: params.destination, departure_date: params.departure_date, itineraries: [] };
+  }
+}
+
+export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveSearchResult> {
   const {
     originIata,
     destinationGroupId,
-    outboundDate,
-    inboundDate,
+    outboundDateFrom,
+    outboundDateTo,
+    inboundDateFrom,
+    inboundDateTo,
     pax,
     requireCabinBaggage,
     allowOpenJaw,
@@ -94,48 +118,72 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveI
     sortBy
   } = filters;
 
+  const warnings: string[] = [];
+
+  const outboundDates = datesBetween(outboundDateFrom, outboundDateTo);
+  const inboundDates = datesBetween(inboundDateFrom, inboundDateTo);
+
+  if (outboundDates.length > MAX_DATE_RANGE_DAYS || inboundDates.length > MAX_DATE_RANGE_DAYS) {
+    throw new Error(
+      `El rango de fechas maximo permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} dias por tramo (para no agotar la cuota gratuita). Reduce el rango de ida o de vuelta.`
+    );
+  }
+
   const groupAirports = (await sql`
     SELECT iata, city FROM airports WHERE group_id = ${destinationGroupId}
   `) as { iata: string; city: string }[];
-  if (groupAirports.length === 0) return [];
+  if (groupAirports.length === 0) return { itineraries: [], warnings };
 
   const cityByIata = new Map(groupAirports.map((a) => [a.iata, a.city]));
   const minCarryOn = requireCabinBaggage ? 1 : undefined;
 
-  const outboundCalls = groupAirports.map((a) =>
-    searchOneWay({
-      origin: originIata,
-      destination: a.iata,
-      departure_date: outboundDate,
-      adults: pax.adults,
-      children: pax.children,
-      max_stops: 0,
-      min_carry_on_bags: minCarryOn,
-      airlines_include: airlinesInclude,
-      airlines_exclude: airlinesExclude,
-      departure_time_range: outboundNotBeforeHour !== undefined ? { earliest_hour: outboundNotBeforeHour } : undefined
-    }).catch(() => ({ origin: originIata, destination: a.iata, departure_date: outboundDate, itineraries: [] }))
-  );
+  const outboundCalls: Promise<IgnavOneWayResponse>[] = [];
+  for (const a of groupAirports) {
+    for (const date of outboundDates) {
+      outboundCalls.push(
+        safeSearchOneWay(
+          {
+            origin: originIata,
+            destination: a.iata,
+            departure_date: date,
+            adults: pax.adults,
+            children: pax.children,
+            max_stops: 0,
+            min_carry_on_bags: minCarryOn,
+            airlines_include: airlinesInclude,
+            airlines_exclude: airlinesExclude,
+            departure_time_range: outboundNotBeforeHour !== undefined ? { earliest_hour: outboundNotBeforeHour } : undefined
+          },
+          warnings
+        )
+      );
+    }
+  }
 
-  const inboundCalls = groupAirports.map((a) =>
-    searchOneWay({
-      origin: a.iata,
-      destination: originIata,
-      departure_date: inboundDate,
-      adults: pax.adults,
-      children: pax.children,
-      max_stops: 0,
-      min_carry_on_bags: minCarryOn,
-      airlines_include: airlinesInclude,
-      airlines_exclude: airlinesExclude,
-      departure_time_range: inboundNotBeforeHour !== undefined ? { earliest_hour: inboundNotBeforeHour } : undefined
-    }).catch(() => ({ origin: a.iata, destination: originIata, departure_date: inboundDate, itineraries: [] }))
-  );
+  const inboundCalls: Promise<IgnavOneWayResponse>[] = [];
+  for (const a of groupAirports) {
+    for (const date of inboundDates) {
+      inboundCalls.push(
+        safeSearchOneWay(
+          {
+            origin: a.iata,
+            destination: originIata,
+            departure_date: date,
+            adults: pax.adults,
+            children: pax.children,
+            max_stops: 0,
+            min_carry_on_bags: minCarryOn,
+            airlines_include: airlinesInclude,
+            airlines_exclude: airlinesExclude,
+            departure_time_range: inboundNotBeforeHour !== undefined ? { earliest_hour: inboundNotBeforeHour } : undefined
+          },
+          warnings
+        )
+      );
+    }
+  }
 
-  const [outboundResponses, inboundResponses] = await Promise.all([
-    Promise.all(outboundCalls),
-    Promise.all(inboundCalls)
-  ]);
+  const [outboundResponses, inboundResponses] = await Promise.all([Promise.all(outboundCalls), Promise.all(inboundCalls)]);
 
   const outboundLegs: LiveLeg[] = [];
   for (const resp of outboundResponses) {
@@ -153,10 +201,19 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveI
     }
   }
 
+  if (outboundLegs.length === 0) {
+    warnings.push('Ignav no devolvio ningun vuelo de ida directo para los aeropuertos y fechas indicados.');
+  }
+  if (inboundLegs.length === 0) {
+    warnings.push('Ignav no devolvio ningun vuelo de vuelta directo para los aeropuertos y fechas indicados.');
+  }
+
   const results: LiveItinerary[] = [];
 
   for (const outbound of outboundLegs) {
     for (const inbound of inboundLegs) {
+      if (new Date(inbound.departure_at) <= new Date(outbound.departure_at)) continue;
+
       const isOpenJaw = outbound.destination_iata !== inbound.origin_iata;
       if (isOpenJaw && !allowOpenJaw) continue;
 
@@ -177,8 +234,7 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveI
       }
 
       const totalPax = pax.adults + pax.children;
-      const totalPrice =
-        outbound.price_amount + inbound.price_amount + (interCityTransfer?.price_eur ?? 0) * totalPax;
+      const totalPrice = outbound.price_amount + inbound.price_amount + (interCityTransfer?.price_eur ?? 0) * totalPax;
 
       if (maxPriceTotal !== undefined && totalPrice > maxPriceTotal) continue;
 
@@ -214,26 +270,15 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveI
         notes.push('Aviso: la tarifa puede no incluir equipaje de mano tipo trolley.');
       }
 
-      results.push({
-        outbound,
-        inbound,
-        isOpenJaw,
-        interCityTransfer,
-        totalPrice,
-        currency: outbound.price_currency,
-        hotelCheckoutAt,
-        airportTransferMinutes,
-        notes
-      });
+      results.push({ outbound, inbound, isOpenJaw, interCityTransfer, totalPrice, currency: outbound.price_currency, hotelCheckoutAt, airportTransferMinutes, notes });
     }
   }
 
   results.sort((a, b) => {
     if (sortBy === 'price') return a.totalPrice - b.totalPrice;
-    if (sortBy === 'duration')
-      return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
+    if (sortBy === 'duration') return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 
-  return results;
+  return { itineraries: results, warnings };
 }

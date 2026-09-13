@@ -16,8 +16,10 @@ export default function HomePage() {
   const [mode, setMode] = useState<'mock' | 'live'>('mock');
   const [originIata, setOriginIata] = useState('ALC');
   const [destinationGroupId, setDestinationGroupId] = useState('poland');
-  const [outboundDate, setOutboundDate] = useState('2026-12-04');
-  const [inboundDate, setInboundDate] = useState('2026-12-08');
+  const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
+  const [outboundDateTo, setOutboundDateTo] = useState('2026-12-05');
+  const [inboundDateFrom, setInboundDateFrom] = useState('2026-12-08');
+  const [inboundDateTo, setInboundDateTo] = useState('2026-12-08');
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(1);
   const [requireCabinBaggage, setRequireCabinBaggage] = useState(false);
@@ -28,6 +30,7 @@ export default function HomePage() {
   const [sortBy, setSortBy] = useState<'checkout_time' | 'price' | 'duration'>('checkout_time');
   const [mockResults, setMockResults] = useState<Itinerary[] | null>(null);
   const [liveResults, setLiveResults] = useState<LiveItinerary[] | null>(null);
+  const [warnings, setWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [bookingLinks, setBookingLinks] = useState<BookingLinksState>({});
@@ -43,12 +46,15 @@ export default function HomePage() {
   async function handleSearch() {
     setLoading(true);
     setError(null);
+    setWarnings([]);
     setBookingLinks({});
     const payload = {
       originIata,
       destinationGroupId,
-      outboundDate,
-      inboundDate,
+      outboundDateFrom,
+      outboundDateTo,
+      inboundDateFrom,
+      inboundDateTo,
       pax: { adults, children },
       requireCabinBaggage,
       allowOpenJaw,
@@ -66,6 +72,7 @@ export default function HomePage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
+      if (data.warnings?.length) setWarnings(data.warnings);
       if (mode === 'live') {
         setLiveResults(data.itineraries);
         setMockResults(null);
@@ -137,14 +144,26 @@ export default function HomePage() {
               ))}
             </select>
           </label>
-          <label className="text-sm">
-            Fecha ida
-            <input type="date" className="mt-1 w-full border rounded p-2" value={outboundDate} onChange={(e) => setOutboundDate(e.target.value)} />
-          </label>
-          <label className="text-sm">
-            Fecha vuelta
-            <input type="date" className="mt-1 w-full border rounded p-2" value={inboundDate} onChange={(e) => setInboundDate(e.target.value)} />
-          </label>
+          <div className="col-span-2 grid grid-cols-2 gap-2">
+            <label className="text-sm">
+              Ida desde
+              <input type="date" className="mt-1 w-full border rounded p-2" value={outboundDateFrom} onChange={(e) => setOutboundDateFrom(e.target.value)} />
+            </label>
+            <label className="text-sm">
+              Ida hasta
+              <input type="date" className="mt-1 w-full border rounded p-2" value={outboundDateTo} onChange={(e) => setOutboundDateTo(e.target.value)} />
+            </label>
+          </div>
+          <div className="col-span-2 grid grid-cols-2 gap-2">
+            <label className="text-sm">
+              Vuelta desde
+              <input type="date" className="mt-1 w-full border rounded p-2" value={inboundDateFrom} onChange={(e) => setInboundDateFrom(e.target.value)} />
+            </label>
+            <label className="text-sm">
+              Vuelta hasta
+              <input type="date" className="mt-1 w-full border rounded p-2" value={inboundDateTo} onChange={(e) => setInboundDateTo(e.target.value)} />
+            </label>
+          </div>
           <label className="text-sm">
             Adultos
             <input type="number" min={1} className="mt-1 w-full border rounded p-2" value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
@@ -182,6 +201,11 @@ export default function HomePage() {
             Permitir open-jaw en destino
           </label>
         </div>
+        {mode === 'live' && (
+          <p className="text-xs text-amber-600">
+            En modo Ignav, el rango maximo por tramo (ida o vuelta) es de 5 dias, para no agotar la cuota gratuita de peticiones.
+          </p>
+        )}
         <button
           onClick={handleSearch}
           disabled={loading}
@@ -190,6 +214,16 @@ export default function HomePage() {
           {loading ? 'Buscando...' : mode === 'live' ? 'Buscar en vivo (Ignav)' : 'Buscar (datos de ejemplo)'}
         </button>
         {error && <p className="text-red-600 text-sm">{error}</p>}
+        {warnings.length > 0 && (
+          <div className="text-amber-700 text-sm bg-amber-50 border border-amber-200 rounded p-3">
+            <p className="font-medium mb-1">Avisos de la busqueda:</p>
+            <ul className="list-disc pl-5 space-y-0.5">
+              {warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
       </section>
 
       {mockResults && (
@@ -204,7 +238,7 @@ export default function HomePage() {
                   <th className="p-2">Vuelta</th>
                   <th className="p-2">Open-jaw</th>
                   <th className="p-2">Precio total</th>
-                  <th className="p-2">Salida hotel dia 8</th>
+                  <th className="p-2">Salida hotel</th>
                   <th className="p-2">Notas</th>
                 </tr>
               </thead>
@@ -228,7 +262,7 @@ export default function HomePage() {
       {liveResults && (
         <section className="bg-white rounded-xl shadow p-6">
           <h2 className="text-lg font-semibold mb-4">Resultados en vivo - Ignav ({liveResults.length})</h2>
-          {liveResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros para estas fechas.</p>}
+          {liveResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros para estas fechas. Revisa los avisos de arriba para saber el motivo exacto.</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -237,7 +271,7 @@ export default function HomePage() {
                   <th className="p-2">Vuelta</th>
                   <th className="p-2">Open-jaw</th>
                   <th className="p-2">Precio total</th>
-                  <th className="p-2">Salida hotel dia vuelta</th>
+                  <th className="p-2">Salida hotel</th>
                   <th className="p-2">Notas</th>
                   <th className="p-2">Reserva</th>
                 </tr>
@@ -285,7 +319,7 @@ export default function HomePage() {
 
       <p className="text-xs text-slate-400">
         Modo "Datos de ejemplo": fixtures internos, no representan precios reales.<br />
-        Modo "Datos en vivo (Ignav)": llama a la API de Ignav en tiempo real; cada busqueda consume varias peticiones de tu cuota gratuita (una por cada combinacion origen-aeropuerto de destino, en ida y vuelta).
+        Modo "Datos en vivo (Ignav)": llama a la API de Ignav en tiempo real; cada dia adicional en el rango de fechas multiplica el numero de peticiones consumidas.
       </p>
     </div>
   );

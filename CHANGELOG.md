@@ -2,6 +2,19 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.3.2] - 2026-09-14 (rediseno visual)
+
+### Corregido
+- **`components/RouteMap.tsx` y `components/ToolsPanel.tsx` seguian enteros en el tema claro original** (fondo blanco, azul `brand-600`) mientras el resto de la app paso al tema oscuro/dorado en la sesion anterior -- de ahi el aspecto roto/inconsistente. `ToolsPanel.tsx` retematizado por completo; `RouteMap.tsx` eliminado (ver mas abajo).
+- **El tema oscuro se aplicaba con un hack** (`-m-6 p-6` en `app/page.tsx` para tapar el fondo claro heredado de `app/layout.tsx`/`globals.css`). Ahora el fondo oscuro se fija correctamente a nivel de `body`, sin hack de margen negativo.
+- `tailwind.config.ts` tenia una paleta `brand` azul sin relacion con el resto de la app (solo la usaba el `RouteMap.tsx` roto). Sustituida por tokens con nombre (`ink`, `ink-panel`, `gold`, `gold-light`) usados de forma consistente en toda la UI en vez de hexadecimales sueltos repetidos por todo `page.tsx`.
+
+### Cambiado
+- **Mapa de rutas sustituido**: `components/RouteMap.tsx` (SVG de 420px de alto sobre un listado de "destinos curados" que el resto de la app ya no usa como fuente principal -- de ahi la queja de "mapa inservible que ocupa mucho sitio") se elimino junto a `app/api/route-map/route.ts`. En su lugar, `components/FlightPathStrip.tsx` nuevo: una tira compacta que muestra origen/destino REALMENTE seleccionados en el formulario (no un listado aparte desactualizado), con una linea de vuelo animada.
+- **Hero rediseñado**: menos padding vertical, avion en filigrana de gran formato en la esquina, y la tarjeta `FlightPathStrip` flotando sobre el borde inferior del hero (tecnica de "search bar sobre la foto" tipica del genero de apps de vuelos privados de lujo) en vez de dejar un hueco vacio entre el hero y el resto del contenido.
+- **Nuevos iconos SVG originales** en `components/Icons.tsx`: despegue, aterrizaje, compas, billete de embarque -- mas los `IconPlane`/`IconSuitcase` que ya existian pero no se usaban en ningun sitio. Aplicados en el hero, la tira de ruta, las cabeceras Ida/Vuelta de la tabla de resultados y `ToolsPanel`.
+- **Tipografia deliberada**: titulares en una pila serif editorial (Georgia y similares) en vez del sans por defecto del navegador, para diferenciar el titular del resto de la UI. Se probo primero con `next/font/google` (Fraunces + Inter) pero se descarto: no se pudo verificar el build en el entorno de la sesion (sin acceso a `fonts.googleapis.com`) y no se queria arriesgar el build de Vercel sin poder comprobarlo antes.
+
 ## [0.3.1] - 2026-09-14 (sesion de auditoria)
 
 ### Corregido

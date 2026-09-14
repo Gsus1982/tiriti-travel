@@ -3,6 +3,11 @@
 @tailwind utilities;
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background-color: #0a0c10;
+  color: #f5f3ef;
+}
+
+::selection {
+  background-color: #c9a24a;
+  color: #0a0c10;
 }

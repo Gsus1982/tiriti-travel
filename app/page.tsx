@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LiveItinerary } from '@/lib/live-engine';
 import { parseSearchQuery } from '@/lib/nlp-search';
-import RouteMap from '@/components/RouteMap';
+import FlightPathStrip from '@/components/FlightPathStrip';
 import ToolsPanel from '@/components/ToolsPanel';
-import { IconSliders, IconMapPin } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconPlaneTakeoff, IconPlaneLanding, IconTicket } from '@/components/Icons';
 
 const HERO_IMAGE_URL =
   'https://images.pexels.com/photos/35138044/pexels-photo-35138044.jpeg?auto=compress&cs=tinysrgb&w=1920';
@@ -145,6 +145,18 @@ export default function HomePage() {
 
   const cityGroups = useMemo(() => groupByCity(filteredRealDestinations), [filteredRealDestinations]);
 
+  const originLabels = useMemo(
+    () => originIatas.map((iata) => (meta?.origins ?? []).find((o) => o.iata === iata)?.city ?? iata),
+    [originIatas, meta]
+  );
+  const destinationLabels = useMemo(() => {
+    const groupNames = destinationGroupIds.map((id) => (meta?.groups ?? []).find((g) => g.id === id)?.name ?? id);
+    const iataNames = selectedDestIatas.map(
+      (iata) => realDestinations.find((d) => d.dest_iata === iata)?.dest_name ?? iata
+    );
+    return [...groupNames, ...iataNames];
+  }, [destinationGroupIds, selectedDestIatas, meta, realDestinations]);
+
   function handleInterpret() {
     if (!meta || !nlpText.trim()) return;
     const refDate = new Date(outboundDateFrom || Date.now());
@@ -247,40 +259,46 @@ export default function HomePage() {
   const originsList = meta?.origins ?? [{ iata: 'ALC', city: 'Alicante' }];
 
   return (
-    <div className="space-y-10 bg-[#0a0c10] -m-6 p-6 min-h-screen">
+    <div className="max-w-5xl mx-auto px-4 md:px-6 pt-8 md:pt-10 pb-16 space-y-8">
       <header
-        className="relative overflow-hidden rounded-3xl border border-[#c9a24a]/20 shadow-2xl px-6 py-20 md:py-28 text-center"
+        className="relative overflow-hidden rounded-3xl border border-gold/20 shadow-2xl px-6 pt-14 pb-24 md:pt-16 md:pb-28 text-center"
         style={{
-          backgroundImage: `linear-gradient(180deg, rgba(6,8,12,0.75), rgba(6,8,12,0.92)), url(${HERO_IMAGE_URL})`,
+          backgroundImage: `linear-gradient(180deg, rgba(6,8,12,0.7), rgba(6,8,12,0.9)), url(${HERO_IMAGE_URL})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}
       >
-        <p className="uppercase tracking-[0.35em] text-xs text-[#c9a24a] font-medium mb-4">Tiriti Travel</p>
-        <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-white">
-          Vuelos directos, <span className="text-[#c9a24a]">sin escalas.</span>
+        <IconPlaneTakeoff className="hidden md:block absolute -right-6 top-10 w-40 h-40 text-gold/[0.08] rotate-12" />
+        <div className="relative flex items-center justify-center gap-2 mb-4">
+          <IconPlaneTakeoff className="w-4 h-4 text-gold" />
+          <p className="uppercase tracking-[0.35em] text-xs text-gold font-medium">Tiriti Travel</p>
+        </div>
+        <h1 className="relative text-4xl md:text-6xl font-display font-medium tracking-tight text-white">
+          Vuelos directos, <span className="text-gold italic">sin escalas.</span>
         </h1>
-        <p className="mt-5 max-w-xl mx-auto text-sm md:text-base text-white/70 leading-relaxed">
+        <p className="relative mt-5 max-w-xl mx-auto text-sm md:text-base text-white/70 leading-relaxed">
           Ida y vuelta sin escalas desde Alicante, Madrid, Valencia y Murcia. Datos en vivo de Ignav,
           nunca estimaciones.
         </p>
-        <div className="mt-8 flex justify-center gap-6 md:gap-10 text-white/80 text-xs uppercase tracking-wider">
-          <div className="border-t border-[#c9a24a]/40 pt-2">4 origenes</div>
-          <div className="border-t border-[#c9a24a]/40 pt-2">Solo directos</div>
-          <div className="border-t border-[#c9a24a]/40 pt-2">Datos en vivo</div>
+        <div className="relative mt-8 flex justify-center gap-6 md:gap-10 text-white/80 text-xs uppercase tracking-wider">
+          <div className="border-t border-gold/40 pt-2">4 origenes</div>
+          <div className="border-t border-gold/40 pt-2">Solo directos</div>
+          <div className="border-t border-gold/40 pt-2">Datos en vivo</div>
         </div>
       </header>
 
-      <RouteMap />
+      <div className="relative -mt-16 md:-mt-20 z-10">
+        <FlightPathStrip originLabels={originLabels} destinationLabels={destinationLabels} combos={combos} />
+      </div>
 
-      <section className="bg-[#12151b] rounded-2xl border border-white/10 shadow-xl p-6 space-y-3">
+      <section className="bg-ink-panel rounded-2xl border border-white/10 shadow-xl p-6 space-y-3">
         <h2 className="text-base font-semibold text-white">Busqueda en lenguaje natural</h2>
         <p className="text-sm text-white/50">
           Ej.: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h,
           regreso no antes de las 12h". Revisa siempre como se ha interpretado antes de buscar.
         </p>
         <textarea
-          className="w-full bg-[#0a0c10] border border-white/10 rounded-lg p-3 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#c9a24a]/60 focus:border-[#c9a24a]/60"
+          className="w-full bg-ink border border-white/10 rounded-lg p-3 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-gold/60 focus:border-gold/60"
           rows={2}
           value={nlpText}
           onChange={(e) => setNlpText(e.target.value)}
@@ -304,10 +322,10 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="bg-[#12151b] rounded-2xl border border-white/10 shadow-xl p-6 space-y-6">
+      <section className="bg-ink-panel rounded-2xl border border-white/10 shadow-xl p-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
-            <IconSliders className="w-5 h-5 text-[#c9a24a]" />
+            <IconSliders className="w-5 h-5 text-gold" />
             <h2 className="text-base font-semibold text-white">Filtros de busqueda</h2>
           </div>
           <label className="flex items-center gap-2 text-sm text-white/70">
@@ -324,8 +342,8 @@ export default function HomePage() {
                 key={o.iata}
                 className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
                   originIatas.includes(o.iata)
-                    ? 'bg-[#c9a24a] text-[#0a0c10] border-[#c9a24a] font-medium'
-                    : 'bg-transparent border-white/20 text-white/70 hover:border-[#c9a24a]/60'
+                    ? 'bg-gold text-ink border-gold font-medium'
+                    : 'bg-transparent border-white/20 text-white/70 hover:border-gold/60'
                 }`}
               >
                 <input
@@ -342,7 +360,7 @@ export default function HomePage() {
 
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <IconMapPin className="w-4 h-4 text-[#c9a24a]" />
+            <IconMapPin className="w-4 h-4 text-gold" />
             <p className="text-sm font-medium text-white/70">
               Destinos ({filteredRealDestinations.length} vuelos directos reales desde tus origenes)
             </p>
@@ -355,11 +373,11 @@ export default function HomePage() {
           <input
             type="text"
             placeholder="Filtrar por ciudad, pais o codigo IATA..."
-            className="w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30 mb-2"
+            className="w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30 mb-2"
             value={realDestFilter}
             onChange={(e) => setRealDestFilter(e.target.value)}
           />
-          <div className="max-h-72 overflow-y-auto flex flex-wrap gap-1.5 border border-white/10 rounded-xl p-3 bg-[#0a0c10]">
+          <div className="max-h-72 overflow-y-auto flex flex-wrap gap-1.5 border border-white/10 rounded-xl p-3 bg-ink">
             {Array.from(cityGroups.entries()).map(([city, airports]) => {
               const iatas = airports.map((a) => a.dest_iata);
               const countries = Array.from(new Set(airports.map((a) => a.country))).join(', ');
@@ -370,8 +388,8 @@ export default function HomePage() {
                     <label
                       className={`text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors font-medium ${
                         allSelected
-                          ? 'bg-[#c9a24a] text-[#0a0c10] border-[#c9a24a]'
-                          : 'bg-transparent border-[#c9a24a]/50 text-[#c9a24a] hover:bg-[#c9a24a]/10'
+                          ? 'bg-gold text-ink border-gold'
+                          : 'bg-transparent border-gold/50 text-gold hover:bg-gold/10'
                       }`}
                       title={`Selecciona los ${airports.length} aeropuertos de ${city} a la vez`}
                     >
@@ -389,7 +407,7 @@ export default function HomePage() {
                       key={d.dest_iata}
                       className={`text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${
                         selectedDestIatas.includes(d.dest_iata)
-                          ? 'bg-white text-[#0a0c10] border-white'
+                          ? 'bg-white text-ink border-white'
                           : 'bg-transparent border-white/15 text-white/70 hover:border-white/40'
                       }`}
                     >
@@ -420,7 +438,7 @@ export default function HomePage() {
               <input
                 type="text"
                 placeholder="Codigos IATA separados por coma, ej: LHR, CDG, FCO"
-                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30"
+                className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30"
                 value={excludeIatasText}
                 onChange={(e) => setExcludeIatasText(e.target.value)}
               />
@@ -430,7 +448,7 @@ export default function HomePage() {
             </p>
           </div>
 
-          <div className="mt-4 bg-[#0a0c10] border border-white/10 rounded-xl p-3">
+          <div className="mt-4 bg-ink border border-white/10 rounded-xl p-3">
             <p className="text-xs text-white/60">
               ¿Buscas mercados navidenos, festivales de luces u otro evento de temporada? Descríbelo en el cuadro de
               "Busqueda en lenguaje natural" de arriba (ej. "mercado navideno en un pais nordico" o "festival de luces
@@ -445,7 +463,7 @@ export default function HomePage() {
               Ida desde
               <input
                 type="date"
-                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
                 value={outboundDateFrom}
                 onChange={(e) => setOutboundDateFrom(e.target.value)}
               />
@@ -454,7 +472,7 @@ export default function HomePage() {
               Ida hasta
               <input
                 type="date"
-                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
                 value={outboundDateTo}
                 onChange={(e) => setOutboundDateTo(e.target.value)}
               />
@@ -465,7 +483,7 @@ export default function HomePage() {
               Vuelta desde
               <input
                 type="date"
-                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
                 value={inboundDateFrom}
                 onChange={(e) => setInboundDateFrom(e.target.value)}
               />
@@ -474,7 +492,7 @@ export default function HomePage() {
               Vuelta hasta
               <input
                 type="date"
-                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
                 value={inboundDateTo}
                 onChange={(e) => setInboundDateTo(e.target.value)}
               />
@@ -485,7 +503,7 @@ export default function HomePage() {
             <input
               type="number"
               min={1}
-              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
               value={adults}
               onChange={(e) => setAdults(Number(e.target.value))}
             />
@@ -495,7 +513,7 @@ export default function HomePage() {
             <input
               type="number"
               min={0}
-              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
               value={children}
               onChange={(e) => setChildren(Number(e.target.value))}
             />
@@ -506,7 +524,7 @@ export default function HomePage() {
               type="number"
               min={0}
               max={23}
-              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
               value={outboundNotBeforeHour}
               onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
             />
@@ -517,7 +535,7 @@ export default function HomePage() {
               type="number"
               min={0}
               max={23}
-              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
               value={inboundNotBeforeHour}
               onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
             />
@@ -527,7 +545,7 @@ export default function HomePage() {
             <input
               type="number"
               min={0}
-              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
               value={maxPriceTotal}
               onChange={(e) => setMaxPriceTotal(e.target.value === '' ? '' : Number(e.target.value))}
             />
@@ -535,7 +553,7 @@ export default function HomePage() {
           <label className="text-xs font-medium text-white/70">
             Ordenar por
             <select
-              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              className="mt-1 w-full bg-ink border border-white/10 rounded-lg p-2 text-sm text-white"
               value={sortBy}
               onChange={(e) => handleReSort(e.target.value as any)}
             >
@@ -567,7 +585,7 @@ export default function HomePage() {
         <button
           onClick={travelIdeasMode ? handleTravelIdeas : handleSearch}
           disabled={loading || originIatas.length === 0 || (!travelIdeasMode && destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
-          className="bg-[#c9a24a] hover:bg-[#dab765] text-[#0a0c10] font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-40"
+          className="bg-gold hover:bg-gold-light text-ink font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-40"
         >
           {loading ? 'Buscando...' : travelIdeasMode ? 'Proponme ideas de viaje' : 'Buscar vuelos'}
         </button>
@@ -599,11 +617,14 @@ export default function HomePage() {
       />
 
       {liveResults && (
-        <section className="bg-[#12151b] rounded-2xl border border-white/10 shadow-xl p-6">
+        <section className="bg-ink-panel rounded-2xl border border-white/10 shadow-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-white">Resultados ({liveResults.length})</h2>
+            <div className="flex items-center gap-2">
+              <IconTicket className="w-4 h-4 text-gold" />
+              <h2 className="text-base font-semibold text-white">Resultados ({liveResults.length})</h2>
+            </div>
             <select
-              className="bg-[#0a0c10] border border-white/10 rounded-lg p-1.5 text-xs text-white"
+              className="bg-ink border border-white/10 rounded-lg p-1.5 text-xs text-white"
               value={sortBy}
               onChange={(e) => handleReSort(e.target.value as any)}
             >
@@ -620,8 +641,16 @@ export default function HomePage() {
               <thead>
                 <tr className="text-left border-b border-white/10 text-white/40">
                   <th className="p-2 font-medium">Ruta</th>
-                  <th className="p-2 font-medium">Ida</th>
-                  <th className="p-2 font-medium">Vuelta</th>
+                  <th className="p-2 font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      <IconPlaneTakeoff className="w-3.5 h-3.5" /> Ida
+                    </span>
+                  </th>
+                  <th className="p-2 font-medium">
+                    <span className="inline-flex items-center gap-1.5">
+                      <IconPlaneLanding className="w-3.5 h-3.5" /> Vuelta
+                    </span>
+                  </th>
                   <th className="p-2 font-medium">Open-jaw</th>
                   <th className="p-2 font-medium">Precio</th>
                   <th className="p-2 font-medium">Salida hotel</th>
@@ -653,14 +682,14 @@ export default function HomePage() {
                         {new Date(r.inbound.departure_at).toLocaleString('es-ES')}
                       </td>
                       <td className="p-2">{r.isOpenJaw ? 'Si' : 'No'}</td>
-                      <td className="p-2 font-medium text-[#c9a24a]">
+                      <td className="p-2 font-medium text-gold">
                         {r.totalPrice.toFixed(2)} {r.currency}
                       </td>
                       <td className="p-2">{new Date(r.hotelCheckoutAt).toLocaleString('es-ES')}</td>
                       <td className="p-2 text-white/40">{r.notes.join(' ')}</td>
                       <td className="p-2">
                         <button
-                          className="text-[#c9a24a] hover:text-[#dab765] underline text-xs"
+                          className="text-gold hover:text-gold-light underline text-xs"
                           onClick={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
                           disabled={loadingLinks === rowKey}
                         >
@@ -674,7 +703,7 @@ export default function HomePage() {
                                   href={link.url}
                                   target="_blank"
                                   rel="noreferrer"
-                                  className="text-xs text-[#c9a24a] hover:text-[#dab765] underline"
+                                  className="text-xs text-gold hover:text-gold-light underline"
                                 >
                                   {link.provider_name} {link.price ? `(${link.price.amount} ${link.price.currency})` : ''}
                                 </a>

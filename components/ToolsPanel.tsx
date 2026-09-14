@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { IconCalendar, IconBell } from './Icons';
 
 type CalendarDay = { date: string; minPrice: number | null; currency: string | null; flightCount: number };
 
@@ -108,21 +109,24 @@ export default function ToolsPanel({
   }, null);
 
   return (
-    <section className="bg-white rounded-xl shadow p-6 space-y-6">
+    <section className="bg-ink-panel rounded-2xl border border-white/10 p-6 space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-2">Calendario de precios (un solo tramo)</h2>
-        <p className="text-xs text-slate-500 mb-2">
+        <div className="flex items-center gap-2 mb-2">
+          <IconCalendar className="w-4 h-4 text-gold" />
+          <h2 className="text-base font-semibold text-white">Calendario de precios (un solo tramo)</h2>
+        </div>
+        <p className="text-xs text-white/40 mb-3">
           Precio minimo por dia entre las fechas de ida seleccionadas arriba, para el primer origen elegido. Maximo 14 dias
           por consulta (limite de cuota Ignav).
         </p>
         <div className="flex gap-2 items-end flex-wrap">
-          <label className="text-sm">
+          <label className="text-xs font-medium text-white/70">
             Destino IATA
             <input
               type="text"
               maxLength={3}
               placeholder="DUB"
-              className="mt-1 w-24 border rounded p-2 uppercase"
+              className="mt-1 w-24 bg-ink border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30 uppercase"
               value={calendarDest}
               onChange={(e) => setCalendarDest(e.target.value)}
             />
@@ -130,26 +134,26 @@ export default function ToolsPanel({
           <button
             onClick={runCalendar}
             disabled={calendarLoading}
-            className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+            className="bg-white/10 hover:bg-white/20 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-white/10 disabled:opacity-50"
           >
             {calendarLoading ? 'Consultando...' : 'Ver calendario'}
           </button>
           {minOfCalendar !== null && minOfCalendar !== undefined && (
-            <span className="text-xs text-emerald-700">Minimo del rango: {minOfCalendar.toFixed(2)}</span>
+            <span className="text-xs text-emerald-300">Minimo del rango: {minOfCalendar.toFixed(2)}</span>
           )}
         </div>
-        {calendarError && <p className="text-red-600 text-xs mt-2">{calendarError}</p>}
+        {calendarError && <p className="text-red-300 text-xs mt-2">{calendarError}</p>}
         {calendarDays && (
           <div className="mt-3 grid grid-cols-3 md:grid-cols-7 gap-2">
             {calendarDays.map((d) => (
               <div
                 key={d.date}
-                className={`text-center rounded p-2 text-xs border ${
+                className={`text-center rounded-lg p-2 text-xs border ${
                   d.minPrice === null
-                    ? 'bg-slate-50 text-slate-400 border-slate-200'
+                    ? 'bg-white/5 text-white/30 border-white/10'
                     : minOfCalendar !== null && d.minPrice === minOfCalendar
-                    ? 'bg-emerald-50 border-emerald-300 text-emerald-800 font-semibold'
-                    : 'bg-white border-slate-200'
+                    ? 'bg-gold/10 border-gold/50 text-gold font-semibold'
+                    : 'bg-ink border-white/10 text-white/70'
                 }`}
               >
                 <div>{d.date.slice(5)}</div>
@@ -160,19 +164,22 @@ export default function ToolsPanel({
         )}
       </div>
 
-      <div className="border-t pt-4">
-        <h2 className="text-lg font-semibold mb-2">Guardar alerta de precio</h2>
-        <p className="text-xs text-slate-500 mb-2">
+      <div className="border-t border-white/10 pt-4">
+        <div className="flex items-center gap-2 mb-2">
+          <IconBell className="w-4 h-4 text-gold" />
+          <h2 className="text-base font-semibold text-white">Guardar alerta de precio</h2>
+        </div>
+        <p className="text-xs text-white/40 mb-3">
           Usa los filtros actuales del buscador (origenes, fechas, destino, precio maximo) y guarda una alerta. Un cron
           diario comprobara si baja el precio; no hay notificacion por email todavia, revisa el panel en tu proxima visita.
         </p>
         <div className="flex gap-2 items-end flex-wrap">
-          <label className="text-sm">
+          <label className="text-xs font-medium text-white/70">
             Etiqueta (opcional)
             <input
               type="text"
               placeholder="Puente diciembre"
-              className="mt-1 border rounded p-2"
+              className="mt-1 bg-ink border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30"
               value={alertLabel}
               onChange={(e) => setAlertLabel(e.target.value)}
             />
@@ -180,12 +187,12 @@ export default function ToolsPanel({
           <button
             onClick={saveAlert}
             disabled={alertSaving}
-            className="bg-[#4a7ba6] hover:bg-[#3d6a91] text-white text-sm font-medium px-4 py-2 rounded-lg disabled:opacity-50"
+            className="bg-gold hover:bg-gold-light text-ink font-semibold text-sm px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
           >
             {alertSaving ? 'Guardando...' : 'Guardar alerta con estos filtros'}
           </button>
         </div>
-        {alertMessage && <p className="text-xs mt-2 text-slate-600">{alertMessage}</p>}
+        {alertMessage && <p className="text-xs mt-2 text-white/50">{alertMessage}</p>}
       </div>
     </section>
   );

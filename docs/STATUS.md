@@ -1,5 +1,28 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion de rediseno visual (Claude, a peticion del usuario)
+
+### Resumen ejecutivo
+El usuario reporto que el diseno "lujo oscuro/dorado" de la sesion anterior seguia viendose mal ("mucho espacio vacio", "mapa inservible que ocupa mucho sitio", "no hay imagenes SVG o de aeronautica"). Diagnostico real: **`components/RouteMap.tsx` y `components/ToolsPanel.tsx` nunca se retematizaron** en el rediseno del PR #15/#16 -- seguian enteros en el tema claro original (fondo blanco, paleta azul `brand-600` de `tailwind.config.ts`, sin relacion con el resto de la app), lo que producia dos bloques blancos/azules rotos en medio de una pagina oscura. Ademas, `app/page.tsx` tapaba un fondo claro heredado de `layout.tsx`/`globals.css` con un hack de margen negativo (`-m-6 p-6`) en vez de fijar el tema oscuro correctamente en la raiz.
+
+### Cambios de esta sesion (rama `design/luxury-theme-fix`)
+1. **Tema oscuro fijado en la raiz** (`app/globals.css` + `app/layout.tsx`): ya no depende del hack `-m-6` en `page.tsx`.
+2. **`tailwind.config.ts`**: paleta `brand` azul (huerfana, sin relacion con el resto de la app) sustituida por tokens `ink` / `ink-panel` / `gold` / `gold-light`, usados de forma consistente en vez de hexadecimales sueltos repetidos.
+3. **`components/RouteMap.tsx` eliminado** junto a `app/api/route-map/route.ts`: dibujaba un SVG de 420px de alto sobre "destinos curados", un listado que el resto de la app ya dejo de usar como fuente principal -- de ahi que se viera vacio/desactualizado la mayor parte del tiempo.
+4. **`components/FlightPathStrip.tsx` nuevo**: sustituye al mapa. Compacto, en el tema correcto, y dirigido por el origen/destino que el usuario tiene REALMENTE seleccionado en el formulario (no un dataset aparte).
+5. **`components/ToolsPanel.tsx` retematizado por completo** a dark/gold.
+6. **Hero rediseñado**: menos padding, avion en filigrana, y la tarjeta `FlightPathStrip` flotando sobre el borde inferior del hero (tecnica "search bar sobre la foto", caracteristica del genero de apps de reserva de vuelos privados de lujo) en vez del hueco vacio que quedaba antes entre el hero y el mapa.
+7. **Iconos SVG originales nuevos** (despegue, aterrizaje, compas, billete de embarque) en `components/Icons.tsx`, mas los `IconPlane`/`IconSuitcase` que ya existian pero no se usaban en ningun sitio -- ahora aplicados en el hero, la tira de ruta, la tabla de resultados y `ToolsPanel`.
+8. **Tipografia**: titulares en pila serif del sistema (Georgia y similares) en vez del sans por defecto. Se probo `next/font/google` (Fraunces + Inter) primero pero se descarto porque no se pudo verificar el build sin acceso a `fonts.googleapis.com` en el entorno de esta sesion -- no se quiso arriesgar el build real de Vercel sin poder probarlo antes. Si en el futuro se quiere ese acabado mas editorial, probarlo directamente en un PR y revisar el preview de Vercel antes de mergear.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Tambien se arranco `next start` en local y se confirmo con `curl` que la home responde 200 y contiene los textos esperados (sin poder ver capturas reales, ya que este entorno no tiene navegador).
+
+### Pendiente de tu parte
+- Revisar el preview de Vercel del PR de esta rama -- esta vez es un cambio visual/subjetivo, asi que no se ha mergeado solo (a diferencia de la sesion de bugs anterior); dime si te gusta o si quieres ajustes antes de aprobarlo.
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion de auditoria (Claude, a peticion del usuario)
 
 ### Resumen ejecutivo

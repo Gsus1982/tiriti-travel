@@ -2,6 +2,47 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.5.0] - 2026-09-14 (modo oscuro, ideas por precio, compartir, historial, iconos iPhone)
+
+A peticion explicita del usuario: implementadas todas las mejoras propuestas en la sesion
+anterior salvo las que requerian la API de Anthropic (pospuestas).
+
+### Anadido
+- **Modo oscuro real**, alternable con un boton (sol/luna) en el nav, no un tema fijo.
+  Respeta `prefers-color-scheme` la primera vez y despues recuerda la eleccion en
+  `localStorage`. `tailwind.config.ts` con `darkMode: 'class'`; un script inline en
+  `app/layout.tsx` fija la clase antes de pintar para evitar el flash del tema
+  equivocado. Variantes `dark:` aplicadas a los componentes principales.
+- **"Ideas por precio"**: `handleTravelIdeas` ahora fuerza explicitamente ordenar por
+  precio (antes usaba el criterio de orden que estuviera puesto, sin logica real de
+  "ideas"). Boton y checkbox renombrados para reflejarlo.
+- **Compartir una busqueda** (`lib/share-link.ts`): boton que usa el share sheet nativo
+  de iPhone (o copia al portapapeles) con un enlace que codifica todos los filtros en la
+  URL; al abrir ese enlace, la app restaura la busqueda automaticamente.
+- **Historial de busquedas recientes** (`lib/search-history.ts` +
+  `components/SearchHistoryPanel.tsx`): guardado en `localStorage` del navegador, sin
+  cuenta ni backend, con chips para repetir una busqueda anterior con un toque.
+- **Mensajes de progreso durante la busqueda**: en vez de un "Buscando..." fijo, van
+  cambiando ("Consultando vuelos de ida...", etc.) mientras dura la peticion. No es
+  progreso real medido (la API no lo expone), son mensajes honestos para que no parezca
+  colgado.
+- **Cache persistente de Sky Scrapper en BD** (tabla `skyscanner_airport_cache` nueva en
+  `scripts/schema.sql`): las resoluciones IATA -> skyId/entityId ya no se repiten en cada
+  busqueda -- relevante dado que su cuota es ~100/mes. **Requiere aplicar el schema.sql
+  actualizado contra tu Neon DB manualmente.**
+- **Icono propio y pantalla completa al añadir a inicio en iPhone**: `app/icon.tsx` y
+  `app/apple-icon.tsx` (generados con `next/og`, sin archivos binarios) + `app/manifest.ts`.
+
+### Nota tecnica (para futuras sesiones)
+Al aplicar las variantes `dark:` se probo primero con `sed` encadenado, lo que produjo
+clases duplicadas en pares reciprocos de color (ej. `text-slate-400 dark:text-slate-500
+dark:text-slate-400`), porque el limite de palabra de `sed` no distingue una clase
+original de una ya insertada por una regla anterior. Se corrigio con un script Python
+(`apply_dark.py`, no versionado) que procesa cada `className` una sola vez comparando
+solo contra el conjunto original de clases. Si en el futuro hace falta re-aplicar o
+extender las variantes de tema, usar ese mismo enfoque (o anadirlas a mano), nunca `sed`
+encadenado sobre pares de colores reciprocos.
+
 ## [0.4.0] - 2026-09-14 (panel lateral, marco con fondo de nubes, version visible, web-app iPhone)
 
 ### Anadido

@@ -1,5 +1,52 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: mejoras generales (modo oscuro, ideas por precio, compartir, historial, cache Sky Scrapper, iconos iPhone)
+
+### Resumen
+Implementadas todas las mejoras propuestas en la sesion anterior salvo las 2 que
+requerian la API de Anthropic (sustituir el parser NLP por IA real, e "ideas por
+eventos"), que el usuario pidio dejar aparcadas por ahora.
+
+### Cambios
+1. **Modo oscuro real** con boton en el nav, persistente en `localStorage`, respeta
+   `prefers-color-scheme` la primera vez.
+2. **"Ideas por precio"**: `handleTravelIdeas` fuerza `sortBy = 'price'` explicitamente.
+3. **Compartir busqueda** por enlace (`lib/share-link.ts`) usando el share sheet nativo
+   de iPhone.
+4. **Historial de busquedas** en `localStorage` (`lib/search-history.ts` +
+   `SearchHistoryPanel.tsx`).
+5. **Mensajes de progreso** honestos durante la busqueda (no es progreso real medido).
+6. **Cache persistente de Sky Scrapper en BD** -- tabla nueva en `scripts/schema.sql`,
+   **hay que aplicarla manualmente contra Neon** (esta sesion no tiene credenciales de
+   conexion a tu base de datos).
+7. **Icono propio + manifest** para "Añadir a inicio" en iPhone, generados con
+   `next/og` (sin archivos de imagen binarios).
+
+### Incidente durante la sesion (para que quede constancia)
+Al aplicar las variantes de modo oscuro con `sed` encadenado se produjo un bug de
+sustitucion en cascada: pares reciprocos de color (`text-slate-400` <-> `text-slate-500`,
+etc.) se iban reinsertando unos a otros, dejando clases duplicadas
+(`text-slate-400 dark:text-slate-500 dark:text-slate-400`). Al corregirlo con
+`git checkout` sobre los archivos afectados, se perdio sin querer **2 veces seguidas**
+el trabajo de compartir/historial/progreso en `app/page.tsx` que aun no estaba
+comiteado, porque `git checkout` revierte el archivo COMPLETO a su ultima version
+comiteada, no solo el cambio que se queria deshacer. Hubo que rehacer esa parte de
+`page.tsx` a mano 3 veces hasta que salio bien. Leccion para el futuro (propia y de
+cualquier otra sesion de IA que trabaje en este repo): **nunca usar `git checkout` sobre
+un archivo con cambios sin comitear que se quieran conservar** -- comitear primero lo
+que este bien, aunque sea en un commit intermedio, antes de deshacer nada.
+
+El bug de fondo (sustitucion en cascada de `sed`) se corrigio con un script Python que
+procesa cada `className` una sola vez comparando solo contra el conjunto original de
+clases, sin releer lo que el propio script ya ha insertado. Ver nota tecnica en
+CHANGELOG.md si hace falta reutilizar el enfoque.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` en local confirmando
+HTTP 200 y presencia de los textos clave de las funciones nuevas.
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: panel lateral + revision de logica + propuestas
 
 ### Cambios de diseno aplicados

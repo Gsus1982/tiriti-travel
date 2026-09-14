@@ -17,7 +17,7 @@ const LON_MAX = 26;
 const LAT_MIN = 36;
 const LAT_MAX = 65;
 const WIDTH = 800;
-const HEIGHT = 460;
+const HEIGHT = 420;
 
 function project(lat: number, lon: number): { x: number; y: number } {
   const x = ((lon - LON_MIN) / (LON_MAX - LON_MIN)) * WIDTH;
@@ -44,32 +44,31 @@ export default function RouteMap() {
   const activeOrigin = origins.find((o) => o.iata === selectedOrigin) ?? origins[0];
 
   return (
-    <section className="bg-white rounded-xl shadow p-6">
-      <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-        <h2 className="text-lg font-semibold">Mapa de rutas directas</h2>
-        <div className="flex gap-2 text-xs">
+    <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+      <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+        <h2 className="text-base font-semibold text-slate-900">Mapa de rutas directas</h2>
+        <div className="flex gap-4 text-sm border-b border-slate-200">
           {origins.map((o) => (
             <button
               key={o.iata}
               onClick={() => setSelectedOrigin(o.iata)}
-              className={`px-2 py-1 rounded-full border ${o.iata === selectedOrigin ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white border-slate-300 text-slate-600'}`}
+              className={`pb-2 -mb-px border-b-2 transition-colors ${
+                o.iata === selectedOrigin
+                  ? 'border-brand-600 text-brand-600 font-medium'
+                  : 'border-transparent text-slate-400 hover:text-slate-600'
+              }`}
             >
-              {o.city} ({o.iata})
+              {o.city}
             </button>
           ))}
         </div>
       </div>
       <style>{`
-        @keyframes twflow-dash {
-          to { stroke-dashoffset: -24; }
-        }
-        .twflow-line {
-          stroke-dasharray: 4 6;
-          animation: twflow-dash 1.6s linear infinite;
-        }
+        @keyframes twflow-dash { to { stroke-dashoffset: -24; } }
+        .twflow-line { stroke-dasharray: 4 6; animation: twflow-dash 1.6s linear infinite; }
       `}</style>
-      <div className="w-full overflow-x-auto">
-        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full min-w-[600px] h-auto" style={{ background: '#f4f5f6', borderRadius: 12 }}>
+      <div className="w-full overflow-x-auto rounded-xl bg-slate-50 text-brand-600">
+        <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full min-w-[600px] h-auto">
           {activeOrigin &&
             destinations.map((d) => {
               const p1 = project(activeOrigin.lat, activeOrigin.lon);
@@ -81,9 +80,9 @@ export default function RouteMap() {
                   y1={p1.y}
                   x2={p2.x}
                   y2={p2.y}
-                  stroke="#4a7ba6"
+                  stroke="currentColor"
                   strokeWidth={1}
-                  strokeOpacity={0.6}
+                  strokeOpacity={0.45}
                   className="twflow-line"
                 />
               );
@@ -92,8 +91,8 @@ export default function RouteMap() {
             const p = project(d.lat, d.lon);
             return (
               <g key={d.iata}>
-                <circle cx={p.x} cy={p.y} r={3} fill="#94a3b8" />
-                <text x={p.x + 5} y={p.y + 3} fontSize={9} fill="#475569">
+                <circle cx={p.x} cy={p.y} r={2.5} className="fill-slate-400" />
+                <text x={p.x + 5} y={p.y + 3} fontSize={9} className="fill-slate-500">
                   {d.city}
                 </text>
               </g>
@@ -104,8 +103,8 @@ export default function RouteMap() {
             const isActive = o.iata === selectedOrigin;
             return (
               <g key={o.iata}>
-                <circle cx={p.x} cy={p.y} r={isActive ? 6 : 4} fill={isActive ? '#0f172a' : '#64748b'} />
-                <text x={p.x + 7} y={p.y + 4} fontSize={11} fontWeight={700} fill="#0f172a">
+                <circle cx={p.x} cy={p.y} r={isActive ? 5.5 : 3.5} className={isActive ? 'fill-slate-900' : 'fill-slate-400'} />
+                <text x={p.x + 7} y={p.y + 4} fontSize={11} fontWeight={600} className="fill-slate-900">
                   {o.city}
                 </text>
               </g>
@@ -113,9 +112,8 @@ export default function RouteMap() {
           })}
         </svg>
       </div>
-      <p className="text-xs text-slate-400 mt-2">
-        Muestra los destinos curados (con datos de vuelo/hotel asociados) alcanzables en directo desde el origen
-        seleccionado. Coordenadas verificadas manualmente.
+      <p className="text-xs text-slate-400 mt-3">
+        Destinos curados con datos de vuelo y hotel asociados, alcanzables en directo desde el origen seleccionado.
       </p>
     </section>
   );

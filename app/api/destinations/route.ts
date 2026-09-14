@@ -25,7 +25,7 @@ export async function GET(request: NextRequest) {
              array_agg(DISTINCT origin_iata ORDER BY origin_iata) AS served_from,
              max(scraped_at) AS last_synced
       FROM aena_destinations
-      WHERE origin_iata = ANY(${origins})
+      WHERE origin_iata = ANY(${origins}::text[])
       GROUP BY dest_iata, dest_name, country
       ORDER BY country, dest_name
     `;

@@ -5,6 +5,7 @@ import type { LiveItinerary } from '@/lib/live-engine';
 import { parseSearchQuery } from '@/lib/nlp-search';
 import RouteMap from '@/components/RouteMap';
 import ToolsPanel from '@/components/ToolsPanel';
+import { IconPlane, IconSliders, IconMapPin } from '@/components/Icons';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -68,6 +69,7 @@ export default function HomePage() {
   const [nlpWarnings, setNlpWarnings] = useState<string[]>([]);
 
   const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
+  const [realDestError, setRealDestError] = useState<string | null>(null);
   const [realDestFilter, setRealDestFilter] = useState('');
   const [showRealDestPanel, setShowRealDestPanel] = useState(false);
 
@@ -83,10 +85,18 @@ export default function HomePage() {
       setRealDestinations([]);
       return;
     }
+    setRealDestError(null);
     fetch(`/api/destinations?origins=${originIatas.join(',')}`)
-      .then((r) => r.json())
+      .then(async (r) => {
+        const data = await r.json();
+        if (!r.ok) throw new Error(data.error ?? `Error ${r.status}`);
+        return data;
+      })
       .then((data) => setRealDestinations(data.destinations ?? []))
-      .catch(() => setRealDestinations([]));
+      .catch((e) => {
+        setRealDestinations([]);
+        setRealDestError(e.message);
+      });
   }, [originIatas]);
 
   const combos = originIatas.length * (destinationGroupIds.length + selectedDestIatas.length);
@@ -201,28 +211,31 @@ export default function HomePage() {
   const groupsList = meta?.groups ?? [{ id: 'poland', name: 'Polonia', country: 'Polonia' }];
 
   return (
-    <div className="space-y-8">
-      <header className="relative overflow-hidden rounded-2xl bg-[#f4f5f6] px-6 py-10 md:py-16 text-center border border-slate-200">
-        <p className="uppercase tracking-[0.3em] text-[11px] text-[#4a7ba6] font-semibold mb-3">Tiriti Travel &middot; buscador familiar</p>
-        <h1 className="text-4xl md:text-6xl font-black tracking-tight text-slate-900 leading-[1.05]">
-          ENCUENTRA<br />TU VUELO
+    <div className="space-y-10">
+      <header className="rounded-2xl bg-white border border-slate-200 px-6 py-12 md:py-16 text-center shadow-sm">
+        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
+          <IconPlane className="w-6 h-6" />
+        </div>
+        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-600">Tiriti Travel</p>
+        <h1 className="mt-3 text-3xl md:text-5xl font-bold tracking-tight text-slate-900">
+          Encuentra tu vuelo directo
         </h1>
-        <div className="mx-auto mt-4 h-px w-24 bg-[#4a7ba6]" />
-        <p className="mt-4 max-w-xl mx-auto text-sm text-slate-500">
-          Solo vuelos directos, ida y vuelta, desde ALC, MAD, VLC y RMU. Datos en vivo de Ignav, no estimaciones.
+        <p className="mt-4 max-w-lg mx-auto text-sm text-slate-500 leading-relaxed">
+          Ida y vuelta sin escalas desde Alicante, Madrid, Valencia y Murcia. Datos en vivo de Ignav,
+          nunca estimaciones.
         </p>
       </header>
 
       <RouteMap />
 
-      <section className="bg-white rounded-xl shadow p-6 space-y-3">
-        <h2 className="text-lg font-semibold">Busqueda en lenguaje natural (beta)</h2>
-        <p className="text-xs text-slate-500">
-          Escribe algo como: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h, regreso no antes de las 12h".
-          El sistema precargara los filtros; siempre revisa el resultado antes de buscar.
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-3">
+        <h2 className="text-base font-semibold text-slate-900">Busqueda en lenguaje natural</h2>
+        <p className="text-sm text-slate-500">
+          Ej.: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h,
+          regreso no antes de las 12h". Revisa siempre como se ha interpretado antes de buscar.
         </p>
         <textarea
-          className="w-full border rounded p-2 text-sm"
+          className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400"
           rows={2}
           value={nlpText}
           onChange={(e) => setNlpText(e.target.value)}
@@ -230,13 +243,13 @@ export default function HomePage() {
         />
         <button
           onClick={handleInterpret}
-          className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg"
+          className="bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
         >
           Interpretar y precargar filtros
         </button>
         {nlpWarnings.length > 0 && (
-          <div className="text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded p-2">
-            <p className="font-medium mb-1">Como se ha interpretado (revisa antes de buscar):</p>
+          <div className="text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">
+            <p className="font-medium mb-1">Revisa la interpretacion:</p>
             <ul className="list-disc pl-4 space-y-0.5">
               {nlpWarnings.map((w, i) => (
                 <li key={i}>{w}</li>
@@ -246,26 +259,26 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center gap-4 flex-wrap">
-          <h2 className="text-lg font-semibold">Filtros de busqueda</h2>
-          <span className="text-xs px-2 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-            Datos en vivo (Ignav)
-          </span>
-          <label className="flex items-center gap-2 text-sm ml-auto">
+      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+        <div className="flex items-center justify-between flex-wrap gap-3">
+          <div className="flex items-center gap-2">
+            <IconSliders className="w-5 h-5 text-brand-600" />
+            <h2 className="text-base font-semibold text-slate-900">Filtros de busqueda</h2>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={travelIdeasMode} onChange={(e) => setTravelIdeasMode(e.target.checked)} />
-            Modo "Quiero viajar, propon ideas"
+            Quiero viajar, propon ideas
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
-            <p className="text-sm font-medium mb-1">Origenes (elige uno o varios)</p>
+            <p className="text-sm font-medium text-slate-700 mb-2">Origenes</p>
             <div className="flex flex-wrap gap-2">
               {originsList.map((o) => (
                 <label
                   key={o.iata}
-                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${originIatas.includes(o.iata) ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white border-slate-300'}`}
+                  className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300 text-slate-600 hover:border-brand-300'}`}
                 >
                   <input
                     type="checkbox"
@@ -280,18 +293,19 @@ export default function HomePage() {
             <button
               type="button"
               onClick={() => setShowRealDestPanel((v) => !v)}
-              className="mt-2 text-xs text-[#4a7ba6] underline"
+              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-500"
             >
-              {showRealDestPanel ? 'Ocultar' : 'Elegir de'} los {realDestinations.length} destinos reales disponibles desde estos origenes
+              <IconMapPin className="w-3.5 h-3.5" />
+              {showRealDestPanel ? 'Ocultar destinos reales' : `Ver ${realDestinations.length} destinos reales disponibles`}
             </button>
           </div>
           <div>
-            <p className="text-sm font-medium mb-1">Destinos: grupos con evento/temporada curados</p>
+            <p className="text-sm font-medium text-slate-700 mb-2">Grupos curados (evento o temporada)</p>
             <div className={`flex flex-wrap gap-2 ${travelIdeasMode ? 'opacity-40 pointer-events-none' : ''}`}>
               {groupsList.map((g) => (
                 <label
                   key={g.id}
-                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${destinationGroupIds.includes(g.id) ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white border-slate-300'}`}
+                  className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${destinationGroupIds.includes(g.id) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300 text-slate-600 hover:border-brand-300'}`}
                 >
                   <input
                     type="checkbox"
@@ -305,35 +319,40 @@ export default function HomePage() {
             </div>
             {selectedDestIatas.length > 0 && (
               <p className="text-xs text-slate-500 mt-2">
-                + {selectedDestIatas.length} destino(s) suelto(s) elegido(s) abajo: {selectedDestIatas.join(', ')}
+                + {selectedDestIatas.length} destino(s) suelto(s): {selectedDestIatas.join(', ')}
               </p>
             )}
             {travelIdeasMode && (
-              <p className="text-xs text-slate-500 mt-1">
-                En modo "Quiero viajar" se buscan TODOS los grupos curados con tus filtros; no hace falta elegir uno.
+              <p className="text-xs text-slate-500 mt-2">
+                Se buscaran todos los grupos curados con los filtros de abajo; no hace falta elegir uno.
               </p>
             )}
           </div>
         </div>
 
         {showRealDestPanel && (
-          <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
+          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
             <p className="text-xs text-slate-600">
-              Union real de destinos con vuelo directo desde {originIatas.join(', ') || '(elige origenes)'}, segun la ultima
-              sincronizacion con Aena. Marca los que quieras incluir en la busqueda (ademas o en vez de los grupos curados).
+              Destinos con vuelo directo desde {originIatas.join(', ') || 'los origenes elegidos'}, segun la ultima
+              sincronizacion con Aena. Marca los que quieras anadir a la busqueda.
             </p>
+            {realDestError && (
+              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
+                No se pudo cargar el listado: {realDestError}
+              </p>
+            )}
             <input
               type="text"
               placeholder="Filtrar por ciudad, pais o IATA..."
-              className="w-full border rounded p-2 text-xs"
+              className="w-full border border-slate-300 rounded-lg p-2 text-xs"
               value={realDestFilter}
               onChange={(e) => setRealDestFilter(e.target.value)}
             />
-            <div className="max-h-56 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1 text-xs">
+            <div className="max-h-56 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1.5 text-xs">
               {filteredRealDestinations.map((d) => (
                 <label
                   key={d.dest_iata}
-                  className={`px-2 py-1 rounded border cursor-pointer ${selectedDestIatas.includes(d.dest_iata) ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white border-slate-200'}`}
+                  className={`px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${selectedDestIatas.includes(d.dest_iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-200 hover:border-brand-300'}`}
                 >
                   <input
                     type="checkbox"
@@ -348,81 +367,81 @@ export default function HomePage() {
                   </span>
                 </label>
               ))}
-              {filteredRealDestinations.length === 0 && (
+              {filteredRealDestinations.length === 0 && !realDestError && (
                 <p className="text-slate-400 col-span-full">Sin resultados o cache aun no sincronizada.</p>
               )}
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="col-span-2 grid grid-cols-2 gap-2">
-            <label className="text-sm">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
+          <div className="col-span-2 grid grid-cols-2 gap-3">
+            <label className="text-xs font-medium text-slate-600">
               Ida desde
-              <input type="date" className="mt-1 w-full border rounded p-2" value={outboundDateFrom} onChange={(e) => setOutboundDateFrom(e.target.value)} />
+              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={outboundDateFrom} onChange={(e) => setOutboundDateFrom(e.target.value)} />
             </label>
-            <label className="text-sm">
+            <label className="text-xs font-medium text-slate-600">
               Ida hasta
-              <input type="date" className="mt-1 w-full border rounded p-2" value={outboundDateTo} onChange={(e) => setOutboundDateTo(e.target.value)} />
+              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={outboundDateTo} onChange={(e) => setOutboundDateTo(e.target.value)} />
             </label>
           </div>
-          <div className="col-span-2 grid grid-cols-2 gap-2">
-            <label className="text-sm">
+          <div className="col-span-2 grid grid-cols-2 gap-3">
+            <label className="text-xs font-medium text-slate-600">
               Vuelta desde
-              <input type="date" className="mt-1 w-full border rounded p-2" value={inboundDateFrom} onChange={(e) => setInboundDateFrom(e.target.value)} />
+              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={inboundDateFrom} onChange={(e) => setInboundDateFrom(e.target.value)} />
             </label>
-            <label className="text-sm">
+            <label className="text-xs font-medium text-slate-600">
               Vuelta hasta
-              <input type="date" className="mt-1 w-full border rounded p-2" value={inboundDateTo} onChange={(e) => setInboundDateTo(e.target.value)} />
+              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={inboundDateTo} onChange={(e) => setInboundDateTo(e.target.value)} />
             </label>
           </div>
-          <label className="text-sm">
+          <label className="text-xs font-medium text-slate-600">
             Adultos
-            <input type="number" min={1} className="mt-1 w-full border rounded p-2" value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
+            <input type="number" min={1} className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
           </label>
-          <label className="text-sm">
+          <label className="text-xs font-medium text-slate-600">
             Ninos
-            <input type="number" min={0} className="mt-1 w-full border rounded p-2" value={children} onChange={(e) => setChildren(Number(e.target.value))} />
+            <input type="number" min={0} className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={children} onChange={(e) => setChildren(Number(e.target.value))} />
           </label>
-          <label className="text-sm">
-            Ida no antes de (hora)
+          <label className="text-xs font-medium text-slate-600">
+            Ida no antes de (h)
             <input
               type="number"
               min={0}
               max={23}
-              className="mt-1 w-full border rounded p-2"
+              className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm"
               value={outboundNotBeforeHour}
               onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
             />
           </label>
-          <label className="text-sm">
-            Vuelta no antes de (hora)
+          <label className="text-xs font-medium text-slate-600">
+            Vuelta no antes de (h)
             <input
               type="number"
               min={0}
               max={23}
-              className="mt-1 w-full border rounded p-2"
+              className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm"
               value={inboundNotBeforeHour}
               onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
             />
           </label>
-          <label className="text-sm">
+          <label className="text-xs font-medium text-slate-600">
             Precio max. total
-            <input type="number" min={0} className="mt-1 w-full border rounded p-2" value={maxPriceTotal} onChange={(e) => setMaxPriceTotal(e.target.value === '' ? '' : Number(e.target.value))} />
+            <input type="number" min={0} className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={maxPriceTotal} onChange={(e) => setMaxPriceTotal(e.target.value === '' ? '' : Number(e.target.value))} />
           </label>
-          <label className="text-sm">
+          <label className="text-xs font-medium text-slate-600">
             Ordenar por
-            <select className="mt-1 w-full border rounded p-2" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
-              <option value="checkout_time">Hora salida hotel (mejor primero)</option>
+            <select className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
+              <option value="checkout_time">Hora salida hotel</option>
               <option value="price">Precio total</option>
-              <option value="duration">Duracion total de vuelo</option>
+              <option value="duration">Duracion total</option>
             </select>
           </label>
-          <label className="text-sm flex items-center gap-2 mt-6">
+          <label className="text-xs font-medium text-slate-600 flex items-center gap-2 mt-5">
             <input type="checkbox" checked={requireCabinBaggage} onChange={(e) => setRequireCabinBaggage(e.target.checked)} />
-            Exigir equipaje de mano incluido
+            Exigir equipaje de mano
           </label>
-          <label className="text-sm flex items-center gap-2 mt-6">
+          <label className="text-xs font-medium text-slate-600 flex items-center gap-2 mt-5">
             <input type="checkbox" checked={allowOpenJaw} onChange={(e) => setAllowOpenJaw(e.target.checked)} />
             Permitir open-jaw en destino
           </label>
@@ -430,26 +449,25 @@ export default function HomePage() {
 
         {!travelIdeasMode && (
           <p className="text-xs text-slate-500">
-            Combinaciones origen x destino seleccionadas: <strong>{combos}</strong>
-            {combos > 6 && <span className="text-red-600"> (maximo 6 en Ignav; reduce la seleccion)</span>}
+            Combinaciones origen x destino: <strong>{combos}</strong>
+            {combos > 6 && <span className="text-red-600"> (maximo 6; reduce la seleccion)</span>}
           </p>
         )}
-        <p className="text-xs text-amber-600">
-          El rango maximo por tramo (ida o vuelta) es de 5 dias y el maximo de combinaciones origen x destino es 6, para no agotar la cuota gratuita de Ignav.
+        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          Maximo 5 dias por tramo y 6 combinaciones origen x destino, para no agotar la cuota gratuita de Ignav.
         </p>
 
-        <div className="flex gap-3">
-          <button
-            onClick={travelIdeasMode ? handleTravelIdeas : handleSearch}
-            disabled={loading || originIatas.length === 0 || (!travelIdeasMode && destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
-            className="bg-[#4a7ba6] hover:bg-[#3d6a91] text-white font-medium px-5 py-2 rounded-lg disabled:opacity-50"
-          >
-            {loading ? 'Buscando...' : travelIdeasMode ? 'Proponme ideas de viaje' : 'Buscar vuelos'}
-          </button>
-        </div>
+        <button
+          onClick={travelIdeasMode ? handleTravelIdeas : handleSearch}
+          disabled={loading || originIatas.length === 0 || (!travelIdeasMode && destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
+          className="bg-brand-600 hover:bg-brand-500 text-white font-medium px-6 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+        >
+          {loading ? 'Buscando...' : travelIdeasMode ? 'Proponme ideas de viaje' : 'Buscar vuelos'}
+        </button>
+
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {warnings.length > 0 && (
-          <div className="text-amber-700 text-sm bg-amber-50 border border-amber-200 rounded p-3">
+          <div className="text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">
             <p className="font-medium mb-1">Avisos de la busqueda:</p>
             <ul className="list-disc pl-5 space-y-0.5">
               {warnings.map((w, i) => (
@@ -474,48 +492,48 @@ export default function HomePage() {
       />
 
       {liveResults && (
-        <section className="bg-white rounded-xl shadow p-6">
+        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">Resultados ({liveResults.length})</h2>
-            <select className="border rounded p-1 text-xs" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
-              <option value="checkout_time">Ordenar: hora salida hotel</option>
-              <option value="price">Ordenar: precio total</option>
-              <option value="duration">Ordenar: duracion total</option>
+            <h2 className="text-base font-semibold text-slate-900">Resultados ({liveResults.length})</h2>
+            <select className="border border-slate-300 rounded-lg p-1.5 text-xs" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
+              <option value="checkout_time">Hora salida hotel</option>
+              <option value="price">Precio total</option>
+              <option value="duration">Duracion total</option>
             </select>
           </div>
-          {liveResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros para estas fechas. Revisa los avisos de arriba para saber el motivo exacto.</p>}
+          {liveResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros. Revisa los avisos de arriba.</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="text-left border-b">
-                  <th className="p-2">Ruta</th>
-                  <th className="p-2">Ida</th>
-                  <th className="p-2">Vuelta</th>
-                  <th className="p-2">Open-jaw</th>
-                  <th className="p-2">Precio total</th>
-                  <th className="p-2">Salida hotel</th>
-                  <th className="p-2">Notas</th>
-                  <th className="p-2">Reserva</th>
+                <tr className="text-left border-b border-slate-200 text-slate-500">
+                  <th className="p-2 font-medium">Ruta</th>
+                  <th className="p-2 font-medium">Ida</th>
+                  <th className="p-2 font-medium">Vuelta</th>
+                  <th className="p-2 font-medium">Open-jaw</th>
+                  <th className="p-2 font-medium">Precio</th>
+                  <th className="p-2 font-medium">Salida hotel</th>
+                  <th className="p-2 font-medium">Notas</th>
+                  <th className="p-2 font-medium">Reserva</th>
                 </tr>
               </thead>
               <tbody>
                 {liveResults.map((r, i) => {
                   const rowKey = `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
                   return (
-                    <tr key={rowKey} className="border-b align-top">
-                      <td className="p-2 font-medium">
+                    <tr key={rowKey} className="border-b border-slate-100 align-top">
+                      <td className="p-2 font-medium text-slate-800">
                         {r.originIata} to {r.destinationGroupName}
                         {r.isSingleIataTarget && <span className="ml-1 text-[10px] text-slate-400">(destino suelto)</span>}
                       </td>
                       <td className="p-2">{r.outbound.airline} {r.outbound.flight_number}<br />{r.outbound.origin_iata} to {r.outbound.destination_iata}<br />{new Date(r.outbound.departure_at).toLocaleString('es-ES')}</td>
                       <td className="p-2">{r.inbound.airline} {r.inbound.flight_number}<br />{r.inbound.origin_iata} to {r.inbound.destination_iata}<br />{new Date(r.inbound.departure_at).toLocaleString('es-ES')}</td>
                       <td className="p-2">{r.isOpenJaw ? 'Si' : 'No'}</td>
-                      <td className="p-2 font-medium">{r.totalPrice.toFixed(2)} {r.currency}</td>
+                      <td className="p-2 font-medium text-slate-800">{r.totalPrice.toFixed(2)} {r.currency}</td>
                       <td className="p-2">{new Date(r.hotelCheckoutAt).toLocaleString('es-ES')}</td>
-                      <td className="p-2 text-slate-600">{r.notes.join(' ')}</td>
+                      <td className="p-2 text-slate-500">{r.notes.join(' ')}</td>
                       <td className="p-2">
                         <button
-                          className="text-[#4a7ba6] underline text-xs"
+                          className="text-brand-600 hover:text-brand-500 underline text-xs"
                           onClick={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
                           disabled={loadingLinks === rowKey}
                         >
@@ -525,7 +543,7 @@ export default function HomePage() {
                           <ul className="mt-1 space-y-1">
                             {bookingLinks[rowKey].map((link, j) => (
                               <li key={j}>
-                                <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-[#4a7ba6] underline">
+                                <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:text-brand-500 underline">
                                   {link.provider_name} {link.price ? `(${link.price.amount} ${link.price.currency})` : ''}
                                 </a>
                               </li>
@@ -543,11 +561,9 @@ export default function HomePage() {
         </section>
       )}
 
-      <p className="text-xs text-slate-400">
-        Todos los resultados provienen de la API de Ignav en tiempo real. Cada dia adicional en el rango de fechas y cada
-        combinacion origen x destino consume peticiones de la cuota gratuita.<br />
-        El listado de "destinos reales disponibles" se sincroniza automaticamente cada dia contra los datos publicos de Aena;
-        ahora puedes elegir cualquiera de ellos y buscar itinerarios completos, no solo los grupos curados.
+      <p className="text-xs text-slate-400 text-center">
+        Datos en vivo de la API de Ignav. Cada dia adicional y cada combinacion origen x destino consume peticiones de
+        la cuota gratuita. Los destinos reales se sincronizan a diario contra los datos publicos de Aena.
       </p>
     </div>
   );

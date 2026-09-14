@@ -10,15 +10,38 @@ type Meta = {
   origins: { iata: string; city: string }[];
 };
 
+type RealDestination = {
+  dest_iata: string;
+  dest_name: string;
+  country: string;
+  served_from: string[];
+  last_synced: string | null;
+};
+
 type BookingLinksState = Record<string, { provider_name: string; url: string; price?: { amount: number; currency: string } }[]>;
 
 function toggle(arr: string[], value: string): string[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
 }
 
+function sortResults<T extends Itinerary | LiveItinerary>(items: T[], sortBy: 'checkout_time' | 'price' | 'duration'): T[] {
+  const copy = [...items];
+  copy.sort((a: any, b: any) => {
+    if (sortBy === 'price') return a.totalPrice - b.totalPrice;
+    if (sortBy === 'duration') {
+      const da = new Date(a.inbound.arrival_at).getTime() - new Date(a.outbound.departure_at).getTime();
+      const db = new Date(b.inbound.arrival_at).getTime() - new Date(b.outbound.departure_at).getTime();
+      return da - db;
+    }
+    return new Date(a.hotelCheckoutAt).getTime() - new Date(b.hotelCheckoutAt).getTime();
+  });
+  return copy;
+}
+
 export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [mode, setMode] = useState<'mock' | 'live'>('mock');
+  const [travelIdeasMode, setTravelIdeasMode] = useState(false);
   const [originIatas, setOriginIatas] = useState<string[]>(['ALC']);
   const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>(['poland']);
   const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
@@ -44,6 +67,10 @@ export default function HomePage() {
   const [nlpText, setNlpText] = useState('');
   const [nlpWarnings, setNlpWarnings] = useState<string[]>([]);
 
+  const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
+  const [realDestFilter, setRealDestFilter] = useState('');
+  const [showRealDestPanel, setShowRealDestPanel] = useState(false);
+
   useEffect(() => {
     fetch('/api/meta')
       .then((r) => r.json())
@@ -51,7 +78,26 @@ export default function HomePage() {
       .catch(() => setError('No se pudo cargar la configuracion inicial.'));
   }, []);
 
+  useEffect(() => {
+    if (originIatas.length === 0) {
+      setRealDestinations([]);
+      return;
+    }
+    fetch(`/api/destinations?origins=${originIatas.join(',')}`)
+      .then((r) => r.json())
+      .then((data) => setRealDestinations(data.destinations ?? []))
+      .catch(() => setRealDestinations([]));
+  }, [originIatas]);
+
   const combos = originIatas.length * destinationGroupIds.length;
+
+  const filteredRealDestinations = useMemo(() => {
+    const q = realDestFilter.trim().toLowerCase();
+    if (!q) return realDestinations;
+    return realDestinations.filter(
+      (d) => d.dest_name.toLowerCase().includes(q) || d.country.toLowerCase().includes(q) || d.dest_iata.toLowerCase().includes(q)
+    );
+  }, [realDestinations, realDestFilter]);
 
   function handleInterpret() {
     if (!meta || !nlpText.trim()) return;
@@ -69,14 +115,15 @@ export default function HomePage() {
     setNlpWarnings(parsed.warnings);
   }
 
-  async function handleSearch() {
+  async function runSearch(groupIdsOverride?: string[]) {
     setLoading(true);
     setError(null);
     setWarnings([]);
     setBookingLinks({});
+    const groupIds = groupIdsOverride ?? destinationGroupIds;
     const payload = {
       originIatas,
-      destinationGroupIds,
+      destinationGroupIds: groupIds,
       outboundDateFrom,
       outboundDateTo,
       inboundDateFrom,
@@ -100,10 +147,10 @@ export default function HomePage() {
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
       if (data.warnings?.length) setWarnings(data.warnings);
       if (mode === 'live') {
-        setLiveResults(data.itineraries);
+        setLiveResults(sortResults(data.itineraries ?? [], sortBy));
         setMockResults(null);
       } else {
-        setMockResults(data.itineraries);
+        setMockResults(sortResults(data.itineraries ?? [], sortBy));
         setLiveResults(null);
       }
     } catch (e: any) {
@@ -111,6 +158,28 @@ export default function HomePage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleSearch() {
+    await runSearch();
+  }
+
+  async function handleTravelIdeas() {
+    const allGroupIds = (meta?.groups ?? []).map((g) => g.id);
+    if (mode === 'live' && originIatas.length * allGroupIds.length > 6) {
+      setError(
+        'En modo Ignav, "Quiero viajar" con todos los destinos supera el limite de 6 combinaciones origen x destino. Reduce los origenes o cambia a modo mock, o desactiva "Quiero viajar" y elige destinos concretos.'
+      );
+      return;
+    }
+    setDestinationGroupIds(allGroupIds);
+    await runSearch(allGroupIds);
+  }
+
+  function handleReSort(newSortBy: 'checkout_time' | 'price' | 'duration') {
+    setSortBy(newSortBy);
+    if (mockResults) setMockResults(sortResults(mockResults, newSortBy));
+    if (liveResults) setLiveResults(sortResults(liveResults, newSortBy));
   }
 
   async function handleShowLinks(rowKey: string, ignavId: string) {
@@ -137,7 +206,18 @@ export default function HomePage() {
   const groupsList = meta?.groups ?? [{ id: 'poland', name: 'Polonia', country: 'Polonia' }];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+      <header className="relative overflow-hidden rounded-2xl bg-[#f4f5f6] px-6 py-10 md:py-16 text-center border border-slate-200">
+        <p className="uppercase tracking-[0.3em] text-[11px] text-[#4a7ba6] font-semibold mb-3">Tiriti Travel &middot; buscador familiar</p>
+        <h1 className="text-4xl md:text-6xl font-black tracking-tight text-slate-900 leading-[1.05]">
+          ENCUENTRA<br />TU VUELO
+        </h1>
+        <div className="mx-auto mt-4 h-px w-24 bg-[#4a7ba6]" />
+        <p className="mt-4 max-w-xl mx-auto text-sm text-slate-500">
+          Solo vuelos directos, ida y vuelta, desde ALC, MAD, VLC y RMU. Comparado y verificado, no estimado.
+        </p>
+      </header>
+
       <section className="bg-white rounded-xl shadow p-6 space-y-3">
         <h2 className="text-lg font-semibold">Busqueda en lenguaje natural (beta)</h2>
         <p className="text-xs text-slate-500">
@@ -170,22 +250,26 @@ export default function HomePage() {
       </section>
 
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap">
           <h2 className="text-lg font-semibold">Filtros de busqueda</h2>
           <div className="flex gap-2 text-sm">
             <button
               onClick={() => setMode('mock')}
-              className={`px-3 py-1 rounded-full border ${mode === 'mock' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700'}`}
+              className={`px-3 py-1 rounded-full border ${mode === 'mock' ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white text-slate-700'}`}
             >
               Datos de ejemplo (mock)
             </button>
             <button
               onClick={() => setMode('live')}
-              className={`px-3 py-1 rounded-full border ${mode === 'live' ? 'bg-brand-600 text-white' : 'bg-white text-slate-700'}`}
+              className={`px-3 py-1 rounded-full border ${mode === 'live' ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white text-slate-700'}`}
             >
               Datos en vivo (Ignav)
             </button>
           </div>
+          <label className="flex items-center gap-2 text-sm ml-auto">
+            <input type="checkbox" checked={travelIdeasMode} onChange={(e) => setTravelIdeasMode(e.target.checked)} />
+            Modo "Quiero viajar, propon ideas"
+          </label>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -195,7 +279,7 @@ export default function HomePage() {
               {originsList.map((o) => (
                 <label
                   key={o.iata}
-                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}
+                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${originIatas.includes(o.iata) ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white border-slate-300'}`}
                 >
                   <input
                     type="checkbox"
@@ -207,14 +291,21 @@ export default function HomePage() {
                 </label>
               ))}
             </div>
+            <button
+              type="button"
+              onClick={() => setShowRealDestPanel((v) => !v)}
+              className="mt-2 text-xs text-[#4a7ba6] underline"
+            >
+              {showRealDestPanel ? 'Ocultar' : 'Ver'} destinos reales disponibles desde estos origenes ({realDestinations.length})
+            </button>
           </div>
           <div>
-            <p className="text-sm font-medium mb-1">Destinos (elige uno o varios)</p>
-            <div className="flex flex-wrap gap-2">
+            <p className="text-sm font-medium mb-1">Destinos (elige uno o varios grupos)</p>
+            <div className={`flex flex-wrap gap-2 ${travelIdeasMode ? 'opacity-40 pointer-events-none' : ''}`}>
               {groupsList.map((g) => (
                 <label
                   key={g.id}
-                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${destinationGroupIds.includes(g.id) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}
+                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${destinationGroupIds.includes(g.id) ? 'bg-[#4a7ba6] text-white border-[#4a7ba6]' : 'bg-white border-slate-300'}`}
                 >
                   <input
                     type="checkbox"
@@ -226,8 +317,42 @@ export default function HomePage() {
                 </label>
               ))}
             </div>
+            {travelIdeasMode && (
+              <p className="text-xs text-slate-500 mt-1">
+                En modo "Quiero viajar" se buscan TODOS los destinos disponibles con tus filtros; no hace falta elegir uno.
+              </p>
+            )}
           </div>
         </div>
+
+        {showRealDestPanel && (
+          <div className="border border-slate-200 rounded-lg p-3 bg-slate-50 space-y-2">
+            <p className="text-xs text-slate-600">
+              Union real de destinos con vuelo directo desde {originIatas.join(', ') || '(elige origenes)'} segun la ultima
+              sincronizacion con Aena. Esta lista es informativa: para buscar itinerarios completos (con precio y hotel), el
+              destino debe estar dentro de uno de los grupos de arriba.
+            </p>
+            <input
+              type="text"
+              placeholder="Filtrar por ciudad, pais o IATA..."
+              className="w-full border rounded p-2 text-xs"
+              value={realDestFilter}
+              onChange={(e) => setRealDestFilter(e.target.value)}
+            />
+            <div className="max-h-48 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1 text-xs">
+              {filteredRealDestinations.map((d) => (
+                <div key={d.dest_iata} className="px-2 py-1 rounded bg-white border border-slate-200">
+                  <span className="font-medium">{d.dest_name}</span> ({d.dest_iata})
+                  <br />
+                  <span className="text-slate-400">{d.country} &middot; desde {d.served_from.join(', ')}</span>
+                </div>
+              ))}
+              {filteredRealDestinations.length === 0 && (
+                <p className="text-slate-400 col-span-full">Sin resultados o cache aun no sincronizada.</p>
+              )}
+            </div>
+          </div>
+        )}
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="col-span-2 grid grid-cols-2 gap-2">
@@ -286,7 +411,7 @@ export default function HomePage() {
           </label>
           <label className="text-sm">
             Ordenar por
-            <select className="mt-1 w-full border rounded p-2" value={sortBy} onChange={(e) => setSortBy(e.target.value as any)}>
+            <select className="mt-1 w-full border rounded p-2" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
               <option value="checkout_time">Hora salida hotel (mejor primero)</option>
               <option value="price">Precio total</option>
               <option value="duration">Duracion total de vuelo</option>
@@ -302,23 +427,33 @@ export default function HomePage() {
           </label>
         </div>
 
-        <p className="text-xs text-slate-500">
-          Combinaciones origen x destino seleccionadas: <strong>{combos}</strong>
-          {mode === 'live' && combos > 6 && <span className="text-red-600"> (maximo 6 en modo Ignav; reduce la seleccion)</span>}
-        </p>
+        {!travelIdeasMode && (
+          <p className="text-xs text-slate-500">
+            Combinaciones origen x destino seleccionadas: <strong>{combos}</strong>
+            {mode === 'live' && combos > 6 && <span className="text-red-600"> (maximo 6 en modo Ignav; reduce la seleccion)</span>}
+          </p>
+        )}
         {mode === 'live' && (
           <p className="text-xs text-amber-600">
             En modo Ignav, el rango maximo por tramo (ida o vuelta) es de 5 dias y el maximo de combinaciones origen x destino es 6, para no agotar la cuota gratuita.
           </p>
         )}
 
-        <button
-          onClick={handleSearch}
-          disabled={loading || originIatas.length === 0 || destinationGroupIds.length === 0}
-          className="bg-brand-600 hover:bg-brand-500 text-white font-medium px-5 py-2 rounded-lg disabled:opacity-50"
-        >
-          {loading ? 'Buscando...' : mode === 'live' ? 'Buscar en vivo (Ignav)' : 'Buscar (datos de ejemplo)'}
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={travelIdeasMode ? handleTravelIdeas : handleSearch}
+            disabled={loading || originIatas.length === 0 || (!travelIdeasMode && destinationGroupIds.length === 0)}
+            className="bg-[#4a7ba6] hover:bg-[#3d6a91] text-white font-medium px-5 py-2 rounded-lg disabled:opacity-50"
+          >
+            {loading
+              ? 'Buscando...'
+              : travelIdeasMode
+              ? 'Proponme ideas de viaje'
+              : mode === 'live'
+              ? 'Buscar en vivo (Ignav)'
+              : 'Buscar (datos de ejemplo)'}
+          </button>
+        </div>
         {error && <p className="text-red-600 text-sm">{error}</p>}
         {warnings.length > 0 && (
           <div className="text-amber-700 text-sm bg-amber-50 border border-amber-200 rounded p-3">
@@ -334,7 +469,14 @@ export default function HomePage() {
 
       {mockResults && (
         <section className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Resultados de ejemplo ({mockResults.length})</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Resultados de ejemplo ({mockResults.length})</h2>
+            <select className="border rounded p-1 text-xs" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
+              <option value="checkout_time">Ordenar: hora salida hotel</option>
+              <option value="price">Ordenar: precio total</option>
+              <option value="duration">Ordenar: duracion total</option>
+            </select>
+          </div>
           {mockResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros.</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -367,7 +509,14 @@ export default function HomePage() {
 
       {liveResults && (
         <section className="bg-white rounded-xl shadow p-6">
-          <h2 className="text-lg font-semibold mb-4">Resultados en vivo - Ignav ({liveResults.length})</h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-semibold">Resultados en vivo - Ignav ({liveResults.length})</h2>
+            <select className="border rounded p-1 text-xs" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
+              <option value="checkout_time">Ordenar: hora salida hotel</option>
+              <option value="price">Ordenar: precio total</option>
+              <option value="duration">Ordenar: duracion total</option>
+            </select>
+          </div>
           {liveResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros para estas fechas. Revisa los avisos de arriba para saber el motivo exacto.</p>}
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -397,7 +546,7 @@ export default function HomePage() {
                       <td className="p-2 text-slate-600">{r.notes.join(' ')}</td>
                       <td className="p-2">
                         <button
-                          className="text-brand-600 underline text-xs"
+                          className="text-[#4a7ba6] underline text-xs"
                           onClick={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
                           disabled={loadingLinks === rowKey}
                         >
@@ -407,7 +556,7 @@ export default function HomePage() {
                           <ul className="mt-1 space-y-1">
                             {bookingLinks[rowKey].map((link, j) => (
                               <li key={j}>
-                                <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-brand-600 underline">
+                                <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-[#4a7ba6] underline">
                                   {link.provider_name} {link.price ? `(${link.price.amount} ${link.price.currency})` : ''}
                                 </a>
                               </li>
@@ -427,7 +576,8 @@ export default function HomePage() {
 
       <p className="text-xs text-slate-400">
         Modo "Datos de ejemplo": fixtures internos, no representan precios reales.<br />
-        Modo "Datos en vivo (Ignav)": llama a la API de Ignav en tiempo real; cada dia adicional en el rango de fechas y cada combinacion origen x destino multiplica el numero de peticiones consumidas.
+        Modo "Datos en vivo (Ignav)": llama a la API de Ignav en tiempo real; cada dia adicional en el rango de fechas y cada combinacion origen x destino multiplica el numero de peticiones consumidas.<br />
+        El listado de "destinos reales disponibles" se sincroniza automaticamente cada dia contra los datos publicos de Aena.
       </p>
     </div>
   );

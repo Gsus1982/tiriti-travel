@@ -279,7 +279,7 @@ async function searchLiveForTarget(
 
   for (const outbound of outboundLegs) {
     for (const inbound of inboundLegs) {
-      if (new Date(inbound.departure_at) <= new Date(outbound.departure_at)) continue;
+      if (new Date(inbound.departure_at) <= new Date(outbound.arrival_at)) continue;
 
       const isOpenJaw = outbound.destination_iata !== inbound.origin_iata;
       if (isOpenJaw && !allowOpenJaw) continue;
@@ -394,7 +394,11 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
 
   merged.sort((a, b) => {
     if (sortBy === 'price') return a.totalPrice - b.totalPrice;
-    if (sortBy === 'duration') return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
+    if (sortBy === 'duration') {
+      const da = new Date(a.inbound.arrival_at).getTime() - new Date(a.outbound.departure_at).getTime();
+      const db = new Date(b.inbound.arrival_at).getTime() - new Date(b.outbound.departure_at).getTime();
+      return da - db;
+    }
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 

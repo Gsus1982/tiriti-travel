@@ -1,5 +1,59 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: tema claro real + fotos de ciudad + fixes de logica
+
+### Resumen ejecutivo
+El usuario mando una captura de la referencia real (app "aeroluxe"): tema CLARO con acento
+indigo/morado, tarjetas de resultado con foto (no icono), filtros en lateral, top nav
+oscuro. El rediseno de la sesion anterior se habia ido a un tema oscuro/dorado que no se
+parecia a esa referencia. Este pase corrige el rumbo del tema (claro/indigo, confirmado
+con el usuario antes de empezar) y sustituye la tabla de resultados por tarjetas con foto
+real de la ciudad de destino.
+
+### Cambios de diseno
+- Tema oscuro/dorado -> claro/indigo en toda la app (`tailwind.config.ts`, `globals.css`,
+  `TopNav.tsx` nuevo, `FlightPathStrip.tsx`, `ToolsPanel.tsx`, `page.tsx`).
+- Resultados: tabla -> tarjetas (`FlightResultCard.tsx` nuevo) con foto real de la ciudad
+  de destino en vez de un icono de avion, usando `lib/city-images.ts` nuevo: banco de 11
+  fotos de Pexels verificadas una a una (busqueda + confirmacion de la URL real del CDN
+  antes de incluir cada una) para las ciudades destino mas habituales, con una foto
+  generica de reserva (vista aerea del Mediterraneo desde ventanilla) para cualquier otro
+  destino real de Aena no cubierto.
+- Se quito el hero de foto grande de la sesion anterior (la referencia real no lo tiene).
+- **No implementado en este pase**: la disposicion de filtros en panel lateral de la
+  referencia. Nuestros filtros reales (origenes/destinos/fechas/pax) siguen a ancho
+  completo encima de los resultados en vez de en una barra lateral, para no arriesgar mas
+  cambios estructurales en la misma sesion. Pendiente si el usuario lo pide expresamente.
+
+### Fixes de logica (a peticion explicita de "revisa la logica")
+1. Inconsistencia entre el sort "duracion" del servidor (suma de duracion de vuelo) y el
+   del cliente al re-ordenar (duracion total del viaje) -- mismo filtro, dos formulas
+   distintas. Unificado a duracion total del viaje.
+2. Filtro de itinerarios invalidos comparaba la salida de vuelta contra la SALIDA de ida
+   en vez de la LLEGADA -- podia colar un vuelo de vuelta que sale antes de aterrizar el
+   de ida. Corregido.
+3. `ignavPost` (lib/ignav.ts) no tenia timeout en el fetch y no reintentaba si fetch()
+   lanzaba una excepcion (solo reintentaba status HTTP concretos) -- una incidencia de
+   red podia abortar toda la busqueda de golpe. Anadido timeout de 8s + reintento en
+   errores de red, mismo patron que ya usaba `lib/skyscanner.ts`.
+
+### PENDIENTE -- Sky Scrapper (RapidAPI) sin integrar todavia
+El usuario pidio explicitamente anadir la API Sky Scrapper (`lib/skyscanner.ts`, cliente
+ya escrito en una sesion anterior pero nunca conectado al motor de busqueda). Antes de
+tocar `live-engine.ts` para mezclar dos proveedores de vuelos con formatos de respuesta
+distintos, hay decisiones de arquitectura que conviene confirmar con el usuario primero
+(ver mensaje de chat de esta sesion): como mostrar la procedencia de cada resultado
+cuando se mezclan dos fuentes, que pasa si un mismo vuelo aparece en ambas APIs
+(deduplicacion), y si Sky Scrapper debe usarse siempre en paralelo con Ignav o solo como
+respaldo cuando Ignav falle/se quede sin cuota. Esta sesion se ha centrado en el diseno y
+la revision de logica pedidos primero.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios tras cada cambio. `next start` + `curl` en
+local confirmando HTTP 200 y contenido esperado en la home.
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion de rediseno visual (Claude, a peticion del usuario)
 
 ### Resumen ejecutivo

@@ -3,11 +3,13 @@
 @tailwind utilities;
 
 body {
-  background-color: #0a0c10;
-  color: #f5f3ef;
+  background: linear-gradient(180deg, #e9edfd 0%, #f4f6fd 35%, #ffffff 75%);
+  background-attachment: fixed;
+  color: #14161b;
+  min-height: 100vh;
 }
 
 ::selection {
-  background-color: #c9a24a;
-  color: #0a0c10;
+  background-color: #6366f1;
+  color: #ffffff;
 }

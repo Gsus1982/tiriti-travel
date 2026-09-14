@@ -5,17 +5,18 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        // Tema oscuro/dorado de lujo (ref. private-jet booking UI). Antes existia una
-        // paleta 'brand' azul sin relacion con el resto de la app, usada solo por
-        // RouteMap.tsx, que se habia quedado en el tema claro original.
+        // Tema claro con acento indigo (ref. private-jet booking UI real que mando el
+        // usuario). El nav superior y los titulares usan 'ink' (casi negro); las
+        // tarjetas son blancas sobre un fondo de cielo suave definido en globals.css.
         ink: {
-          DEFAULT: '#0a0c10',
-          panel: '#12151b'
+          DEFAULT: '#0e1013',
+          soft: '#4b5165'
         },
-        gold: {
-          DEFAULT: '#c9a24a',
-          light: '#dab765',
-          dim: '#8a723a'
+        indigo: {
+          DEFAULT: '#6366f1',
+          light: '#818cf8',
+          dark: '#4f46e5',
+          pale: '#eef1ff'
         }
       },
       fontFamily: {

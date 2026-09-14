@@ -2,6 +2,44 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.3.3] - 2026-09-14 (tema claro real + fotos de ciudad + fixes de logica)
+
+El usuario mando una captura de la referencia real (tema CLARO con acento indigo, tarjetas
+con foto de avion, filtros en lateral) -- el rediseno de la sesion anterior se habia ido a
+un tema oscuro/dorado que no se parecia a la referencia real. Este pase corrige el rumbo.
+
+### Cambiado (diseno)
+- **Tema completo de oscuro/dorado a claro/indigo**, fiel a la captura real: fondo con
+  degradado suave tipo cielo, tarjetas blancas, nav superior oscuro, acento indigo
+  (`#6366f1`) en vez de dorado. `tailwind.config.ts` con tokens `ink`/`indigo` nuevos.
+- **`components/TopNav.tsx` nuevo**: barra de navegacion oscura con logo, como en la
+  referencia (sin inventar enlaces de navegacion falsos que no existen en la app).
+- **Resultados: de tabla a tarjetas con foto real de la ciudad de destino** (no icono de
+  avion): `components/FlightResultCard.tsx` nuevo + `lib/city-images.ts` nuevo con un
+  banco de 11 fotos de Pexels verificadas una a una (Paris, Londres, Roma, Amsterdam,
+  Lisboa, Praga, Viena, Atenas, Estocolmo, Cracovia, Budapest) y una foto generica de
+  reserva para cualquier otro destino real de Aena no cubierto por el banco.
+- `components/ToolsPanel.tsx` y `components/FlightPathStrip.tsx` retematizados a
+  claro/indigo (se habian quedado en dark/dorado de la sesion anterior).
+- Quitado el hero de foto grande de la sesion anterior: la referencia real no lo tiene,
+  usa el fondo con degradado + la barra de busqueda directamente.
+
+### Corregido (logica, a peticion explicita de revision)
+- **Inconsistencia en "ordenar por duracion"**: el servidor (`lib/live-engine.ts`)
+  ordenaba por la SUMA de duracion de vuelo (ida+vuelta); el cliente (`app/page.tsx`) al
+  re-ordenar la misma lista usaba la duracion TOTAL del viaje (salida de ida a llegada de
+  vuelta). Mismo filtro, dos formulas -- el orden podia cambiar solo por re-ordenar sin
+  tocar los datos. Unificado a la duracion total del viaje en ambos sitios.
+- **Itinerarios fisicamente imposibles**: el filtro que descarta combinaciones invalidas
+  comparaba la salida de vuelta contra la SALIDA de ida en vez de la LLEGADA de ida --
+  permitia colar un vuelo de vuelta que sale antes de que el de ida haya aterrizado.
+  Corregido a comparar contra `outbound.arrival_at`.
+- **`ignavPost` sin timeout y sin reintento en errores de red**: si `fetch()` lanzaba una
+  excepcion (timeout, DNS, red caida) en vez de devolver un status HTTP, el error se
+  propagaba directo sin pasar por la logica de reintento -- una sola incidencia de red
+  abortaba toda la busqueda. Anadido timeout de 8s (mismo patron que `lib/skyscanner.ts`)
+  y los errores de red ahora se reintentan igual que los status HTTP reintentables.
+
 ## [0.3.2] - 2026-09-14 (rediseno visual)
 
 ### Corregido

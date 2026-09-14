@@ -90,14 +90,30 @@ const MAX_RETRIES = 2;
 async function ignavPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-    const res = await fetch(`${IGNAV_BASE_URL}${path}`, {
-      method: 'POST',
-      headers: {
-        'X-Api-Key': getApiKey(),
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(body)
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${IGNAV_BASE_URL}${path}`, {
+        method: 'POST',
+        headers: {
+          'X-Api-Key': getApiKey(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body),
+        // FIX (auditoria): sin timeout, un Ignav colgado bloqueaba la peticion hasta que
+        // Vercel mataba la funcion entera a los 10s (plan Hobby), sin dar ninguna
+        // oportunidad de fallar rapido y seguir con el resto de peticiones en paralelo.
+        signal: AbortSignal.timeout(8000)
+      });
+    } catch (err) {
+      // FIX (auditoria): antes, si fetch() lanzaba (timeout, DNS, red caida), el error
+      // se propagaba directo sin pasar por la logica de reintento de abajo -- una sola
+      // incidencia de red abortaba toda la busqueda. Ahora se trata igual que un status
+      // reintentable.
+      lastError = err instanceof Error ? err : new Error('Error de red desconocido llamando a Ignav');
+      if (attempt === MAX_RETRIES) throw lastError;
+      await sleep(400 * (attempt + 1));
+      continue;
+    }
     if (res.ok) {
       return (await res.json()) as T;
     }

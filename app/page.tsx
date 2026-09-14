@@ -11,11 +11,15 @@ type Meta = {
 
 type BookingLinksState = Record<string, { provider_name: string; url: string; price?: { amount: number; currency: string } }[]>;
 
+function toggle(arr: string[], value: string): string[] {
+  return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+}
+
 export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [mode, setMode] = useState<'mock' | 'live'>('mock');
-  const [originIata, setOriginIata] = useState('ALC');
-  const [destinationGroupId, setDestinationGroupId] = useState('poland');
+  const [originIatas, setOriginIatas] = useState<string[]>(['ALC']);
+  const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>(['poland']);
   const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
   const [outboundDateTo, setOutboundDateTo] = useState('2026-12-05');
   const [inboundDateFrom, setInboundDateFrom] = useState('2026-12-08');
@@ -43,14 +47,16 @@ export default function HomePage() {
       .catch(() => setError('No se pudo cargar la configuracion inicial.'));
   }, []);
 
+  const combos = originIatas.length * destinationGroupIds.length;
+
   async function handleSearch() {
     setLoading(true);
     setError(null);
     setWarnings([]);
     setBookingLinks({});
     const payload = {
-      originIata,
-      destinationGroupId,
+      originIatas,
+      destinationGroupIds,
       outboundDateFrom,
       outboundDateTo,
       inboundDateFrom,
@@ -107,6 +113,9 @@ export default function HomePage() {
     }
   }
 
+  const originsList = meta?.origins ?? [{ iata: 'ALC', city: 'Alicante' }];
+  const groupsList = meta?.groups ?? [{ id: 'poland', name: 'Polonia', country: 'Polonia' }];
+
   return (
     <div className="space-y-6">
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
@@ -127,23 +136,43 @@ export default function HomePage() {
             </button>
           </div>
         </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-sm font-medium mb-1">Origenes (elige uno o varios)</p>
+            <div className="flex flex-wrap gap-2">
+              {originsList.map((o) => (
+                <label key={o.iata} className={`text-xs px-2 py-1 rounded border cursor-pointer ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}>
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={originIatas.includes(o.iata)}
+                    onChange={() => setOriginIatas((prev) => toggle(prev, o.iata))}
+                  />
+                  {o.city} ({o.iata})
+                </label>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-sm font-medium mb-1">Destinos (elige uno o varios)</p>
+            <div className="flex flex-wrap gap-2">
+              {groupsList.map((g) => (
+                <label key={g.id} className={`text-xs px-2 py-1 rounded border cursor-pointer ${destinationGroupIds.includes(g.id) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}>
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={destinationGroupIds.includes(g.id)}
+                    onChange={() => setDestinationGroupIds((prev) => toggle(prev, g.id))}
+                  />
+                  {g.name}
+                </label>
+              ))}
+            </div>
+          </div>
+        </div>
+
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <label className="text-sm">
-            Origen
-            <select className="mt-1 w-full border rounded p-2" value={originIata} onChange={(e) => setOriginIata(e.target.value)}>
-              {(meta?.origins ?? [{ iata: 'ALC', city: 'Alicante' }]).map((o) => (
-                <option key={o.iata} value={o.iata}>{o.city} ({o.iata})</option>
-              ))}
-            </select>
-          </label>
-          <label className="text-sm">
-            Destino (grupo)
-            <select className="mt-1 w-full border rounded p-2" value={destinationGroupId} onChange={(e) => setDestinationGroupId(e.target.value)}>
-              {(meta?.groups ?? [{ id: 'poland', name: 'Polonia', country: 'Polonia' }]).map((g) => (
-                <option key={g.id} value={g.id}>{g.name}</option>
-              ))}
-            </select>
-          </label>
           <div className="col-span-2 grid grid-cols-2 gap-2">
             <label className="text-sm">
               Ida desde
@@ -201,14 +230,20 @@ export default function HomePage() {
             Permitir open-jaw en destino
           </label>
         </div>
+
+        <p className="text-xs text-slate-500">
+          Combinaciones origen x destino seleccionadas: <strong>{combos}</strong>
+          {mode === 'live' && combos > 6 && <span className="text-red-600"> (maximo 6 en modo Ignav; reduce la seleccion)</span>}
+        </p>
         {mode === 'live' && (
           <p className="text-xs text-amber-600">
-            En modo Ignav, el rango maximo por tramo (ida o vuelta) es de 5 dias, para no agotar la cuota gratuita de peticiones.
+            En modo Ignav, el rango maximo por tramo (ida o vuelta) es de 5 dias y el maximo de combinaciones origen x destino es 6, para no agotar la cuota gratuita.
           </p>
         )}
+
         <button
           onClick={handleSearch}
-          disabled={loading}
+          disabled={loading || originIatas.length === 0 || destinationGroupIds.length === 0}
           className="bg-brand-600 hover:bg-brand-500 text-white font-medium px-5 py-2 rounded-lg disabled:opacity-50"
         >
           {loading ? 'Buscando...' : mode === 'live' ? 'Buscar en vivo (Ignav)' : 'Buscar (datos de ejemplo)'}
@@ -267,6 +302,7 @@ export default function HomePage() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="text-left border-b">
+                  <th className="p-2">Ruta</th>
                   <th className="p-2">Ida</th>
                   <th className="p-2">Vuelta</th>
                   <th className="p-2">Open-jaw</th>
@@ -281,6 +317,7 @@ export default function HomePage() {
                   const rowKey = `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
                   return (
                     <tr key={rowKey} className="border-b align-top">
+                      <td className="p-2 font-medium">{r.originIata} to {r.destinationGroupName}</td>
                       <td className="p-2">{r.outbound.airline} {r.outbound.flight_number}<br />{r.outbound.origin_iata} to {r.outbound.destination_iata}<br />{new Date(r.outbound.departure_at).toLocaleString('es-ES')}</td>
                       <td className="p-2">{r.inbound.airline} {r.inbound.flight_number}<br />{r.inbound.origin_iata} to {r.inbound.destination_iata}<br />{new Date(r.inbound.departure_at).toLocaleString('es-ES')}</td>
                       <td className="p-2">{r.isOpenJaw ? 'Si' : 'No'}</td>
@@ -319,7 +356,7 @@ export default function HomePage() {
 
       <p className="text-xs text-slate-400">
         Modo "Datos de ejemplo": fixtures internos, no representan precios reales.<br />
-        Modo "Datos en vivo (Ignav)": llama a la API de Ignav en tiempo real; cada dia adicional en el rango de fechas multiplica el numero de peticiones consumidas.
+        Modo "Datos en vivo (Ignav)": llama a la API de Ignav en tiempo real; cada dia adicional en el rango de fechas y cada combinacion origen x destino multiplica el numero de peticiones consumidas.
       </p>
     </div>
   );

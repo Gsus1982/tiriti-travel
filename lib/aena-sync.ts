@@ -52,26 +52,46 @@ export function parseDestinationsHtml(html: string): ParsedDestination[] {
   return results;
 }
 
-export async function fetchAenaDestinations(origin: string, timeoutMs = 8000): Promise<ParsedDestination[]> {
+function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(`Timeout duro de ${ms}ms alcanzado en ${label}`)), ms);
+    promise.then(
+      (v) => { clearTimeout(timer); resolve(v); },
+      (e) => { clearTimeout(timer); reject(e); }
+    );
+  });
+}
+
+export async function fetchAenaDestinations(origin: string, timeoutMs = 5000): Promise<ParsedDestination[]> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];
   if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
   const url = `https://www.aena.es/es/${slug}/${path}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'TiritiTravelSyncBot/1.0 (uso personal, sincronizacion diaria de destinos)',
-      'Accept-Language': 'es-ES,es;q=0.9',
-    },
-    cache: 'no-store',
-    signal: AbortSignal.timeout(timeoutMs),
-  });
-  if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
-  const html = await res.text();
-  const parsed = parseDestinationsHtml(html);
-  if (parsed.length < 5) {
-    throw new Error(`Parseo sospechoso para ${origin}: solo ${parsed.length} destinos.`);
-  }
-  return parsed;
+
+  // Doble proteccion: AbortSignal.timeout() aborta la conexion HTTP, y
+  // withHardTimeout() garantiza que la promesa se resuelve/rechaza igual
+  // aunque el abort no se propague a tiempo (defensivo ante posibles
+  // bloqueos de red silenciosos de Aena hacia IPs de datacenter).
+  const doFetch = async () => {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; TiritiTravelSyncBot/1.0; +uso personal)',
+        'Accept-Language': 'es-ES,es;q=0.9',
+        Accept: 'text/html',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
+    const html = await res.text();
+    const parsed = parseDestinationsHtml(html);
+    if (parsed.length < 5) {
+      throw new Error(`Parseo sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena).`);
+    }
+    return parsed;
+  };
+
+  return withHardTimeout(doFetch(), timeoutMs + 500, `fetch Aena ${origin}`);
 }
 
 /**

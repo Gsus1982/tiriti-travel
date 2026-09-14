@@ -1,5 +1,129 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: panel lateral + revision de logica + propuestas
+
+### Cambios de diseno aplicados
+- Filtros en panel lateral (ver CHANGELOG). Split: "Quien, cuando y a donde" (origenes,
+  destinos, fechas, pax, boton de busqueda) a ancho completo; refinamientos (horarios,
+  precio/orden, extras) en `FilterAccordion.tsx` a la derecha.
+- Fondo de nubes con la app enmarcada en el medio en pantallas medianas/grandes; en movil
+  ocupa toda la pantalla (uso principal: web-app de iPhone anadida a inicio).
+- Version visible en el nav (`lib/version.ts`, sincronizar a mano con `package.json` y el
+  changelog en cada sesion). Metadatos `appleWebApp` + `viewport-fit=cover` +
+  `safe-area-inset` para que se comporte bien como web-app de iPhone (pantalla completa,
+  respeta notch/isla dinamica y barra de home).
+- Renombrados 2 elementos de UI que eran poco claros (ver revision de nombres abajo).
+
+---
+
+### REVISION DE LOGICA Y UX (a peticion explicita del usuario)
+
+#### 1. Nombres de filtros -- cambios ya aplicados
+- "Filtros de busqueda" -> **"Quien, cuando y a donde"**: el nombre viejo no decia nada
+  (toda la app son "filtros de busqueda"); el nuevo describe lo que hay dentro.
+- "Permitir open-jaw en destino" -> **"Permitir llegar y salir por aeropuertos distintos
+  (open-jaw)"**: "open-jaw" es jerga del sector que un usuario normal no tiene por que
+  conocer; ahora se explica en lenguaje llano y se deja el termino tecnico entre
+  parentesis para quien si lo conozca.
+
+#### 2. Nombres que se quedan igual pero podrian mejorar (no tocados, para no acumular
+mas cambios de golpe -- decidir si merece la pena)
+- "Ida no antes de (h)" / "Vuelta no antes de (h)": funcionan pero son ambiguos sobre si
+  se refieren a la fecha o a la hora. Alternativa: "Salida no antes de las 18h" con un
+  selector de hora en vez de un numero suelto de 0-23.
+- "Precio max. total": correcto, pero no aclara si es por persona o para todo el grupo
+  (es total del grupo, ver `pax.adults + pax.children` en `live-engine.ts`). Podria decir
+  "Precio maximo total (grupo completo)".
+- El checkbox "Incluir Sky Scrapper (cuota mensual limitada)" podria llevar un icono de
+  info con el numero exacto de peticiones restantes si en el futuro se guarda un contador
+  en BD (ver seccion Sky Scrapper de la sesion anterior).
+
+#### 3. Busqueda en lenguaje natural: limitacion de fondo, no solo de nombres
+Lo que la interfaz llama "busqueda en lenguaje natural" **no usa ningun modelo de IA**:
+es un parser hecho a mano con expresiones regulares (`lib/nlp-search.ts`) que busca
+palabras clave como "el", "dia", "despues de las", etc. Funciona bien para frases
+sencillas y ya se le corrigieron 2 bugs reales de atribucion dia/hora en una sesion
+anterior, pero tiene un techo estructural: cualquier frase que no encaje con esos
+patrones concretos (sinonimos, un orden de palabras distinto, una condicion mas compleja)
+simplemente no se interpreta bien, y el usuario solo se entera revisando manualmente los
+avisos antes de buscar.
+
+**Propuesta**: sustituir (o complementar) el parser de regex por una llamada real a un
+modelo de lenguaje (API de Anthropic) que reciba la frase del usuario + la lista de
+origenes/grupos/paises disponibles, y devuelva la misma estructura de filtros
+(origenes, destino, fechas, horas) en JSON. Esto:
+- Entiende variaciones de redaccion que el regex nunca cubrira ("salgo el finde que
+  viene", "algo economico a mediados de diciembre", sinonimos, errores tipograficos).
+- Puede explicar en lenguaje natural POR QUE ha interpretado algo de una forma (en vez de
+  los avisos genericos actuales).
+- Requiere: una `ANTHROPIC_API_KEY` en Vercel, un endpoint nuevo (`/api/nlp-parse`) que
+  llame a la API de Anthropic server-side (nunca desde el cliente, para no exponer la
+  key), y tiene un coste por peticion (pequeño con un modelo economico, pero no cero,
+  a diferencia del parser de regex actual que es gratis). No implementado en esta sesion
+  -- requiere que decidas si quieres asumir ese coste y darme la key.
+
+#### 4. "Quiero viajar, propon ideas": lo que hace hoy es mas limitado de lo que suena
+El checkbox actual (`handleTravelIdeas` en `page.tsx`) simplemente selecciona TODOS los
+grupos de destino curados y lanza la misma busqueda de siempre (con el limite de 6
+combinaciones origen x destino de Ignav). No "propone ideas" de forma inteligente: solo
+amplia el destino a "todos los que ya tenemos curados" y ordena por el criterio de
+`sortBy` que ya estuviera elegido (por defecto, hora de salida del hotel). Si `sortBy` no
+esta en "precio", ni siquiera prioriza lo barato.
+
+**Propuesta del usuario, que comparto**: desdoblar en 2 modos claramente distintos:
+
+**A) "Ideas por precio"** -- viable ahora mismo, sin APIs nuevas:
+- Mismo mecanismo actual (buscar en todos los grupos curados + destinos reales
+  disponibles) pero forzando `sortBy = 'price'` y mostrando explicitamente "mas barato
+  primero" en vez de dejarlo al azar del sort ya elegido.
+- Mejora barata: en vez de limitarse a los 8 grupos curados, usar tambien un muestreo de
+  los destinos REALES de Aena (los mismos que ya se listan en el selector de destinos),
+  no solo los curados, para dar mas variedad -- respetando siempre el limite de 6 combos.
+
+**B) "Ideas por eventos/actividades"** -- necesita una fuente de datos nueva:
+Ahora mismo la app NO tiene ninguna base de datos ni API de eventos conectada (se quito
+la lista fija de eventos en una sesion anterior a favor del cuadro de lenguaje natural).
+Para que este modo funcione de verdad hacen falta datos reales de que esta pasando en
+cada ciudad en las fechas elegidas. Opciones evaluadas (ninguna implementada, todas
+requieren decidir y dar de alta una cuenta/API key):
+
+| Opcion | Que ofrece | Pega principal |
+|---|---|---|
+| **PredictHQ** | Agregador de eventos (conciertos, festivales, deportivos, culturales) de muchas fuentes, con "rank" de relevancia/afluencia por evento. Cobertura europea solida. | Verificado en esta sesion (web): es un producto orientado a cuentas B2B grandes (retail, hosteleria, logistica) con prueba gratuita de 14 dias y despues un "Free Plan" cuyos limites no se publican en la web -- hay que hablar con ventas para saber que incluye de verdad. No es una API de autoservicio con tier gratuito claro para un desarrollador individual. |
+| **Ticketmaster Discovery API** | Gratis hasta 5000 peticiones/dia. Buena cobertura de conciertos y grandes eventos. | Cobertura floja en cosas no-Ticketmaster (mercados navideños, festivales pequeños, eventos culturales gratuitos -- justo el tipo de cosas que ya buscas a mano en las sesiones de "mercados navideños"). |
+| **Eventbrite API** | Cubre eventos mas pequeños/locales que Ticketmaster. | Verificado en esta sesion (web): el endpoint publico de busqueda de eventos (`/v3/events/search/`) esta cerrado desde diciembre de 2019/febrero de 2020 para desarrolladores nuevos sin acuerdo comercial, y sigue asi -- confirmado en el propio repositorio de incidencias de Eventbrite. No es una opcion viable sin ese acuerdo. |
+| **Apoyo de IA en vez de una API de eventos** | En lugar de una base de datos de eventos, usar una llamada a un modelo de lenguaje que, dada una ciudad y un rango de fechas, sugiera que suele haber (mercados navideños tipicos de esas fechas, festivales conocidos, temporada alta/baja) basandose en su conocimiento general -- similar a como se investigo a mano la Fete des Lumieres de Lyon en una sesion de chat anterior. | No son datos en tiempo real ni verificados (un modelo puede equivocarse en fechas exactas de un evento de un año concreto); hay que dejarle claro al usuario en la propia interfaz que son sugerencias a verificar, no una agenda oficial. |
+
+**Mi recomendacion**: empezar por la opcion de apoyo de IA (mismo mecanismo que ya se
+usa para el "apoyo de IA" del punto 3, una sola integracion sirve para las dos cosas) en
+vez de contratar una API de eventos de pago sin haber validado antes si el modo "ideas
+por eventos" se usa de verdad. Si con el tiempo se ve que hace falta precision real de
+fechas/aforo, entonces plantear PredictHQ.
+
+### Ideas de mejora generales (a peticion explicita, sin implementar)
+1. **Cache persistente de resoluciones IATA de Sky Scrapper** en BD (ver sesion
+   anterior) -- ahorra cuota mensual tan ajustada.
+2. **Historial de busquedas guardadas**: dado que ya existe "guardar alerta de precio",
+   seria poco trabajo anadir "repetir esta busqueda" con un clic desde un historial
+   reciente (guardado en localStorage del navegador, sin necesidad de cuenta de usuario).
+3. **Indicador de progreso durante la busqueda**: con hasta 60 peticiones a Ignav en
+   paralelo, una busqueda puede tardar varios segundos sin ningun feedback intermedio
+   mas alla del texto "Buscando...". Un contador simple ("consultando aeropuerto 3 de
+   6...") mejoraria la percepcion de velocidad.
+4. **Compartir un resultado por enlace**: generar una URL con los filtros de la busqueda
+   codificados en la query string, para poder mandarsela a otra persona o guardarla en
+   Notas del iPhone sin tener que rehacer la busqueda.
+5. **Modo oscuro real como preferencia, no como tema fijo**: ahora que el tema base es
+   claro, se podria anadir un toggle claro/oscuro que respete `prefers-color-scheme`,
+   en vez de forzar un unico tema para todo el mundo.
+6. **Service worker minimo para "anadir a inicio" en iPhone**: los metadatos
+   `appleWebApp` de esta sesion ya dan pantalla completa, pero sin un manifest.json +
+   icono propio, el icono en la pantalla de inicio sera una captura generica de la pagina.
+   Vale la pena anadir un `app/manifest.ts` (soportado nativamente por Next.js 14) con un
+   icono propio de 180x180 al menos para Apple.
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: integracion Sky Scrapper (RapidAPI)
 
 ### Resumen ejecutivo

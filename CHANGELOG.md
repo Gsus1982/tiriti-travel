@@ -2,6 +2,34 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.4.0] - 2026-09-14 (panel lateral, marco con fondo de nubes, version visible, web-app iPhone)
+
+### Anadido
+- **Numero de version visible en la app** (`lib/version.ts`, junto al logo en `TopNav`).
+  Mantener sincronizada a mano con `package.json` y la entrada mas reciente de este
+  changelog -- no hay build step que las una automaticamente.
+- **Metadatos de web-app para iPhone** (`app/layout.tsx`): `appleWebApp` (pantalla
+  completa al anadir a inicio, sin barra de Safari), `viewport-fit: cover` +
+  `env(safe-area-inset-*)` en `globals.css` para que el nav superior no quede debajo del
+  notch/isla dinamica ni el contenido final debajo de la barra de home.
+
+### Cambiado (diseno)
+- **Fondo de nubes con el contenido enmarcado en el medio**, como en la captura de
+  referencia: en pantallas medianas/grandes, la app entera es una tarjeta redondeada con
+  sombra que flota sobre un fondo azul/indigo mas oscuro (visible alrededor). En movil
+  (uso principal: "web-app de iPhone"), la tarjeta ocupa toda la pantalla sin marco ni
+  esquinas redondeadas -- no tiene sentido gastar espacio en decoracion en una pantalla
+  pequeña, y asi se siente como una app nativa al anadirla a inicio.
+- **Filtros en panel lateral**, como en la referencia: la tarjeta principal ("Quien,
+  cuando y a donde") con origenes/destinos/fechas/pax y el boton de busqueda se queda a
+  ancho completo; los filtros de refinamiento (horarios, precio, orden, equipaje,
+  open-jaw, Sky Scrapper, ciudades a descartar) pasan a un panel lateral fijo
+  (`components/FilterAccordion.tsx`, acordeones nativos `<details>`, sin estado extra) a
+  la derecha de los resultados, con el panel de calendario/alertas debajo.
+- **Renombrada la seccion "Filtros de busqueda" a "Quien, cuando y a donde"** y el
+  checkbox "Permitir open-jaw en destino" a "Permitir llegar y salir por aeropuertos
+  distintos (open-jaw)" -- ver revision de nombres en docs/STATUS.md.
+
 ## [0.3.4] - 2026-09-14 (integracion Sky Scrapper)
 
 A peticion explicita del usuario: mezclar resultados de Ignav y Sky Scrapper (RapidAPI) en

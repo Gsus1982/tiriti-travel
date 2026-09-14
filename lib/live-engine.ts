@@ -6,6 +6,11 @@ import { datesBetween } from './types';
 const AIRPORT_BUFFER_MIN = 120;
 const MAX_DATE_RANGE_DAYS = 5;
 const MAX_ORIGIN_GROUP_COMBOS = 6;
+// Limite conservador sobre el numero REAL de peticiones a Ignav por busqueda (no solo
+// combos origen x destino). Con una cuota de 1000 peticiones de por vida, este tope evita
+// que una sola busqueda con destinos multi-aeropuerto y rango de fechas amplio se lleve
+// una parte desproporcionada de la cuota de golpe.
+const MAX_IGNAV_REQUESTS_PER_SEARCH = 60;
 
 export type LiveFilters = {
   originIatas: string[];
@@ -236,6 +241,40 @@ async function searchLiveForTarget(
   if (outboundLegs.length === 0) warnings.push(`[${originIata} -> ${groupName}] Ignav no devolvio vuelos de ida directos.`);
   if (inboundLegs.length === 0) warnings.push(`[${groupName} -> ${originIata}] Ignav no devolvio vuelos de vuelta directos.`);
 
+  // FIX (auditoria): antes se hacian 1-2 consultas SQL secuenciales POR CADA combinacion
+  // ida x vuelta dentro del doble bucle (clasico N+1) -- con pocos legs no se nota, pero
+  // segun crezca el numero de vuelos devueltos por Ignav esto puede sumar decenas/cientos
+  // de round-trips secuenciales y contribuir a los mismos timeouts de 10s de Vercel Hobby
+  // que ya dan problemas en el cron de Aena. Ahora se precargan en batch (maximo 2 consultas
+  // por destino, independientemente de cuantas combinaciones haya) y se consultan en memoria.
+  const distinctOutboundDest = Array.from(new Set(outboundLegs.map((l) => l.destination_iata)));
+  const distinctInboundOrigin = Array.from(new Set(inboundLegs.map((l) => l.origin_iata)));
+
+  const transferTimesMap = new Map<string, { mode: string; duration_min: number; price_eur: number | null }>();
+  if (distinctOutboundDest.length > 0 && distinctInboundOrigin.length > 0) {
+    const transferRows = (await sql`
+      SELECT origin_iata, destination_iata, mode, duration_min, price_eur
+      FROM transfer_times
+      WHERE origin_iata = ANY(${distinctOutboundDest}::text[]) AND destination_iata = ANY(${distinctInboundOrigin}::text[])
+      ORDER BY duration_min ASC
+    `) as { origin_iata: string; destination_iata: string; mode: string; duration_min: number; price_eur: string | null }[];
+    for (const row of transferRows) {
+      const key = `${row.origin_iata}->${row.destination_iata}`;
+      // ORDER BY duration_min ASC + solo guardar la primera vista = la mas rapida (misma logica que el LIMIT 1 original)
+      if (!transferTimesMap.has(key)) {
+        transferTimesMap.set(key, { mode: row.mode, duration_min: row.duration_min, price_eur: row.price_eur ? Number(row.price_eur) : null });
+      }
+    }
+  }
+
+  const hotelTransferMap = new Map<string, number>();
+  if (distinctInboundOrigin.length > 0) {
+    const hotelRows = (await sql`
+      SELECT airport_iata, airport_to_center_min FROM hotel_transfer WHERE airport_iata = ANY(${distinctInboundOrigin}::text[])
+    `) as { airport_iata: string; airport_to_center_min: number }[];
+    for (const row of hotelRows) hotelTransferMap.set(row.airport_iata, row.airport_to_center_min);
+  }
+
   const results: LiveItinerary[] = [];
 
   for (const outbound of outboundLegs) {
@@ -247,24 +286,15 @@ async function searchLiveForTarget(
 
       let interCityTransfer: LiveItinerary['interCityTransfer'] = null;
       if (isOpenJaw) {
-        const rows = (await sql`
-          SELECT mode, duration_min, price_eur FROM transfer_times
-          WHERE origin_iata = ${outbound.destination_iata} AND destination_iata = ${inbound.origin_iata}
-          ORDER BY duration_min ASC LIMIT 1
-        `) as { mode: string; duration_min: number; price_eur: string | null }[];
-        if (rows[0]) {
-          interCityTransfer = { mode: rows[0].mode, duration_min: rows[0].duration_min, price_eur: rows[0].price_eur ? Number(rows[0].price_eur) : null };
-        }
+        const found = transferTimesMap.get(`${outbound.destination_iata}->${inbound.origin_iata}`);
+        if (found) interCityTransfer = found;
       }
 
       const totalPax = pax.adults + pax.children;
       const totalPrice = outbound.price_amount + inbound.price_amount + (interCityTransfer?.price_eur ?? 0) * totalPax;
       if (maxPriceTotal !== undefined && totalPrice > maxPriceTotal) continue;
 
-      const transferRow = (await sql`
-        SELECT airport_to_center_min FROM hotel_transfer WHERE airport_iata = ${inbound.origin_iata} LIMIT 1
-      `) as { airport_to_center_min: number }[];
-      const airportTransferMinutes = transferRow[0]?.airport_to_center_min ?? 45;
+      const airportTransferMinutes = hotelTransferMap.get(inbound.origin_iata) ?? 45;
       const hotelCheckoutAt = addMinutes(inbound.departure_at, AIRPORT_BUFFER_MIN + airportTransferMinutes);
 
       const notes: string[] = [];
@@ -338,6 +368,21 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
   }
   if (combos === 0) {
     throw new Error('No hay destinos seleccionados (ni grupos curados ni destinos IATA sueltos).');
+  }
+
+  // El cap de MAX_ORIGIN_GROUP_COMBOS de arriba NO limita el multiplicador real de
+  // peticiones a Ignav: un grupo de destino con varios aeropuertos (ej. Polonia: 4)
+  // dispara una peticion por aeropuerto x fecha x sentido. Con el maximo de 5 dias de
+  // rango y 6 combos, un solo click podia llegar a 4 aeropuertos x 5 dias x 2 x 6 combos
+  // = 240 peticiones de golpe contra una cuota de 1000 de por vida (no mensual). Se
+  // calcula aqui el numero real antes de lanzar nada.
+  const estimatedRequests =
+    originIatas.length *
+    allTargets.reduce((sum, t) => sum + t.airports.length * (outboundDates.length + inboundDates.length), 0);
+  if (estimatedRequests > MAX_IGNAV_REQUESTS_PER_SEARCH) {
+    throw new Error(
+      `Esta busqueda lanzaria aproximadamente ${estimatedRequests} peticiones a Ignav (aeropuertos del destino x dias de rango x 2 x combinaciones), por encima del limite de ${MAX_IGNAV_REQUESTS_PER_SEARCH} por busqueda que protege tu cuota de 1000 peticiones DE POR VIDA. Reduce el rango de fechas, el numero de destinos con varios aeropuertos, o los origenes seleccionados.`
+    );
   }
 
   const warnings: string[] = [];

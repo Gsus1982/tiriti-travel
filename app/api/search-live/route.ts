@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchLiveItineraries, type LiveFilters } from '@/lib/live-engine';
+import { searchLiveItineraries, type LiveFilters, type LiveItinerary } from '@/lib/live-engine';
+
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
 
 type Body = Partial<Omit<LiveFilters, 'originIatas' | 'destinationGroupIds'>> & {
   originIatas?: string[];
@@ -48,7 +51,7 @@ export async function POST(req: NextRequest) {
       outboundDateTo: outboundDateTo ?? outboundDateFrom,
       inboundDateFrom,
       inboundDateTo: inboundDateTo ?? inboundDateFrom,
-      pax: body.pax ?? { adults: 1, children: 0 },
+      pax: body.pax ?? { adults: 2, children: 1 },
       requireCabinBaggage: body.requireCabinBaggage ?? false,
       allowOpenJaw: body.allowOpenJaw ?? true,
       outboundNotBeforeHour: body.outboundNotBeforeHour,
@@ -64,7 +67,7 @@ export async function POST(req: NextRequest) {
     // Nuevo: filtro de exclusion de ciudades/aeropuertos, aplicado sobre el resultado ya
     // devuelto por el motor. No requiere tocar lib/live-engine.ts.
     const itineraries = excludeIatas.length
-      ? rawItineraries.filter((it: any) => {
+      ? rawItineraries.filter((it: LiveItinerary) => {
           const outboundDest = it.outbound?.destination_iata;
           const inboundOrigin = it.inbound?.origin_iata;
           return !excludeIatas.includes(outboundDest) && !excludeIatas.includes(inboundOrigin);
@@ -72,7 +75,9 @@ export async function POST(req: NextRequest) {
       : rawItineraries;
 
     return NextResponse.json({ count: itineraries.length, itineraries, warnings });
-  } catch (e: any) {
-    return NextResponse.json({ error: e.message ?? 'Error interno' }, { status: 500 });
+  } catch (err) {
+    console.error(err);
+    const message = err instanceof Error ? err.message : 'Error interno en busqueda en vivo';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

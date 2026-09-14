@@ -1,5 +1,90 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion de auditoria (Claude, a peticion del usuario)
+
+### Resumen ejecutivo
+Auditoria completa del repo (clonado en local, historial y ramas incluidas) mas aplicacion directa de fixes sobre una rama nueva `fix/auditoria-completa` partiendo del PR #15. Verificado con `npx tsc --noEmit` y `npm run build` limpios tras todos los cambios. Nota: esta rama partia de un STATUS.md desactualizado (sin la seccion "Sesion 2" que ya existia en `main`); este archivo fusiona ambos historiales para no perder nada al mergear.
+
+### Verificacion de seguridad independiente
+Se escaneo TODO el historial de git (todas las ramas, todos los commits) buscando la key de RapidAPI que el usuario pego en el chat en la sesion anterior. Confirmado: nunca se comiteo, solo hay placeholders en `.env.example`. El aviso de seguridad de la sesion anterior era correcto.
+
+### Fixes aplicados en `fix/auditoria-completa`
+1. Mergeado el fix del PR #15 para `destinationIatas` sueltos (bug activo en `main`).
+2. `lib/nlp-search.ts`: reescrita la extraccion de dias/horas para que se corte el texto en la primera palabra de vuelta (regreso/vuelta/retorno) y se extraigan dias/horas por separado en cada mitad. Antes, con el propio ejemplo de la home ("...el 4 despues de las 18h o si no el 5 a partir de las 8h, regreso no antes de las 12h"), el parser asumia que el dia 5 era la vuelta (cuando era una alternativa de ida) y aplicaba 18h como hora minima de vuelta (cuando el texto pedia 12h). Verificado con un test aislado en Node antes de tocar el archivo real.
+3. `app/api/search-live/route.ts`: restauradas las 2 lineas (`dynamic`/`runtime`) que la reconstruccion "a ciegas" del PR #15 habia perdido; unica ruta del proyecto sin esas 2 lineas. Tambien alineado el manejo de errores y el `pax` por defecto con el resto del proyecto.
+4. `lib/live-engine.ts`: eliminado el N+1 -- `transfer_times` y `hotel_transfer` se precargan en batch antes del doble bucle ida x vuelta en vez de consultarse uno a uno dentro de el.
+5. `lib/live-engine.ts`: nuevo limite `MAX_IGNAV_REQUESTS_PER_SEARCH = 60` que calcula el numero REAL de peticiones (aeropuertos x dias x 2 x combos) antes de lanzar la busqueda, no solo el numero de combinaciones origen x destino. Ver CHANGELOG para el caso extremo (240 peticiones en una sola busqueda) que esto evita.
+6. `lib/db.ts` y `lib/ignav.ts`: el saneador de caracteres invisibles ahora los ELIMINA en vez de sustituirlos por un espacio (que solo arreglaba el caso de borde en los extremos de la cadena).
+7. Eliminados `app/api/debug/db-check` (endpoint temporal) y el motor mock huerfano (`lib/search-engine.ts` + `app/api/search/route.ts`); sus 2 funciones usadas por `app/api/meta/route.ts` se movieron a `lib/meta-queries.ts` nuevo.
+
+### 2 hallazgos que NO se han tocado por codigo (documentar, no arreglar)
+- **Los crons escalonados de `vercel.json` (04:00/04:05/04:10/04:15) no hacen lo que aparentan.** En el plan Hobby, Vercel solo garantiza que el cron se ejecute DENTRO de la hora indicada, no en el minuto exacto -- los 4 refresh-aena pueden dispararse en cualquier orden o casi a la vez dentro de las 04:00-04:59. El escalonado por minutos es cosmetico. (El limite de "solo 2 crons en Hobby" que aparece en blogs antiguos ya no aplica -- Vercel lo subio a 100/proyecto en enero 2026 -- pero la falta de precision de minuto en Hobby SI sigue vigente). No se ha cambiado `vercel.json` porque no hay ninguna configuracion que arregle esto en Hobby; si algun dia importa el orden/espaciado exacto, la solucion es un scheduler externo (ej. GitHub Actions con horas distintas de verdad, o un cron externo tipo cron-job.org) llamando a estos mismos endpoints con el secreto `AENA_SYNC_SECRET`.
+- **Ojo con la alternativa de GitHub Actions propuesta para el 504 de Aena**: si la hipotesis del bloqueo por IP de datacenter es correcta, GitHub Actions probablemente tenga EL MISMO problema (sus runners tambien son IPs de datacenter, de Azure). Antes de invertir tiempo montando ese pipeline, probar el fetch a Aena una vez desde una IP residencial (tu propio ordenador) para confirmar o descartar la hipotesis.
+
+### Pendiente de tu parte
+- Revisar el diff de la rama `fix/auditoria-completa` (o el PR que se abra desde ella) y aprobar el merge a `main`.
+- Cuando termines de revisar: revocar el token de GitHub que diste para esta sesion y volver a poner el repo en privado.
+
+---
+
+
+## Estado al 14 de septiembre de 2026, 15:34 CEST — Sesion 2: rediseno + fix + filtros nuevos + Sky Scrapper
+
+### Resumen ejecutivo de esta sesion
+- Se identifico y corrigio la causa exacta del error "Faltan campos obligatorios" que aparecia al buscar destinos sueltos (ej. Londres/Heathrow) sin usar un grupo curado con evento.
+- Se hizo un rediseno visual completo de `app/page.tsx` inspirado en https://dribbble.com/shots/26617634-Private-Jet-Booking-Luxury-Travel-Flight-Booking-App-UI (fondo oscuro #0a0c10/#12151b, acentos dorados #c9a24a).
+- Se anadio un filtro nuevo "Ciudades a descartar" (excludeIatas) y una agrupacion "(todos)" para ciudades con varios aeropuertos (Londres, y cualquier otra que aparezca en el listado real de Aena).
+- Se quito la lista fija de destinos curados con evento/temporada del selector, sustituida por una sugerencia de usar el cuadro de busqueda en lenguaje natural.
+- Se investigo la API "Sky Scrapper" de RapidAPI como fuente de datos alternativa a Ignav y se creo un cliente nuevo `lib/skyscanner.ts`, sin integrarlo aun en el motor de busqueda principal (paso deliberadamente aislado para no arriesgar el motor que ya funciona).
+- Todo esto esta en el **PR #15** (rama `feat/luxury-ui-exclude-filter-fix`), **sin mergear todavia**, a la espera de que el usuario revise el preview visual de Vercel.
+
+### Aviso de seguridad critico de esta sesion
+El usuario pego en el chat una API key real de RapidAPI en texto plano (`x-rapidapi-key: 7a60fa...`). **Esa key NUNCA se ha escrito en ningun archivo ni commit del repositorio.** Instrucciones detalladas paso a paso para el usuario, pendientes de ejecutar:
+
+**Paso 1 — Regenerar la key filtrada en RapidAPI:**
+1. Entra en https://rapidapi.com y haz login con la cuenta que usaste para suscribirte a "Sky Scrapper" / "Air Scraper".
+2. Ve a tu perfil (icono arriba a la derecha) → "My Apps" (o "Apps").
+3. Selecciona la app que tiene asociada esa API (normalmente se llama "default-application_...").
+4. Dentro de la app, busca la seccion "Security" o el propio listado de la key.
+5. Hay un boton para regenerar/rotar la key (a veces aparece como un icono de refresco junto a la key). Al pulsarlo se invalida la key vieja (la que se compartio en el chat) y se genera una nueva.
+6. Copia la key nueva, la necesitaras para el paso 2.
+
+**Paso 2 — Anadir la key nueva como variable de entorno en Vercel:**
+1. Entra en https://vercel.com y abre el proyecto `tiriti-travel`.
+2. Ve a la pestana "Settings" del proyecto (arriba).
+3. En el menu lateral izquierdo, pulsa "Environment Variables".
+4. En el campo "Key" escribe exactamente: `RAPIDAPI_SKY_SCRAPPER_KEY`
+5. En el campo "Value" pega la key nueva (la del paso 1, nunca la vieja).
+6. En "Environments" marca al menos "Production"; si tambien quieres probarlo en los despliegues de PRs, marca tambien "Preview".
+7. Pulsa "Save".
+8. Importante: anadir una variable de entorno nueva NO redespliega automaticamente los despliegues ya existentes. Si quieres que el codigo la vea de inmediato, ve a la pestana "Deployments", abre el despliegue de `main` mas reciente y pulsa el menu de tres puntos → "Redeploy".
+
+Mientras esos 2 pasos no se completen, cualquier codigo que intente usar `lib/skyscanner.ts` lanzara un error explicito y controlado (`RAPIDAPI_SKY_SCRAPPER_KEY no esta configurada...`) en vez de fallar en silencio. Ese cliente todavia no se llama desde ningun endpoint de la app, asi que su ausencia no rompe nada de lo que ya funciona.
+
+### PR #15 (abierto, sin mergear) — feat/luxury-ui-exclude-filter-fix
+Contenido del PR:
+- `app/api/search-live/route.ts`: FIX del bug de validacion. Antes: `if (!destinationGroupIds?.length || ...)` rechazaba busquedas validas que usaban solo `destinationIatas`. Ahora: `if ((!destinationGroupIds?.length && !destinationIatas?.length) || ...)`. Tambien anade el filtrado por `excludeIatas` sobre el resultado ya devuelto por `searchLiveItineraries`.
+- `lib/skyscanner.ts` (nuevo): cliente para la API Sky Scrapper (RapidAPI, host `sky-scrapper.p.rapidapi.com`), con funciones `searchAirport` y `searchFlights`. Lee la key SIEMPRE desde `process.env.RAPIDAPI_SKY_SCRAPPER_KEY`. No integrado aun en `lib/live-engine.ts`.
+- `app/page.tsx`: rediseno completo. Fondo oscuro (#0a0c10 tarjetas, #12151b secciones), acentos dorados (#c9a24a), hero editorial con imagen de fondo (Pexels) y texto "Vuelos directos, sin escalas.". Nuevo campo "Ciudades a descartar" (input de texto con IATAs separados por coma, filtra tanto el selector como -via el payload `excludeIatas`- los resultados). Nueva funcion `groupByCity()` que agrupa aeropuertos que comparten el mismo nombre de ciudad base (ej. "LONDRES /HEATHROW", "LONDRES /GATWICK", "LONDRES /LUTON", "LONDRES /STANSTED" → chip extra "LONDRES (todos)" que selecciona los 4 a la vez). Se elimino el bloque de chips fijos de "grupos curados con evento/temporada"; en su lugar hay una nota sugiriendo usar el cuadro de NLP para describir el evento buscado.
+
+### Aviso de transparencia sobre la reconstruccion de app/api/search-live/route.ts
+Las herramientas de GitHub disponibles en esta sesion (`get_file_contents`) devolvieron solo un mensaje de confirmacion de descarga, sin el contenido real del archivo, para archivos de cualquier tamano probado (se confirmo el mismo comportamiento con archivos de 182 bytes y de 2296 bytes). Tampoco funciono leer el archivo via las URLs raw de GitHub con `fetch_url` (fallo silenciosamente). El archivo se reconstruyo con alta confianza combinando:
+- Multiples fragmentos exactos obtenidos con `search_code` (import, definicion de `Body`, la linea de validacion original completa con el mensaje de error exacto, el bloque `try { const body = (await req.json()) as Body; }`, y el bloque completo de construccion de `filters` con todos los campos, que es identico al de `app/api/search/route.ts` verificado por separado).
+- El contrato de la peticion tal y como lo envia `app/page.tsx` (que si se pudo leer integro porque esta IA lo habia escrito en un push anterior de esta misma conversacion).
+
+Se recomienda revisar el diff del PR #15 para ese archivo concreto con atencion antes de aprobar el merge, y probar en el preview de Vercel una busqueda con destinos sueltos (sin grupo curado) para confirmar que el fix funciona como se espera.
+
+### Como probar el PR #15 antes de aprobarlo
+1. Entra al PR #15 en GitHub: buscar el comentario del bot de Vercel con el enlace de preview (normalmente aparece 1-2 minutos despues de crear el PR).
+2. Abre esa URL de preview.
+3. Revisa visualmente el rediseno (fondo oscuro, acentos dorados) y confirma si va en la direccion correcta o si quieres ajustes.
+4. Prueba una busqueda seleccionando SOLO destinos sueltos (ej. "Londres /Heathrow" sin marcar ningun grupo curado) y confirma que YA NO aparece el error "Faltan campos obligatorios".
+5. Prueba el chip "(todos)" en una ciudad con varios aeropuertos.
+6. Prueba el campo "Ciudades a descartar" escribiendo un IATA y comprobando que desaparece del selector.
+7. Si todo funciona bien, se puede mergear el PR #15 a `main` (pedir a la IA que lo haga, o hacerlo manualmente desde GitHub).
+
+---
+
 ## Estado al 14 de septiembre de 2026, 14:00 CEST — Sesion extensa de correcciones
 
 ### Resumen ejecutivo
@@ -37,17 +122,9 @@ Diagnostico realizado:
 - MAD: 0 (nunca se ha podido ejecutar el cron con exito)
 - RMU: 0 (nunca se ha podido ejecutar el cron con exito)
 
-### Diseno visual -- pendiente de feedback especifico
-El usuario ha expresado repetidamente insatisfaccion ("feisimo", "apesta a IA", "incoherente", "el mapa es cutre") pero la IA de esta sesion NO tiene ninguna via de ver capturas de la app renderizada salvo que el usuario las adjunte directamente en el chat como imagen. Se hicieron 3 iteraciones de diseno (PR #2, #10, mas ajustes de paleta) sin verificacion visual real entre iteraciones, lo cual es la causa raiz de por que "no avanza" segun el usuario. NO se debe seguir iterando el CSS a ciegas sin que el usuario adjunte una captura de pantalla real tras cada cambio.
+### Diseno visual -- pendiente de feedback especifico (ACTUALIZADO: ver PR #15 arriba, ya se hizo un rediseno completo basado en referencia de Dribbble)
 
-Componentes de diseno actuales:
-- app/layout.tsx: layout minimo, sin header propio (se elimino el que tenia el emoji duplicado)
-- app/page.tsx: hero con imagen de fondo (Pexels) + gradiente oscuro, selector de destinos reales como bloque principal, grupos curados colapsados
-- components/RouteMap.tsx: mapa SVG dibujado a mano con proyeccion equirectangular simple (sin libreria externa, para no arriesgar el build sin poder probarlo). El usuario lo describe como "cutre" -- pendiente de sustituir por algo mejor, posiblemente con una libreria real (react-simple-maps o similar) SI se puede verificar el build primero.
-- components/Icons.tsx: iconos SVG propios dibujados a mano (avion, calendario, campana, pin, sliders, maleta) para evitar emojis
-- components/ToolsPanel.tsx: calendario de precios + formulario de alertas
-
-### Archivos clave del proyecto (inventario completo al cierre)
+### Archivos clave del proyecto (inventario, ver tambien lib/skyscanner.ts nuevo en PR #15)
 ```
 app/
   layout.tsx
@@ -80,6 +157,7 @@ lib/
   nlp-search.ts
   price-calendar.ts
   aena-sync.ts (logica de scraping/parseo/guardado de Aena, compartida)
+  skyscanner.ts (NUEVO en PR #15, cliente Sky Scrapper de RapidAPI, no integrado aun en live-engine.ts)
 vercel.json (5 crons: 4 de refresh-aena por origen + 1 de check-alerts)
 ```
 
@@ -92,6 +170,7 @@ vercel.json (5 crons: 4 de refresh-aena por origen + 1 de check-alerts)
 - price_alerts (alertas de precio guardadas por el usuario)
 
 ### Recomendacion para la siguiente sesion/IA
-1. Verificar primero si PR #13 (timeout 5s) resuelve el 504. Si no, asumir bloqueo de red de Aena hacia Vercel y saltar directo a la alternativa de GitHub Actions o ejecucion manual.
-2. NO tocar mas CSS/diseno sin que el usuario adjunte una captura de pantalla real en el chat primero. Pedir explicitamente 2-3 cambios concretos y verificables por captura, no ajustes genericos.
-3. Considerar borrar lib/search-engine.ts y app/api/search/route.ts (motor mock huerfano) si se confirma que no rompe app/api/meta/route.ts (que importa listDestinationGroups/listOriginAirports desde ese mismo archivo -- habria que mover esas 2 funciones a otro sitio primero).
+1. Verificar primero si PR #13 (timeout 5s) resuelve el 504 en el cron de Aena. Si no, asumir bloqueo de red de Aena hacia Vercel y saltar directo a la alternativa de GitHub Actions o ejecucion manual.
+2. Revisar y aprobar/ajustar el PR #15 (rediseno + fix + filtros nuevos) tras ver el preview de Vercel.
+3. Completar los 2 pasos manuales pendientes (regenerar key de RapidAPI + anadirla en Vercel) para poder usar lib/skyscanner.ts en el futuro.
+4. Considerar borrar lib/search-engine.ts y app/api/search/route.ts (motor mock huerfano) si se confirma que no rompe app/api/meta/route.ts (que importa listDestinationGroups/listOriginAirports desde ese mismo archivo -- habria que mover esas 2 funciones a otro sitio primero).

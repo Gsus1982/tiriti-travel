@@ -22,7 +22,7 @@ export default function FlightPathStrip({
   const hasRoute = originLabels.length > 0 && destinationLabels.length > 0;
 
   return (
-    <section className="bg-white rounded-2xl border border-slate-100 shadow-sm px-5 py-4 md:px-8 md:py-5">
+    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm px-5 py-4 md:px-8 md:py-5">
       <style>{`
         @keyframes flightpath-dash { to { stroke-dashoffset: -20; } }
         .flightpath-line { stroke-dasharray: 3 5; animation: flightpath-dash 1.4s linear infinite; }
@@ -40,8 +40,8 @@ export default function FlightPathStrip({
       `}</style>
       <div className="flex items-center gap-4 md:gap-6">
         <div className="min-w-0 shrink-0 max-w-[38%]">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Origen</p>
-          <p className="text-sm md:text-base font-display text-ink truncate">{formatSide(originLabels, 'Elige origen')}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Origen</p>
+          <p className="text-sm md:text-base font-display text-ink dark:text-slate-100 truncate">{formatSide(originLabels, 'Elige origen')}</p>
         </div>
 
         <div className="relative flex-1 h-6 text-indigo/60 hidden sm:block">
@@ -57,16 +57,16 @@ export default function FlightPathStrip({
         <div className="flex-1 h-px bg-gradient-to-r from-slate-200 to-transparent sm:hidden" />
 
         <div className="min-w-0 shrink-0 max-w-[38%] text-right">
-          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400">Destino</p>
-          <p className="text-sm md:text-base font-display text-ink truncate">{formatSide(destinationLabels, 'Elige destino')}</p>
+          <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Destino</p>
+          <p className="text-sm md:text-base font-display text-ink dark:text-slate-100 truncate">{formatSide(destinationLabels, 'Elige destino')}</p>
         </div>
       </div>
 
       {combos > 0 && (
-        <p className="mt-3 pt-3 border-t border-slate-100 text-xs text-slate-400 flex items-center gap-1.5">
+        <p className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 dark:text-slate-500 flex items-center gap-1.5">
           <IconCompass className="w-3.5 h-3.5 text-indigo/70" />
           {combos} combinacion{combos === 1 ? '' : 'es'} origen x destino en esta busqueda
-          {combos > 6 && <span className="text-red-500"> (maximo 6)</span>}
+          {combos > 6 && <span className="text-red-500 dark:text-red-400"> (maximo 6)</span>}
         </p>
       )}
     </section>

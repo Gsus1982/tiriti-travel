@@ -18,6 +18,14 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
+.dark body {
+  background:
+    radial-gradient(ellipse 70% 45% at 12% -5%, rgba(255, 255, 255, 0.04), transparent 60%),
+    radial-gradient(ellipse 55% 35% at 92% 12%, rgba(255, 255, 255, 0.03), transparent 55%),
+    linear-gradient(180deg, #05060a 0%, #0a0c12 55%, #0e1018 100%);
+  color: #e5e7eb;
+}
+
 ::selection {
   background-color: #6366f1;
   color: #ffffff;

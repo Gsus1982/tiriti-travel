@@ -1,3 +1,4 @@
+import { sql } from './db';
 import type { LiveItinerary, LiveLeg } from './live-engine';
 import { searchAirport, searchFlights, type SkyAirport } from './skyscanner';
 
@@ -20,18 +21,46 @@ import { searchAirport, searchFlights, type SkyAirport } from './skyscanner';
 // busqueda (no rompe Ignav, que sigue funcionando aparte) y hay que ajustar el mapeo.
 
 // Cache en memoria de resoluciones IATA -> skyId/entityId, solo dentro de una misma
-// invocacion de la funcion serverless (no persiste entre busquedas). Evita resolver el
-// mismo aeropuerto 2 veces dentro de la misma busqueda si aparece en varias
-// combinaciones origen x destino. Una cache persistente en BD reduciria aun mas el
-// consumo de cuota entre busquedas distintas -- pendiente, ver docs/STATUS.md.
+// invocacion de la funcion serverless -- evita resolver el mismo aeropuerto 2 veces
+// dentro de la MISMA busqueda. Por encima, resolveAirport ahora consulta primero la
+// tabla skyscanner_airport_cache (persistente en BD, ver scripts/schema.sql): dado que
+// ALC/MAD/VLC/RMU como origen y los destinos habituales se repiten entre busquedas
+// distintas, esto ahorra una peticion completa a la API cada vez que un aeropuerto ya
+// se resolvio alguna vez antes -- relevante con una cuota de solo ~100/mes.
 const airportCache = new Map<string, SkyAirport | null>();
 
 async function resolveAirport(iata: string): Promise<SkyAirport | null> {
   if (airportCache.has(iata)) return airportCache.get(iata)!;
+
+  try {
+    const cached = (await sql`
+      SELECT sky_id, entity_id FROM skyscanner_airport_cache WHERE iata = ${iata} LIMIT 1
+    `) as { sky_id: string; entity_id: string }[];
+    if (cached[0]) {
+      const match: SkyAirport = { skyId: cached[0].sky_id, entityId: cached[0].entity_id, presentation: { title: iata } };
+      airportCache.set(iata, match);
+      return match;
+    }
+  } catch {
+    // Si la tabla aun no existe (schema.sql no aplicado) o falla la consulta, se sigue
+    // sin cache persistente en vez de romper la busqueda -- solo se pierde el ahorro de
+    // cuota, no la funcionalidad.
+  }
+
   try {
     const results = await searchAirport(iata);
     const match = results.find((r) => r.skyId && r.entityId) ?? null;
     airportCache.set(iata, match);
+    if (match) {
+      sql`
+        INSERT INTO skyscanner_airport_cache (iata, sky_id, entity_id)
+        VALUES (${iata}, ${match.skyId}, ${match.entityId})
+        ON CONFLICT (iata) DO UPDATE SET sky_id = EXCLUDED.sky_id, entity_id = EXCLUDED.entity_id, resolved_at = now()
+      `.catch(() => {
+        // Guardar en cache es una optimizacion, no algo critico -- un fallo aqui no debe
+        // tumbar la busqueda que ya tiene su resultado.
+      });
+    }
     return match;
   } catch {
     airportCache.set(iata, null);

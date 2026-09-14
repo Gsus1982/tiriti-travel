@@ -22,6 +22,16 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="es">
+      <head>
+        <script
+          // Se ejecuta antes de pintar para evitar el "flash" de tema claro cuando el
+          // usuario ya habia elegido oscuro. No usa next/script porque necesita correr
+          // sincronamente antes del primer render, no despues de hidratar.
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var t=localStorage.getItem('tiriti_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`
+          }}
+        />
+      </head>
       <body className="min-h-screen font-sans">{children}</body>
     </html>
   );

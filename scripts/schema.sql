@@ -54,3 +54,16 @@ CREATE TABLE IF NOT EXISTS hotel_transfer (
 );
 
 CREATE INDEX IF NOT EXISTS idx_legs_origin_dest_date ON legs (origin_iata, destination_iata, departure_at);
+
+-- Cache persistente de resoluciones IATA -> skyId/entityId de Sky Scrapper (RapidAPI).
+-- Antes esta resolucion se repetia en cada busqueda (solo cacheada en memoria durante
+-- una misma invocacion de la funcion serverless); dado que la cuota de Sky Scrapper es
+-- ~100 peticiones AL MES (mucho mas ajustada que Ignav), cachear esto en BD ahorra una
+-- peticion completa cada vez que se repite un aeropuerto ya resuelto antes (ALC, MAD,
+-- VLC, RMU como origen, y cualquier destino ya buscado antes).
+CREATE TABLE IF NOT EXISTS skyscanner_airport_cache (
+  iata CHAR(3) PRIMARY KEY,
+  sky_id TEXT NOT NULL,
+  entity_id TEXT NOT NULL,
+  resolved_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

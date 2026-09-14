@@ -2,6 +2,28 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.5.1] - 2026-09-14 ("Sorprendeme": fix de bug real + rediseno)
+
+El usuario probo "Quiero viajar, propon ideas por precio" con Alicante como unico
+origen y siempre daba error de limite de combinaciones. No era un problema de nombre,
+era un bug real preexistente (de antes de esta sesion).
+
+### Corregido
+- **Bug real**: `handleTravelIdeas` multiplicaba origenes x TODOS los grupos curados
+  (8) sin comprobar si cabian en el limite de 6 combinaciones de Ignav. Con un solo
+  origen ya fallaba siempre (1x8=8>6) -- la funcion era, en la practica, inutilizable
+  para cualquier seleccion de origenes. Ahora (`handleSurpriseMe`) calcula cuantos
+  grupos caben para los origenes elegidos y coge solo esos, **mezclados al azar** en
+  cada pulsacion (asi salen destinos distintos cada vez, en vez de siempre los mismos).
+
+### Cambiado (a peticion del usuario: "cambiale el nombre y dale mayor protagonismo")
+- Renombrado de "Quiero viajar, propon ideas por precio" (checkbox escondido dentro de
+  los filtros, cambiaba el comportamiento del boton principal de forma poco clara) a
+  **"Sorprendeme"**: ahora es su propio boton, siempre visible, con icono y degradado
+  distintivo (indigo a fucsia) para diferenciarlo visualmente de "Buscar vuelos".
+  Solo necesita un origen elegido -- no hace falta seleccionar destino primero, que es
+  precisamente el caso de uso ("no se a donde ir").
+
 ## [0.5.0] - 2026-09-14 (modo oscuro, ideas por precio, compartir, historial, iconos iPhone)
 
 A peticion explicita del usuario: implementadas todas las mejoras propuestas en la sesion

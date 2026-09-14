@@ -1,5 +1,29 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: fix real de "Sorprendeme" (antes "ideas por precio")
+
+El usuario probo la funcion en el movil con Alicante como unico origen y siempre daba
+error de limite de combinaciones. Era un bug real preexistente (de antes de esta
+sesion, no introducido por la sesion anterior que solo le anadio el sort por precio):
+`handleTravelIdeas` multiplicaba origenes x TODOS los grupos curados (8) sin comprobar
+el limite de 6 combos de Ignav -- con 1 solo origen ya fallaba siempre (1x8=8>6). La
+funcion era, en la practica, inutilizable.
+
+**Fix**: `handleSurpriseMe` calcula cuantos grupos caben para los origenes elegidos
+(`Math.floor(6 / originIatas.length)`, minimo 1) y coge solo esos, mezclados al azar en
+cada pulsacion para que salgan destinos distintos cada vez.
+
+**Rediseno** (a peticion del usuario): quitado el checkbox "Quiero viajar, propon ideas
+por precio" (escondido dentro de los filtros, cambiaba el boton principal de forma poco
+clara). Ahora es su propio boton "Sorprendeme", siempre visible, con icono de chispas y
+degradado indigo-fucsia para distinguirlo de "Buscar vuelos". Solo necesita origen
+elegido, no destino (ese es el caso de uso: "no se a donde ir").
+
+Verificado con `npx tsc --noEmit` y `npm run build` limpios, y la formula del limite de
+combos comprobada a mano para 1-4 origenes (nunca supera 6).
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: mejoras generales (modo oscuro, ideas por precio, compartir, historial, cache Sky Scrapper, iconos iPhone)
 
 ### Resumen

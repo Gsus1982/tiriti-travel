@@ -11,7 +11,7 @@ import ToolsPanel from '@/components/ToolsPanel';
 import FlightResultCard from '@/components/FlightResultCard';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
-import { IconSliders, IconMapPin, IconTicket, IconShare } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles } from '@/components/Icons';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -67,7 +67,6 @@ function groupByCity(list: RealDestination[]) {
 
 export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
-  const [travelIdeasMode, setTravelIdeasMode] = useState(false);
   const [originIatas, setOriginIatas] = useState<string[]>(['ALC']);
   const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>([]);
   const [selectedDestIatas, setSelectedDestIatas] = useState<string[]>([]);
@@ -299,23 +298,28 @@ export default function HomePage() {
     await runSearch();
   }
 
-  async function handleTravelIdeas() {
+  async function handleSurpriseMe() {
     const allGroupIds = (meta?.groups ?? []).map((g) => g.id);
-    if (originIatas.length * allGroupIds.length > 6) {
-      setError(
-        '"Quiero viajar" con todos los grupos curados supera el limite de 6 combinaciones origen x destino de Ignav. Reduce los origenes seleccionados o desactiva "Quiero viajar" y elige destinos concretos.'
-      );
+    if (originIatas.length === 0) {
+      setError('Elige al menos un origen antes de pulsar "Sorprendeme".');
       return;
     }
-    setDestinationGroupIds(allGroupIds);
+    if (allGroupIds.length === 0) {
+      setError('No hay destinos curados disponibles todavia.');
+      return;
+    }
+    // FIX (bug real reportado): antes esto multiplicaba origenes x TODOS los grupos
+    // curados sin comprobar si cabian en el limite de 6 combinaciones de Ignav -- con
+    // 8 grupos curados, fallaba SIEMPRE incluso con un solo origen (1x8=8>6). Ahora se
+    // coge solo el numero de grupos que quepan dentro del limite para los origenes
+    // elegidos, mezclados al azar para que salgan destinos distintos cada vez que se
+    // pulsa (asi "Sorprendeme" sorprende de verdad, no siempre lo mismo).
+    const maxGroups = Math.max(1, Math.floor(6 / originIatas.length));
+    const groupIds = [...allGroupIds].sort(() => Math.random() - 0.5).slice(0, maxGroups);
+    setDestinationGroupIds(groupIds);
     setSelectedDestIatas([]);
-    // Mejora (revision de logica): antes esto solo ampliaba a todos los destinos
-    // curados y usaba el criterio de orden que estuviera puesto en ese momento (podia
-    // no ser precio) -- no habia ninguna logica real de "proponer ideas". Ahora fuerza
-    // explicitamente ordenar por precio, que es lo unico que tiene sentido para "dame
-    // ideas" sin mas contexto, y lo refleja en el desplegable para que no quede oculto.
     setSortBy('price');
-    await runSearch(allGroupIds, [], 'price');
+    await runSearch(groupIds, [], 'price');
   }
 
   function handleReSort(newSortBy: 'checkout_time' | 'price' | 'duration') {
@@ -473,15 +477,9 @@ export default function HomePage() {
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
             <div className="space-y-6 min-w-0">
               <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 md:p-6 space-y-6">
-                <div className="flex items-center justify-between flex-wrap gap-3">
-                  <div className="flex items-center gap-2">
-                    <IconSliders className="w-5 h-5 text-indigo" />
-                    <h2 className="text-base font-semibold text-ink dark:text-slate-100">Quien, cuando y a donde</h2>
-                  </div>
-                  <label className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-                    <input type="checkbox" checked={travelIdeasMode} onChange={(e) => setTravelIdeasMode(e.target.checked)} />
-                    Quiero viajar, propon ideas por precio
-                  </label>
+                <div className="flex items-center gap-2">
+                  <IconSliders className="w-5 h-5 text-indigo" />
+                  <h2 className="text-base font-semibold text-ink dark:text-slate-100">Quien, cuando y a donde</h2>
                 </div>
 
                 <div>
@@ -654,23 +652,21 @@ export default function HomePage() {
                   </label>
                 </div>
 
-                {!travelIdeasMode && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Combinaciones origen x destino: <strong className="text-ink dark:text-slate-100">{combos}</strong>
-                    {combos > 6 && <span className="text-red-500 dark:text-red-400"> (maximo 6; reduce la seleccion)</span>}
-                  </p>
-                )}
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Combinaciones origen x destino: <strong className="text-ink dark:text-slate-100">{combos}</strong>
+                  {combos > 6 && <span className="text-red-500 dark:text-red-400"> (maximo 6; reduce la seleccion)</span>}
+                </p>
                 <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
                   Maximo 5 dias por tramo y 6 combinaciones origen x destino, para no agotar la cuota gratuita de Ignav.
                 </p>
 
                 <div className="flex items-center gap-3 flex-wrap">
                   <button
-                    onClick={travelIdeasMode ? handleTravelIdeas : handleSearch}
-                    disabled={loading || originIatas.length === 0 || (!travelIdeasMode && destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
+                    onClick={handleSearch}
+                    disabled={loading || originIatas.length === 0 || (destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
                     className="bg-indigo hover:bg-indigo-dark text-white font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-40"
                   >
-                    {loading ? progressMessage : travelIdeasMode ? 'Proponme ideas por precio' : 'Buscar vuelos'}
+                    {loading ? progressMessage : 'Buscar vuelos'}
                   </button>
                   <button
                     onClick={handleShare}
@@ -680,6 +676,23 @@ export default function HomePage() {
                     Compartir esta busqueda
                   </button>
                   {shareMessage && <span className="text-xs text-emerald-600 dark:text-emerald-400">{shareMessage}</span>}
+                </div>
+
+                <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex items-center justify-between flex-wrap gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-ink dark:text-slate-100">¿No sabes a donde ir?</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      No hace falta elegir destino: prueba con algunos de tus destinos curados al azar, ordenados por precio.
+                    </p>
+                  </div>
+                  <button
+                    onClick={handleSurpriseMe}
+                    disabled={loading || originIatas.length === 0}
+                    className="flex items-center gap-2 bg-gradient-to-r from-indigo to-fuchsia-500 hover:from-indigo-dark hover:to-fuchsia-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-40 shrink-0"
+                  >
+                    <IconSparkles className="w-4 h-4" />
+                    {loading ? progressMessage : 'Sorprendeme'}
+                  </button>
                 </div>
 
                 {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}

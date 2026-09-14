@@ -7,8 +7,11 @@ import RouteMap from '@/components/RouteMap';
 import ToolsPanel from '@/components/ToolsPanel';
 import { IconSliders, IconMapPin } from '@/components/Icons';
 
-const HERO_IMAGE_URL =
-  'https://st.perplexity.ai/estatic/0b226c450798410ac541646c86ec31afd840e5beab817a5d84fa821e7db61981ec84c3b4a3f072a7a2e1899c9fb06c6e0313946104e1450d38d221a8f7c3e7422d4ae0f9cf9af1e0268ddda3c60a281353ebfe0b19e27fe6c7fccada88b5b3df0bee15765f0afd9f6426fc8cf44a50ce';
+// URL publica de Pexels (licencia libre, hotlink permitido). La anterior
+// (st.perplexity.ai) era un cache interno del chat, no accesible desde un
+// navegador normal fuera de esta conversacion -- por eso no se veia ninguna
+// imagen en produccion.
+const HERO_IMAGE_URL = 'https://images.pexels.com/photos/35138044/pexels-photo-35138044.jpeg?auto=compress&cs=tinysrgb&w=1600';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];

@@ -2,55 +2,81 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.3.0] - 2026-09-14
+
+### Anadido
+- **Buscador en lenguaje natural (beta)** (`lib/nlp-search.ts`, `parseSearchQuery`): cuadro de texto en la UI que interpreta frases en espanol (origenes, destino, dias, horas) y precarga el formulario de filtros. Basado en reglas (regex + diccionario), no en un LLM.
+- Deteccion de destinos mencionados que aun no estan en la base de datos (p. ej. "Londres"), con aviso explicito en vez de fallo silencioso.
+- Documentacion explicita de la limitacion de logica condicional compleja ("dia A si es despues de hora X, si no dia B a partir de hora Y"): se aproxima con rango de fechas + hora mas permisiva, avisando siempre al usuario.
+
+### Corregido
+- Bug de TypeScript (`sortBy` no incluido en `SharedParams`) que rompio 2 builds consecutivos en `lib/live-engine.ts` y `lib/search-engine.ts` tras el cambio a multibusqueda; solucionado pasando el objeto `filters` completo a las funciones internas en lugar de una copia parcial.
+- Bug propio detectado antes de publicar: variable `parsedResult` referenciada antes de su declaracion en el primer borrador de `lib/nlp-search.ts`; corregido usando variables `let` inicializadas correctamente antes de construir el objeto de retorno.
+
+### Infraestructura
+- Multiples deployments de prueba y error durante el desarrollo de la multibusqueda (visibles en el historial de Vercel): 3 builds con `ERROR` por el bug de tipos, resueltos en el commit `683427c`.
+
+## [0.2.1] - 2026-09-14
+
+### Anadido
+- **Multibusqueda**: los motores mock y live aceptan ahora `originIatas: string[]` y `destinationGroupIds: string[]` (antes `originIata`/`destinationGroupId` singulares). Se generan todas las combinaciones origen x destino, se buscan en paralelo y se mezclan en una sola lista de resultados ordenada globalmente.
+- Limite de seguridad `MAX_ORIGIN_GROUP_COMBOS = 6` en el motor live, para no disparar el consumo de la cuota gratuita de Ignav sin darse cuenta.
+- Campos `originIata`, `destinationGroupId`, `destinationGroupName` anadidos a `LiveItinerary` para poder mostrar de que combinacion viene cada resultado en la tabla (columna "Ruta").
+- UI: selectores de origen y destino convertidos de dropdown unico a chips seleccionables multiples (checkboxes visuales), con contador de combinaciones en tiempo real.
+
+### Corregido
+- Bug de conector: un `push_files` con 6 archivos a la vez descarto silenciosamente `app/page.tsx` del commit sin dar error; desde entonces se verifica cada commit con `get_commit` antes de darlo por bueno, y se prefiere subir la UI en commits separados de 1 archivo.
+
+## [0.2.0] - 2026-09-14
+
+### Anadido
+- **Integracion con Ignav** (`lib/ignav.ts`, `lib/live-engine.ts`): motor de busqueda en vivo alternativo al motor mock, usando la API real de Ignav (`POST /api/fares/one-way`, `POST /api/fares/booking-links`).
+- Nuevos endpoints: `POST /api/search-live` (busqueda en vivo) y `POST /api/booking-link` (enlaces de reserva reales por proveedor).
+- Selector Mock / Ignav en la UI, con tabla de resultados separada para cada modo y boton "Ver enlaces ida" que consulta booking-links en directo.
+- **Rango de fechas**: `outboundDateFrom/To` e `inboundDateFrom/To` sustituyen a las fechas unicas; el motor explora todas las fechas del rango (funcion `datesBetween` en `lib/types.ts`).
+- **Reintentos automaticos** ante errores 424/429/502/503/504 de Ignav (hasta 2 reintentos con backoff de 400ms, 800ms).
+- **Warnings explicitos**: en vez de devolver "0 resultados" en silencio ante un fallo de la API, el motor live captura y expone el mensaje de error real de Ignav por cada llamada fallida.
+
+### Corregido
+- Bug critico: `IGNAV_API_KEY` no se recogia en el build porque Vercel no aplica automaticamente cambios de variables de entorno a un deployment ya existente; se necesita un nuevo deploy (documentado en el README).
+- Se detecto que la primera version del motor live silenciaba los errores de la API dentro de un `.catch()` que devolvia una respuesta vacia sin registrar el motivo; corregido con la funcion `safeSearchOneWay` que acumula los errores en un array `warnings`.
+
+### Seguridad
+- Aviso al usuario para rotar la API key de Ignav tras haberla compartido en el chat, por higiene de seguridad (no por compromiso detectado).
+
 ## [0.1.2] - 2026-09-14
 
 ### Corregido
-- `lib/db.ts`: se añade `sanitizeConnectionString()` (normaliza cualquier espacio Unicode — thin space U+2009, non-breaking space U+00A0, etc. — a espacio ASCII y recorta extremos) y `assertAscii()` (valida caracter a caracter y lanza un error descriptivo con la posición exacta si queda algún caracter no-ASCII). Causa raíz: al copiar `DATABASE_URL` desde el chat a Vercel se coló un caracter U+2009 en la variable de entorno, lo que producía el error de `undici`/Neon `Cannot convert argument to a ByteString...`.
+- `lib/db.ts`: se anade `sanitizeConnectionString()` (normaliza espacios Unicode especiales — thin space U+2009, non-breaking space U+00A0, etc. — a espacio ASCII) y `assertAscii()` (valida caracter a caracter con mensaje de error descriptivo). Causa raiz: al copiar `DATABASE_URL` desde el chat a Vercel se colo un caracter U+2009, produciendo el error `Cannot convert argument to a ByteString...`.
 
 ### Verificado
-- **Verificación end-to-end completada por el usuario**: búsqueda real ALC → Polonia, 04/12/2026 → 08/12/2026, 2 adultos + 1 niño, open-jaw activado. Resultado: **6 itinerarios** devueltos correctamente desde Neon (2 vuelos de ida ALC→KRK × 3 vuelos de vuelta KRK→ALC en los datos mock), confirmando que el pipeline completo GitHub → Vercel → Neon funciona en producción.
-- Pendiente conocido: los datos mock actuales solo cubren ALC→KRK como tramo de ida dentro del grupo `poland`; no hay legs de ida ALC→WRO/WAW/WMI para esas fechas, por lo que el open-jaw no se activa aún en este escenario concreto (no es un fallo del motor, es cobertura de datos de ejemplo).
+- Verificacion end-to-end completada por el usuario: busqueda real ALC -> Polonia, 04/12/2026 -> 08/12/2026, 2 adultos + 1 nino, open-jaw activado. Resultado: 6 itinerarios devueltos correctamente desde Neon.
 
 ## [0.1.1] - 2026-09-14
 
 ### Corregido
-- `lib/db.ts`: inicialización perezosa del cliente de Neon (`getSql()`), en lugar de crear el cliente al importar el módulo. Evitaba que `npm run build` fallara en Vercel cuando `DATABASE_URL` aún no estaba configurada.
-- `app/api/search/route.ts` y `app/api/meta/route.ts`: se añade `export const dynamic = 'force-dynamic'` y `export const runtime = 'nodejs'` para que Next.js no intente pre-renderizar/recolectar datos de estas rutas en tiempo de build, y para asegurar el runtime Node.js (necesario para el driver de Neon).
-- Manejo de errores: las rutas API devuelven ahora el mensaje de error real (`err.message`) en la respuesta JSON en caso de fallo, para facilitar el diagnóstico.
+- `lib/db.ts`: inicializacion perezosa del cliente de Neon (`getSql()`), evitando que `npm run build` fallara en Vercel cuando `DATABASE_URL` aun no estaba configurada.
+- `app/api/search/route.ts` y `app/api/meta/route.ts`: `export const dynamic = 'force-dynamic'` y `export const runtime = 'nodejs'` para evitar pre-renderizado en build time.
 
 ### Infraestructura
-- Proyecto Neon `tiriti-travel` creado (región `aws-us-west-2`, Postgres 18, plan gratuito).
-- Proyecto Vercel `tiriti-travel` creado y enlazado al repositorio GitHub `Gsus1982/tiriti-travel` (despliegue automático en cada push a `main`).
-- Variable de entorno `DATABASE_URL` configurada manualmente en Vercel (Production/Preview/Development) por el usuario, ya que el conector de Vercel disponible no expone una herramienta para gestionar variables de entorno por API.
-- Deploy `dpl_Ed1PyuGMgNU9t3ZkghQFfaUNvaUY` marcado como `READY` tras el fix.
-- Protección de despliegue (Vercel Authentication / SSO) verificada como activa (`deploymentType: all`) para mantener la app de acceso exclusivamente personal.
-
-### Notas de verificación
-- El build en Vercel completa correctamente (`state: READY`) usando el commit `8ed9e8e`.
-- La comprobación de la respuesta HTTP de `/api/meta` y `/api/search` desde fuera de Vercel no pudo completarse mediante las herramientas automatizadas disponibles, debido a la protección de despliegue (SSO) y a una limitación de permisos (`403 Forbidden: Not authorized ... scope "gsus1982s-projects"`) en las herramientas de logs/runtime del conector de Vercel usado. **Resuelto en 0.1.2** mediante verificación manual directa del usuario.
+- Proyecto Neon `tiriti-travel` creado (region `aws-us-west-2`, Postgres 18, plan gratuito).
+- Proyecto Vercel `tiriti-travel` creado y enlazado al repositorio GitHub, despliegue automatico en cada push a `main`.
+- Proteccion de despliegue (Vercel Authentication / SSO) activada para mantener la app de acceso exclusivamente personal.
 
 ## [0.1.0] - 2026-09-14
 
-### Añadido
-- Scaffold inicial de la aplicación Next.js 14 (App Router) + TypeScript + Tailwind CSS.
+### Anadido
+- Scaffold inicial de la aplicacion Next.js 14 (App Router) + TypeScript + Tailwind CSS.
 - Modelo de datos en Postgres (Neon): `destination_groups`, `airports`, `legs`, `transfer_times`, `hotel_transfer`.
-- Motor de búsqueda (`lib/search-engine.ts`) con:
-  - Filtro no negociable de vuelos directos.
-  - Origen fijo en España (mismo aeropuerto ida/vuelta).
-  - Lógica de **open-jaw en destino**: evalúa todas las combinaciones de entrada/salida entre los aeropuertos de un mismo `destination_group` (incluye flexibilidad de ciudad dentro del mismo país, según lo acordado con el usuario).
-  - Cálculo de traslado interno estimado (tren/bus) cuando hay open-jaw, vía tabla `transfer_times`.
-  - Cálculo de la hora de salida del hotel el día de regreso (`hora_vuelo - 2h - traslado_aeropuerto`).
-  - Filtros: hora mínima de salida ida/vuelta, equipaje de mano incluido, aerolíneas incluidas/excluidas, precio máximo total.
-  - Ranking configurable: hora de salida del hotel (por defecto), precio total, duración total.
-- Endpoints API: `POST /api/search` (búsqueda de itinerarios), `GET /api/meta` (orígenes y grupos de destino disponibles).
-- UI de búsqueda (`app/page.tsx`) con formulario de filtros y tabla de resultados.
-- Datos de ejemplo (`source = 'mock_seed_2026-09'`) para 10 rutas: Alicante–Cracovia, Alicante–Wroclaw, Valencia–Varsovia (Chopin y Modlin), Madrid–Riga, Madrid–Estocolmo, Madrid–Helsinki, Madrid–Oslo, Madrid–Atenas, Madrid–Sofia, Madrid–Belgrado.
+- Motor de busqueda mock inicial con: filtro no negociable de vuelos directos, origen fijo, open-jaw en destino, calculo de traslado interno, calculo de hora de salida del hotel, filtros de hora/equipaje/aerolinea/precio, ranking configurable.
+- Endpoints iniciales: `POST /api/search`, `GET /api/meta`.
+- UI de busqueda inicial (`app/page.tsx`) con formulario de filtros y tabla de resultados.
+- Datos de ejemplo (`source = 'mock_seed_2026-09'`) para 10 rutas iniciales.
 - Repositorio GitHub privado `Gsus1982/tiriti-travel` creado.
-- Proyecto Vercel creado y enlazado al repositorio para despliegue continuo.
 
-### Decisiones de diseño registradas
-- Se descarta Supabase como base de datos principal por preferencia explícita del usuario (uso gratuito ya agotado en su cuenta); se elige Neon por su plan gratuito real y su driver serverless optimizado para Vercel.
-- No se incluye búsqueda de hoteles en esta fase (decisión explícita del usuario).
-- No se incluye sistema de autenticación propio; la privacidad se gestiona con la protección de despliegue de Vercel, dado que la app es de uso exclusivamente personal.
-- El open-jaw se permite entre ciudades distintas del mismo país (no solo entre aeropuertos de la misma ciudad), según confirmación explícita del usuario.
-- El aeropuerto de origen en España nunca cambia entre ida y vuelta (sin flexibilidad de origen), también por confirmación explícita del usuario.
+### Decisiones de diseno registradas
+- Se descarta Supabase como base de datos principal por preferencia explicita del usuario; se elige Neon por su plan gratuito real y driver serverless optimizado para Vercel.
+- No se incluye busqueda de hoteles en esta fase (decision explicita del usuario).
+- No se incluye sistema de autenticacion propio; la privacidad se gestiona con la proteccion de despliegue de Vercel.
+- El open-jaw se permite entre ciudades distintas del mismo pais (no solo entre aeropuertos de la misma ciudad).
+- El aeropuerto de origen en Espana nunca cambia entre ida y vuelta dentro de una misma combinacion de busqueda.

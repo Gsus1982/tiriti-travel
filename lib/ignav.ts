@@ -78,20 +78,35 @@ function getApiKey(): string {
   return sanitize(key);
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+const RETRYABLE_STATUSES = new Set([424, 429, 502, 503, 504]);
+const MAX_RETRIES = 2;
+
 async function ignavPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
-  const res = await fetch(`${IGNAV_BASE_URL}${path}`, {
-    method: 'POST',
-    headers: {
-      'X-Api-Key': getApiKey(),
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(body)
-  });
-  if (!res.ok) {
+  let lastError: Error | null = null;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const res = await fetch(`${IGNAV_BASE_URL}${path}`, {
+      method: 'POST',
+      headers: {
+        'X-Api-Key': getApiKey(),
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+    if (res.ok) {
+      return (await res.json()) as T;
+    }
     const text = await res.text().catch(() => '');
-    throw new Error(`Ignav API error ${res.status} en ${path}: ${text}`);
+    lastError = new Error(`Ignav API error ${res.status} en ${path}: ${text}`);
+    if (!RETRYABLE_STATUSES.has(res.status) || attempt === MAX_RETRIES) {
+      throw lastError;
+    }
+    await sleep(400 * (attempt + 1));
   }
-  return (await res.json()) as T;
+  throw lastError ?? new Error('Error desconocido llamando a Ignav');
 }
 
 export async function searchOneWay(params: OneWaySearchParams): Promise<IgnavOneWayResponse> {

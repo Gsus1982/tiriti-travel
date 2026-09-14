@@ -1,5 +1,33 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion de auditoria (Claude, a peticion del usuario)
+
+### Resumen ejecutivo
+Auditoria completa del repo (clonado en local, historial y ramas incluidas) mas aplicacion directa de fixes sobre una rama nueva `fix/auditoria-completa` partiendo del PR #15. Verificado con `npx tsc --noEmit` y `npm run build` limpios tras todos los cambios. Nota: esta rama partia de un STATUS.md desactualizado (sin la seccion "Sesion 2" que ya existia en `main`); este archivo fusiona ambos historiales para no perder nada al mergear.
+
+### Verificacion de seguridad independiente
+Se escaneo TODO el historial de git (todas las ramas, todos los commits) buscando la key de RapidAPI que el usuario pego en el chat en la sesion anterior. Confirmado: nunca se comiteo, solo hay placeholders en `.env.example`. El aviso de seguridad de la sesion anterior era correcto.
+
+### Fixes aplicados en `fix/auditoria-completa`
+1. Mergeado el fix del PR #15 para `destinationIatas` sueltos (bug activo en `main`).
+2. `lib/nlp-search.ts`: reescrita la extraccion de dias/horas para que se corte el texto en la primera palabra de vuelta (regreso/vuelta/retorno) y se extraigan dias/horas por separado en cada mitad. Antes, con el propio ejemplo de la home ("...el 4 despues de las 18h o si no el 5 a partir de las 8h, regreso no antes de las 12h"), el parser asumia que el dia 5 era la vuelta (cuando era una alternativa de ida) y aplicaba 18h como hora minima de vuelta (cuando el texto pedia 12h). Verificado con un test aislado en Node antes de tocar el archivo real.
+3. `app/api/search-live/route.ts`: restauradas las 2 lineas (`dynamic`/`runtime`) que la reconstruccion "a ciegas" del PR #15 habia perdido; unica ruta del proyecto sin esas 2 lineas. Tambien alineado el manejo de errores y el `pax` por defecto con el resto del proyecto.
+4. `lib/live-engine.ts`: eliminado el N+1 -- `transfer_times` y `hotel_transfer` se precargan en batch antes del doble bucle ida x vuelta en vez de consultarse uno a uno dentro de el.
+5. `lib/live-engine.ts`: nuevo limite `MAX_IGNAV_REQUESTS_PER_SEARCH = 60` que calcula el numero REAL de peticiones (aeropuertos x dias x 2 x combos) antes de lanzar la busqueda, no solo el numero de combinaciones origen x destino. Ver CHANGELOG para el caso extremo (240 peticiones en una sola busqueda) que esto evita.
+6. `lib/db.ts` y `lib/ignav.ts`: el saneador de caracteres invisibles ahora los ELIMINA en vez de sustituirlos por un espacio (que solo arreglaba el caso de borde en los extremos de la cadena).
+7. Eliminados `app/api/debug/db-check` (endpoint temporal) y el motor mock huerfano (`lib/search-engine.ts` + `app/api/search/route.ts`); sus 2 funciones usadas por `app/api/meta/route.ts` se movieron a `lib/meta-queries.ts` nuevo.
+
+### 2 hallazgos que NO se han tocado por codigo (documentar, no arreglar)
+- **Los crons escalonados de `vercel.json` (04:00/04:05/04:10/04:15) no hacen lo que aparentan.** En el plan Hobby, Vercel solo garantiza que el cron se ejecute DENTRO de la hora indicada, no en el minuto exacto -- los 4 refresh-aena pueden dispararse en cualquier orden o casi a la vez dentro de las 04:00-04:59. El escalonado por minutos es cosmetico. (El limite de "solo 2 crons en Hobby" que aparece en blogs antiguos ya no aplica -- Vercel lo subio a 100/proyecto en enero 2026 -- pero la falta de precision de minuto en Hobby SI sigue vigente). No se ha cambiado `vercel.json` porque no hay ninguna configuracion que arregle esto en Hobby; si algun dia importa el orden/espaciado exacto, la solucion es un scheduler externo (ej. GitHub Actions con horas distintas de verdad, o un cron externo tipo cron-job.org) llamando a estos mismos endpoints con el secreto `AENA_SYNC_SECRET`.
+- **Ojo con la alternativa de GitHub Actions propuesta para el 504 de Aena**: si la hipotesis del bloqueo por IP de datacenter es correcta, GitHub Actions probablemente tenga EL MISMO problema (sus runners tambien son IPs de datacenter, de Azure). Antes de invertir tiempo montando ese pipeline, probar el fetch a Aena una vez desde una IP residencial (tu propio ordenador) para confirmar o descartar la hipotesis.
+
+### Pendiente de tu parte
+- Revisar el diff de la rama `fix/auditoria-completa` (o el PR que se abra desde ella) y aprobar el merge a `main`.
+- Cuando termines de revisar: revocar el token de GitHub que diste para esta sesion y volver a poner el repo en privado.
+
+---
+
+
 ## Estado al 14 de septiembre de 2026, 15:34 CEST — Sesion 2: rediseno + fix + filtros nuevos + Sky Scrapper
 
 ### Resumen ejecutivo de esta sesion

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { listDestinationGroups, listOriginAirports } from '@/lib/search-engine';
+import { listDestinationGroups, listOriginAirports } from '@/lib/meta-queries';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';

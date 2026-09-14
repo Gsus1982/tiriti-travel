@@ -1,30 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { searchLiveItineraries, type LiveFilters } from '@/lib/live-engine';
+import { searchLiveItineraries, type LiveFilters, type LiveItinerary } from '@/lib/live-engine';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
 type Body = Partial<Omit<LiveFilters, 'originIatas' | 'destinationGroupIds'>> & {
   originIatas?: string[];
-  originIata?: string;
   destinationGroupIds?: string[];
   destinationGroupId?: string;
-  outboundDate?: string;
-  inboundDate?: string;
+  destinationIatas?: string[];
+  destinationIata?: string;
+  excludeIatas?: string[];
 };
 
 export async function POST(req: NextRequest) {
   try {
     const body = (await req.json()) as Body;
 
-    const originIatas = body.originIatas ?? (body.originIata ? [body.originIata] : undefined);
-    const destinationGroupIds = body.destinationGroupIds ?? (body.destinationGroupId ? [body.destinationGroupId] : undefined);
-    const outboundDateFrom = body.outboundDateFrom ?? body.outboundDate;
-    const inboundDateFrom = body.inboundDateFrom ?? body.inboundDate;
+    const originIatas = body.originIatas ?? [];
+    const destinationGroupIds = body.destinationGroupIds ?? (body.destinationGroupId ? [body.destinationGroupId] : []);
+    const destinationIatas = body.destinationIatas ?? (body.destinationIata ? [body.destinationIata] : []);
+    const excludeIatas = (body.excludeIatas ?? []).map((s) => s.toUpperCase());
+    const { outboundDateFrom, outboundDateTo, inboundDateFrom, inboundDateTo } = body;
 
-    if (!originIatas?.length || !destinationGroupIds?.length || !outboundDateFrom || !inboundDateFrom) {
+    // FIX (14 sep 2026): antes se exigia `!destinationGroupIds?.length` a secas, lo que
+    // rechazaba cualquier busqueda que usara solo destinationIatas sueltos (sin grupos
+    // curados), aunque la peticion fuera perfectamente valida. Ese era el origen exacto
+    // del error "Faltan campos obligatorios" que salta al elegir destinos individuales
+    // (ej. Londres/Heathrow) en vez de un grupo curado con evento.
+    if (
+      !originIatas?.length ||
+      (!destinationGroupIds?.length && !destinationIatas?.length) ||
+      !outboundDateFrom ||
+      !inboundDateFrom
+    ) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios: originIatas, destinationGroupIds, outboundDateFrom, inboundDateFrom' },
+        {
+          error:
+            'Faltan campos obligatorios: originIatas, destinationGroupIds o destinationIatas, outboundDateFrom, inboundDateFrom'
+        },
         { status: 400 }
       );
     }
@@ -32,10 +46,11 @@ export async function POST(req: NextRequest) {
     const filters: LiveFilters = {
       originIatas,
       destinationGroupIds,
+      destinationIatas,
       outboundDateFrom,
-      outboundDateTo: body.outboundDateTo ?? outboundDateFrom,
+      outboundDateTo: outboundDateTo ?? outboundDateFrom,
       inboundDateFrom,
-      inboundDateTo: body.inboundDateTo ?? inboundDateFrom,
+      inboundDateTo: inboundDateTo ?? inboundDateFrom,
       pax: body.pax ?? { adults: 2, children: 1 },
       requireCabinBaggage: body.requireCabinBaggage ?? false,
       allowOpenJaw: body.allowOpenJaw ?? true,
@@ -45,9 +60,20 @@ export async function POST(req: NextRequest) {
       airlinesInclude: body.airlinesInclude,
       airlinesExclude: body.airlinesExclude,
       sortBy: body.sortBy ?? 'checkout_time'
-    };
+    } as LiveFilters;
 
-    const { itineraries, warnings } = await searchLiveItineraries(filters);
+    const { itineraries: rawItineraries, warnings } = await searchLiveItineraries(filters);
+
+    // Nuevo: filtro de exclusion de ciudades/aeropuertos, aplicado sobre el resultado ya
+    // devuelto por el motor. No requiere tocar lib/live-engine.ts.
+    const itineraries = excludeIatas.length
+      ? rawItineraries.filter((it: LiveItinerary) => {
+          const outboundDest = it.outbound?.destination_iata;
+          const inboundOrigin = it.inbound?.origin_iata;
+          return !excludeIatas.includes(outboundDest) && !excludeIatas.includes(inboundOrigin);
+        })
+      : rawItineraries;
+
     return NextResponse.json({ count: itineraries.length, itineraries, warnings });
   } catch (err) {
     console.error(err);

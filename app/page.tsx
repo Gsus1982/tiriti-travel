@@ -7,11 +7,8 @@ import RouteMap from '@/components/RouteMap';
 import ToolsPanel from '@/components/ToolsPanel';
 import { IconSliders, IconMapPin } from '@/components/Icons';
 
-// URL publica de Pexels (licencia libre, hotlink permitido). La anterior
-// (st.perplexity.ai) era un cache interno del chat, no accesible desde un
-// navegador normal fuera de esta conversacion -- por eso no se veia ninguna
-// imagen en produccion.
-const HERO_IMAGE_URL = 'https://images.pexels.com/photos/35138044/pexels-photo-35138044.jpeg?auto=compress&cs=tinysrgb&w=1600';
+const HERO_IMAGE_URL =
+  'https://images.pexels.com/photos/35138044/pexels-photo-35138044.jpeg?auto=compress&cs=tinysrgb&w=1920';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -26,10 +23,19 @@ type RealDestination = {
   last_synced: string | null;
 };
 
-type BookingLinksState = Record<string, { provider_name: string; url: string; price?: { amount: number; currency: string } }[]>;
+type BookingLinksState = Record<
+  string,
+  { provider_name: string; url: string; price?: { amount: number; currency: string } }[]
+>;
 
 function toggle(arr: string[], value: string): string[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
+}
+
+function toggleAll(prev: string[], values: string[]): string[] {
+  const allSelected = values.every((v) => prev.includes(v));
+  if (allSelected) return prev.filter((v) => !values.includes(v));
+  return Array.from(new Set([...prev, ...values]));
 }
 
 function sortResults(items: LiveItinerary[], sortBy: 'checkout_time' | 'price' | 'duration'): LiveItinerary[] {
@@ -46,12 +52,23 @@ function sortResults(items: LiveItinerary[], sortBy: 'checkout_time' | 'price' |
   return copy;
 }
 
+function groupByCity(list: RealDestination[]) {
+  const map = new Map<string, RealDestination[]>();
+  for (const d of list) {
+    const base = d.dest_name.split('/')[0].trim();
+    if (!map.has(base)) map.set(base, []);
+    map.get(base)!.push(d);
+  }
+  return map;
+}
+
 export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [travelIdeasMode, setTravelIdeasMode] = useState(false);
   const [originIatas, setOriginIatas] = useState<string[]>(['ALC']);
   const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>([]);
   const [selectedDestIatas, setSelectedDestIatas] = useState<string[]>([]);
+  const [excludeIatasText, setExcludeIatasText] = useState('');
   const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
   const [outboundDateTo, setOutboundDateTo] = useState('2026-12-05');
   const [inboundDateFrom, setInboundDateFrom] = useState('2026-12-08');
@@ -77,7 +94,6 @@ export default function HomePage() {
   const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
   const [realDestError, setRealDestError] = useState<string | null>(null);
   const [realDestFilter, setRealDestFilter] = useState('');
-  const [showCuratedGroups, setShowCuratedGroups] = useState(false);
 
   useEffect(() => {
     fetch('/api/meta')
@@ -107,13 +123,27 @@ export default function HomePage() {
 
   const combos = originIatas.length * (destinationGroupIds.length + selectedDestIatas.length);
 
+  const excludeIatas = useMemo(
+    () =>
+      excludeIatasText
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean),
+    [excludeIatasText]
+  );
+
   const filteredRealDestinations = useMemo(() => {
     const q = realDestFilter.trim().toLowerCase();
-    if (!q) return realDestinations;
-    return realDestinations.filter(
+    const base = excludeIatas.length
+      ? realDestinations.filter((d) => !excludeIatas.includes(d.dest_iata))
+      : realDestinations;
+    if (!q) return base;
+    return base.filter(
       (d) => d.dest_name.toLowerCase().includes(q) || d.country.toLowerCase().includes(q) || d.dest_iata.toLowerCase().includes(q)
     );
-  }, [realDestinations, realDestFilter]);
+  }, [realDestinations, realDestFilter, excludeIatas]);
+
+  const cityGroups = useMemo(() => groupByCity(filteredRealDestinations), [filteredRealDestinations]);
 
   function handleInterpret() {
     if (!meta || !nlpText.trim()) return;
@@ -142,6 +172,7 @@ export default function HomePage() {
       originIatas,
       destinationGroupIds: groupIds,
       destinationIatas: iatas,
+      excludeIatas,
       outboundDateFrom,
       outboundDateTo,
       inboundDateFrom,
@@ -214,37 +245,42 @@ export default function HomePage() {
   }
 
   const originsList = meta?.origins ?? [{ iata: 'ALC', city: 'Alicante' }];
-  const groupsList = meta?.groups ?? [];
 
   return (
-    <div className="space-y-10">
+    <div className="space-y-10 bg-[#0a0c10] -m-6 p-6 min-h-screen">
       <header
-        className="relative overflow-hidden rounded-2xl border border-slate-200 shadow-sm px-6 py-16 md:py-24 text-center text-white"
+        className="relative overflow-hidden rounded-3xl border border-[#c9a24a]/20 shadow-2xl px-6 py-20 md:py-28 text-center"
         style={{
-          backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.55), rgba(15,23,42,0.75)), url(${HERO_IMAGE_URL})`,
+          backgroundImage: `linear-gradient(180deg, rgba(6,8,12,0.75), rgba(6,8,12,0.92)), url(${HERO_IMAGE_URL})`,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}
       >
-        <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
-          Encuentra tu vuelo directo
+        <p className="uppercase tracking-[0.35em] text-xs text-[#c9a24a] font-medium mb-4">Tiriti Travel</p>
+        <h1 className="text-4xl md:text-6xl font-semibold tracking-tight text-white">
+          Vuelos directos, <span className="text-[#c9a24a]">sin escalas.</span>
         </h1>
-        <p className="mt-4 max-w-lg mx-auto text-sm md:text-base text-white/90 leading-relaxed">
+        <p className="mt-5 max-w-xl mx-auto text-sm md:text-base text-white/70 leading-relaxed">
           Ida y vuelta sin escalas desde Alicante, Madrid, Valencia y Murcia. Datos en vivo de Ignav,
           nunca estimaciones.
         </p>
+        <div className="mt-8 flex justify-center gap-6 md:gap-10 text-white/80 text-xs uppercase tracking-wider">
+          <div className="border-t border-[#c9a24a]/40 pt-2">4 origenes</div>
+          <div className="border-t border-[#c9a24a]/40 pt-2">Solo directos</div>
+          <div className="border-t border-[#c9a24a]/40 pt-2">Datos en vivo</div>
+        </div>
       </header>
 
       <RouteMap />
 
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-3">
-        <h2 className="text-base font-semibold text-slate-900">Busqueda en lenguaje natural</h2>
-        <p className="text-sm text-slate-500">
+      <section className="bg-[#12151b] rounded-2xl border border-white/10 shadow-xl p-6 space-y-3">
+        <h2 className="text-base font-semibold text-white">Busqueda en lenguaje natural</h2>
+        <p className="text-sm text-white/50">
           Ej.: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h,
           regreso no antes de las 12h". Revisa siempre como se ha interpretado antes de buscar.
         </p>
         <textarea
-          className="w-full border border-slate-300 rounded-lg p-3 text-sm focus:outline-none focus:ring-2 focus:ring-brand-200 focus:border-brand-400"
+          className="w-full bg-[#0a0c10] border border-white/10 rounded-lg p-3 text-sm text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#c9a24a]/60 focus:border-[#c9a24a]/60"
           rows={2}
           value={nlpText}
           onChange={(e) => setNlpText(e.target.value)}
@@ -252,12 +288,12 @@ export default function HomePage() {
         />
         <button
           onClick={handleInterpret}
-          className="bg-slate-800 hover:bg-slate-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+          className="bg-white/10 hover:bg-white/20 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-white/10"
         >
           Interpretar y precargar filtros
         </button>
         {nlpWarnings.length > 0 && (
-          <div className="text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="text-amber-200 text-sm bg-amber-900/20 border border-amber-700/30 rounded-lg p-3">
             <p className="font-medium mb-1">Revisa la interpretacion:</p>
             <ul className="list-disc pl-4 space-y-0.5">
               {nlpWarnings.map((w, i) => (
@@ -268,25 +304,29 @@ export default function HomePage() {
         )}
       </section>
 
-      <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-5">
+      <section className="bg-[#12151b] rounded-2xl border border-white/10 shadow-xl p-6 space-y-6">
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div className="flex items-center gap-2">
-            <IconSliders className="w-5 h-5 text-brand-600" />
-            <h2 className="text-base font-semibold text-slate-900">Filtros de busqueda</h2>
+            <IconSliders className="w-5 h-5 text-[#c9a24a]" />
+            <h2 className="text-base font-semibold text-white">Filtros de busqueda</h2>
           </div>
-          <label className="flex items-center gap-2 text-sm text-slate-700">
+          <label className="flex items-center gap-2 text-sm text-white/70">
             <input type="checkbox" checked={travelIdeasMode} onChange={(e) => setTravelIdeasMode(e.target.checked)} />
-            Quiero viajar, propon ideas (grupos curados)
+            Quiero viajar, propon ideas
           </label>
         </div>
 
         <div>
-          <p className="text-sm font-medium text-slate-700 mb-2">Origenes</p>
+          <p className="text-sm font-medium text-white/70 mb-2">Origenes</p>
           <div className="flex flex-wrap gap-2">
             {originsList.map((o) => (
               <label
                 key={o.iata}
-                className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300 text-slate-600 hover:border-brand-300'}`}
+                className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${
+                  originIatas.includes(o.iata)
+                    ? 'bg-[#c9a24a] text-[#0a0c10] border-[#c9a24a] font-medium'
+                    : 'bg-transparent border-white/20 text-white/70 hover:border-[#c9a24a]/60'
+                }`}
               >
                 <input
                   type="checkbox"
@@ -302,176 +342,239 @@ export default function HomePage() {
 
         <div>
           <div className="flex items-center gap-2 mb-2">
-            <IconMapPin className="w-4 h-4 text-brand-600" />
-            <p className="text-sm font-medium text-slate-700">
+            <IconMapPin className="w-4 h-4 text-[#c9a24a]" />
+            <p className="text-sm font-medium text-white/70">
               Destinos ({filteredRealDestinations.length} vuelos directos reales desde tus origenes)
             </p>
           </div>
           {realDestError && (
-            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 mb-2">
+            <p className="text-xs text-red-300 bg-red-900/20 border border-red-700/30 rounded p-2 mb-2">
               No se pudo cargar el listado: {realDestError}
             </p>
           )}
           <input
             type="text"
             placeholder="Filtrar por ciudad, pais o codigo IATA..."
-            className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2"
+            className="w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30 mb-2"
             value={realDestFilter}
             onChange={(e) => setRealDestFilter(e.target.value)}
           />
-          <div className="max-h-64 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1.5 text-xs border border-slate-200 rounded-xl p-2 bg-slate-50">
-            {filteredRealDestinations.map((d) => (
-              <label
-                key={d.dest_iata}
-                className={`px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${selectedDestIatas.includes(d.dest_iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-200 hover:border-brand-300'}`}
-              >
-                <input
-                  type="checkbox"
-                  className="hidden"
-                  checked={selectedDestIatas.includes(d.dest_iata)}
-                  onChange={() => setSelectedDestIatas((prev) => toggle(prev, d.dest_iata))}
-                />
-                <span className="font-medium">{d.dest_name}</span> ({d.dest_iata})
-                <br />
-                <span className={selectedDestIatas.includes(d.dest_iata) ? 'text-white/80' : 'text-slate-400'}>
-                  {d.country} &middot; desde {d.served_from.join(', ')}
-                </span>
-              </label>
-            ))}
+          <div className="max-h-72 overflow-y-auto flex flex-wrap gap-1.5 border border-white/10 rounded-xl p-3 bg-[#0a0c10]">
+            {Array.from(cityGroups.entries()).map(([city, airports]) => {
+              const iatas = airports.map((a) => a.dest_iata);
+              const countries = Array.from(new Set(airports.map((a) => a.country))).join(', ');
+              const allSelected = iatas.every((i) => selectedDestIatas.includes(i));
+              return (
+                <div key={city} className="flex flex-wrap gap-1.5 items-center">
+                  {airports.length > 1 && (
+                    <label
+                      className={`text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors font-medium ${
+                        allSelected
+                          ? 'bg-[#c9a24a] text-[#0a0c10] border-[#c9a24a]'
+                          : 'bg-transparent border-[#c9a24a]/50 text-[#c9a24a] hover:bg-[#c9a24a]/10'
+                      }`}
+                      title={`Selecciona los ${airports.length} aeropuertos de ${city} a la vez`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={allSelected}
+                        onChange={() => setSelectedDestIatas((prev) => toggleAll(prev, iatas))}
+                      />
+                      {city} (todos)
+                    </label>
+                  )}
+                  {airports.map((d) => (
+                    <label
+                      key={d.dest_iata}
+                      className={`text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${
+                        selectedDestIatas.includes(d.dest_iata)
+                          ? 'bg-white text-[#0a0c10] border-white'
+                          : 'bg-transparent border-white/15 text-white/70 hover:border-white/40'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="hidden"
+                        checked={selectedDestIatas.includes(d.dest_iata)}
+                        onChange={() => setSelectedDestIatas((prev) => toggle(prev, d.dest_iata))}
+                      />
+                      {d.dest_name} ({d.dest_iata})
+                      <span className="ml-1 text-[10px] opacity-60">{countries}</span>
+                    </label>
+                  ))}
+                </div>
+              );
+            })}
             {filteredRealDestinations.length === 0 && !realDestError && (
-              <p className="text-slate-400 col-span-full">Sin resultados o cache aun no sincronizada.</p>
+              <p className="text-white/30 text-xs">Sin resultados o cache aun no sincronizada.</p>
             )}
           </div>
           {selectedDestIatas.length > 0 && (
-            <p className="text-xs text-slate-500 mt-2">{selectedDestIatas.length} destino(s) seleccionado(s).</p>
+            <p className="text-xs text-white/40 mt-2">{selectedDestIatas.length} destino(s) seleccionado(s).</p>
           )}
 
-          <button
-            type="button"
-            onClick={() => setShowCuratedGroups((v) => !v)}
-            className="mt-3 text-xs font-medium text-brand-600 hover:text-brand-500"
-          >
-            {showCuratedGroups ? 'Ocultar' : 'Ver'} sugerencias con evento o temporada (mercados navidenos, festivales...)
-          </button>
-          {showCuratedGroups && (
-            <div className={`flex flex-wrap gap-2 mt-2 ${travelIdeasMode ? 'opacity-40 pointer-events-none' : ''}`}>
-              {groupsList.map((g) => (
-                <label
-                  key={g.id}
-                  className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${destinationGroupIds.includes(g.id) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300 text-slate-600 hover:border-brand-300'}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={destinationGroupIds.includes(g.id)}
-                    onChange={() => setDestinationGroupIds((prev) => toggle(prev, g.id))}
-                  />
-                  {g.name}
-                </label>
-              ))}
-            </div>
-          )}
-          {travelIdeasMode && (
-            <p className="text-xs text-slate-500 mt-2">
-              En modo "Quiero viajar" se buscan todos los grupos curados con evento/temporada; no hace falta elegir uno.
+          <div className="mt-4">
+            <label className="text-xs font-medium text-white/70">
+              Ciudades a descartar (opcional)
+              <input
+                type="text"
+                placeholder="Codigos IATA separados por coma, ej: LHR, CDG, FCO"
+                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white placeholder-white/30"
+                value={excludeIatasText}
+                onChange={(e) => setExcludeIatasText(e.target.value)}
+              />
+            </label>
+            <p className="text-[11px] text-white/30 mt-1">
+              Se quitan del selector de destinos y, si ya buscaste, tambien de los resultados devueltos por el servidor.
             </p>
-          )}
+          </div>
+
+          <div className="mt-4 bg-[#0a0c10] border border-white/10 rounded-xl p-3">
+            <p className="text-xs text-white/60">
+              ¿Buscas mercados navidenos, festivales de luces u otro evento de temporada? Descríbelo en el cuadro de
+              "Busqueda en lenguaje natural" de arriba (ej. "mercado navideno en un pais nordico" o "festival de luces
+              en Francia") en vez de elegir de una lista fija -- así no te repetimos siempre las mismas ciudades.
+            </p>
+          </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-white/10">
           <div className="col-span-2 grid grid-cols-2 gap-3">
-            <label className="text-xs font-medium text-slate-600">
+            <label className="text-xs font-medium text-white/70">
               Ida desde
-              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={outboundDateFrom} onChange={(e) => setOutboundDateFrom(e.target.value)} />
+              <input
+                type="date"
+                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                value={outboundDateFrom}
+                onChange={(e) => setOutboundDateFrom(e.target.value)}
+              />
             </label>
-            <label className="text-xs font-medium text-slate-600">
+            <label className="text-xs font-medium text-white/70">
               Ida hasta
-              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={outboundDateTo} onChange={(e) => setOutboundDateTo(e.target.value)} />
+              <input
+                type="date"
+                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                value={outboundDateTo}
+                onChange={(e) => setOutboundDateTo(e.target.value)}
+              />
             </label>
           </div>
           <div className="col-span-2 grid grid-cols-2 gap-3">
-            <label className="text-xs font-medium text-slate-600">
+            <label className="text-xs font-medium text-white/70">
               Vuelta desde
-              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={inboundDateFrom} onChange={(e) => setInboundDateFrom(e.target.value)} />
+              <input
+                type="date"
+                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                value={inboundDateFrom}
+                onChange={(e) => setInboundDateFrom(e.target.value)}
+              />
             </label>
-            <label className="text-xs font-medium text-slate-600">
+            <label className="text-xs font-medium text-white/70">
               Vuelta hasta
-              <input type="date" className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={inboundDateTo} onChange={(e) => setInboundDateTo(e.target.value)} />
+              <input
+                type="date"
+                className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+                value={inboundDateTo}
+                onChange={(e) => setInboundDateTo(e.target.value)}
+              />
             </label>
           </div>
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-white/70">
             Adultos
-            <input type="number" min={1} className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={adults} onChange={(e) => setAdults(Number(e.target.value))} />
+            <input
+              type="number"
+              min={1}
+              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              value={adults}
+              onChange={(e) => setAdults(Number(e.target.value))}
+            />
           </label>
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-white/70">
             Ninos
-            <input type="number" min={0} className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={children} onChange={(e) => setChildren(Number(e.target.value))} />
+            <input
+              type="number"
+              min={0}
+              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              value={children}
+              onChange={(e) => setChildren(Number(e.target.value))}
+            />
           </label>
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-white/70">
             Ida no antes de (h)
             <input
               type="number"
               min={0}
               max={23}
-              className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
               value={outboundNotBeforeHour}
               onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
             />
           </label>
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-white/70">
             Vuelta no antes de (h)
             <input
               type="number"
               min={0}
               max={23}
-              className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm"
+              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
               value={inboundNotBeforeHour}
               onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
             />
           </label>
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-white/70">
             Precio max. total
-            <input type="number" min={0} className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={maxPriceTotal} onChange={(e) => setMaxPriceTotal(e.target.value === '' ? '' : Number(e.target.value))} />
+            <input
+              type="number"
+              min={0}
+              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              value={maxPriceTotal}
+              onChange={(e) => setMaxPriceTotal(e.target.value === '' ? '' : Number(e.target.value))}
+            />
           </label>
-          <label className="text-xs font-medium text-slate-600">
+          <label className="text-xs font-medium text-white/70">
             Ordenar por
-            <select className="mt-1 w-full border border-slate-300 rounded-lg p-2 text-sm" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
+            <select
+              className="mt-1 w-full bg-[#0a0c10] border border-white/10 rounded-lg p-2 text-sm text-white"
+              value={sortBy}
+              onChange={(e) => handleReSort(e.target.value as any)}
+            >
               <option value="checkout_time">Hora salida hotel</option>
               <option value="price">Precio total</option>
               <option value="duration">Duracion total</option>
             </select>
           </label>
-          <label className="text-xs font-medium text-slate-600 flex items-center gap-2 mt-5">
+          <label className="text-xs font-medium text-white/70 flex items-center gap-2 mt-5">
             <input type="checkbox" checked={requireCabinBaggage} onChange={(e) => setRequireCabinBaggage(e.target.checked)} />
             Exigir equipaje de mano
           </label>
-          <label className="text-xs font-medium text-slate-600 flex items-center gap-2 mt-5">
+          <label className="text-xs font-medium text-white/70 flex items-center gap-2 mt-5">
             <input type="checkbox" checked={allowOpenJaw} onChange={(e) => setAllowOpenJaw(e.target.checked)} />
             Permitir open-jaw en destino
           </label>
         </div>
 
         {!travelIdeasMode && (
-          <p className="text-xs text-slate-500">
-            Combinaciones origen x destino: <strong>{combos}</strong>
-            {combos > 6 && <span className="text-red-600"> (maximo 6; reduce la seleccion)</span>}
+          <p className="text-xs text-white/40">
+            Combinaciones origen x destino: <strong className="text-white/70">{combos}</strong>
+            {combos > 6 && <span className="text-red-300"> (maximo 6; reduce la seleccion)</span>}
           </p>
         )}
-        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <p className="text-xs text-amber-200/80 bg-amber-900/10 border border-amber-700/20 rounded-lg px-3 py-2">
           Maximo 5 dias por tramo y 6 combinaciones origen x destino, para no agotar la cuota gratuita de Ignav.
         </p>
 
         <button
           onClick={travelIdeasMode ? handleTravelIdeas : handleSearch}
           disabled={loading || originIatas.length === 0 || (!travelIdeasMode && destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
-          className="bg-brand-600 hover:bg-brand-500 text-white font-medium px-6 py-2.5 rounded-lg transition-colors disabled:opacity-50"
+          className="bg-[#c9a24a] hover:bg-[#dab765] text-[#0a0c10] font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-40"
         >
           {loading ? 'Buscando...' : travelIdeasMode ? 'Proponme ideas de viaje' : 'Buscar vuelos'}
         </button>
 
-        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {error && <p className="text-red-300 text-sm">{error}</p>}
         {warnings.length > 0 && (
-          <div className="text-amber-800 text-sm bg-amber-50 border border-amber-200 rounded-lg p-3">
+          <div className="text-amber-200 text-sm bg-amber-900/20 border border-amber-700/30 rounded-lg p-3">
             <p className="font-medium mb-1">Avisos de la busqueda:</p>
             <ul className="list-disc pl-5 space-y-0.5">
               {warnings.map((w, i) => (
@@ -496,20 +599,26 @@ export default function HomePage() {
       />
 
       {liveResults && (
-        <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+        <section className="bg-[#12151b] rounded-2xl border border-white/10 shadow-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-base font-semibold text-slate-900">Resultados ({liveResults.length})</h2>
-            <select className="border border-slate-300 rounded-lg p-1.5 text-xs" value={sortBy} onChange={(e) => handleReSort(e.target.value as any)}>
+            <h2 className="text-base font-semibold text-white">Resultados ({liveResults.length})</h2>
+            <select
+              className="bg-[#0a0c10] border border-white/10 rounded-lg p-1.5 text-xs text-white"
+              value={sortBy}
+              onChange={(e) => handleReSort(e.target.value as any)}
+            >
               <option value="checkout_time">Hora salida hotel</option>
               <option value="price">Precio total</option>
               <option value="duration">Duracion total</option>
             </select>
           </div>
-          {liveResults.length === 0 && <p className="text-sm text-slate-500">Sin itinerarios directos que cumplan los filtros. Revisa los avisos de arriba.</p>}
+          {liveResults.length === 0 && (
+            <p className="text-sm text-white/40">Sin itinerarios directos que cumplan los filtros. Revisa los avisos de arriba.</p>
+          )}
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full text-sm text-white/80">
               <thead>
-                <tr className="text-left border-b border-slate-200 text-slate-500">
+                <tr className="text-left border-b border-white/10 text-white/40">
                   <th className="p-2 font-medium">Ruta</th>
                   <th className="p-2 font-medium">Ida</th>
                   <th className="p-2 font-medium">Vuelta</th>
@@ -521,23 +630,37 @@ export default function HomePage() {
                 </tr>
               </thead>
               <tbody>
-                {liveResults.map((r, i) => {
+                {liveResults.map((r: any) => {
                   const rowKey = `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
                   return (
-                    <tr key={rowKey} className="border-b border-slate-100 align-top">
-                      <td className="p-2 font-medium text-slate-800">
+                    <tr key={rowKey} className="border-b border-white/5 align-top">
+                      <td className="p-2 font-medium text-white">
                         {r.originIata} to {r.destinationGroupName}
-                        {r.isSingleIataTarget && <span className="ml-1 text-[10px] text-slate-400">(destino suelto)</span>}
+                        {r.isSingleIataTarget && <span className="ml-1 text-[10px] text-white/30">(destino suelto)</span>}
                       </td>
-                      <td className="p-2">{r.outbound.airline} {r.outbound.flight_number}<br />{r.outbound.origin_iata} to {r.outbound.destination_iata}<br />{new Date(r.outbound.departure_at).toLocaleString('es-ES')}</td>
-                      <td className="p-2">{r.inbound.airline} {r.inbound.flight_number}<br />{r.inbound.origin_iata} to {r.inbound.destination_iata}<br />{new Date(r.inbound.departure_at).toLocaleString('es-ES')}</td>
+                      <td className="p-2">
+                        {r.outbound.airline} {r.outbound.flight_number}
+                        <br />
+                        {r.outbound.origin_iata} to {r.outbound.destination_iata}
+                        <br />
+                        {new Date(r.outbound.departure_at).toLocaleString('es-ES')}
+                      </td>
+                      <td className="p-2">
+                        {r.inbound.airline} {r.inbound.flight_number}
+                        <br />
+                        {r.inbound.origin_iata} to {r.inbound.destination_iata}
+                        <br />
+                        {new Date(r.inbound.departure_at).toLocaleString('es-ES')}
+                      </td>
                       <td className="p-2">{r.isOpenJaw ? 'Si' : 'No'}</td>
-                      <td className="p-2 font-medium text-slate-800">{r.totalPrice.toFixed(2)} {r.currency}</td>
+                      <td className="p-2 font-medium text-[#c9a24a]">
+                        {r.totalPrice.toFixed(2)} {r.currency}
+                      </td>
                       <td className="p-2">{new Date(r.hotelCheckoutAt).toLocaleString('es-ES')}</td>
-                      <td className="p-2 text-slate-500">{r.notes.join(' ')}</td>
+                      <td className="p-2 text-white/40">{r.notes.join(' ')}</td>
                       <td className="p-2">
                         <button
-                          className="text-brand-600 hover:text-brand-500 underline text-xs"
+                          className="text-[#c9a24a] hover:text-[#dab765] underline text-xs"
                           onClick={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
                           disabled={loadingLinks === rowKey}
                         >
@@ -547,12 +670,17 @@ export default function HomePage() {
                           <ul className="mt-1 space-y-1">
                             {bookingLinks[rowKey].map((link, j) => (
                               <li key={j}>
-                                <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-brand-600 hover:text-brand-500 underline">
+                                <a
+                                  href={link.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-xs text-[#c9a24a] hover:text-[#dab765] underline"
+                                >
                                   {link.provider_name} {link.price ? `(${link.price.amount} ${link.price.currency})` : ''}
                                 </a>
                               </li>
                             ))}
-                            {bookingLinks[rowKey].length === 0 && <li className="text-xs text-slate-400">Sin enlaces disponibles</li>}
+                            {bookingLinks[rowKey].length === 0 && <li className="text-xs text-white/30">Sin enlaces disponibles</li>}
                           </ul>
                         )}
                       </td>
@@ -565,7 +693,7 @@ export default function HomePage() {
         </section>
       )}
 
-      <p className="text-xs text-slate-400 text-center">
+      <p className="text-xs text-white/20 text-center">
         Datos en vivo de la API de Ignav. Cada dia adicional y cada combinacion origen x destino consume peticiones de
         la cuota gratuita. Los destinos reales se sincronizan a diario contra los datos publicos de Aena.
       </p>

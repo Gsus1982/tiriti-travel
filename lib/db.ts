@@ -3,8 +3,14 @@ import { neon, NeonQueryFunction } from '@neondatabase/serverless';
 let cachedSql: NeonQueryFunction<false, false> | null = null;
 
 function sanitizeConnectionString(raw: string): string {
+  // FIX (auditoria): antes se sustituian espacios invisibles/no-ASCII por un ESPACIO
+  // normal y luego se hacia .trim() -- eso solo arregla el caso en que el caracter
+  // esta en un borde. Si cae en medio de la cadena (copy/paste desde un editor con
+  // formato), el resultado seguia siendo una URL rota, solo que de otra forma. Una
+  // connection string nunca lleva espacios legitimos, asi que ahora se eliminan del
+  // todo en vez de sustituirlos.
   return raw
-    .replace(/[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ')
+    .replace(/[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200B\u200C\u200D\uFEFF]/g, '')
     .trim();
 }
 

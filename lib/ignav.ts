@@ -67,7 +67,9 @@ export type OneWaySearchParams = {
 };
 
 function sanitize(raw: string): string {
-  return raw.replace(/[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000]/g, ' ').trim();
+  // FIX (auditoria): mismo problema que en lib/db.ts -- sustituir por un espacio en vez
+  // de eliminar solo arregla el caso de borde; una API key nunca lleva espacios legitimos.
+  return raw.replace(/[\s\u00A0\u1680\u2000-\u200A\u202F\u205F\u3000\u200B\u200C\u200D\uFEFF]/g, '').trim();
 }
 
 function getApiKey(): string {

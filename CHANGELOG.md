@@ -2,6 +2,22 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.3.1] - 2026-09-14 (sesion de auditoria)
+
+### Corregido
+- **Bug critico de produccion**: `app/api/search-live/route.ts` rechazaba busquedas con solo `destinationIatas` sueltos (sin grupo curado) con "Faltan campos obligatorios". Mergeado el fix ya existente en el PR #15.
+- **Bug NLP demostrado con el propio ejemplo de la home**: `lib/nlp-search.ts` atribuia mal dias/horas a la clausula equivocada (ida/vuelta) cuando el texto tenia varias alternativas de ida ("el 4 despues de las 18h o si no el 5 a partir de las 8h, regreso no antes de las 12h"). Ahora se corta el texto en la primera palabra de vuelta (regreso/vuelta/retorno) y se extraen dias/horas por separado en cada mitad, en vez de una lista plana global.
+- **Regresion de la reconstruccion "a ciegas" del PR #15**: faltaban `export const dynamic = 'force-dynamic'` y `export const runtime = 'nodejs'` en `search-live/route.ts` (las unicas rutas del proyecto sin esas 2 lineas). Restauradas. Tambien se alineo el manejo de errores con el patron `err instanceof Error` usado en el resto de rutas, y se corrigio el `pax` por defecto (2 adultos + 1 nino, como en main) que la reconstruccion habia cambiado sin querer a 1+0.
+- **N+1 en `lib/live-engine.ts`**: el doble bucle ida x vuelta hacia 1-2 consultas SQL secuenciales POR CADA combinacion. Ahora se precargan `transfer_times` y `hotel_transfer` en batch (maximo 2 consultas por destino, antes del bucle) y se consultan en memoria dentro del bucle.
+- **Caso de borde en `lib/db.ts` y `lib/ignav.ts`**: el saneador de caracteres invisibles los sustituia por un ESPACIO literal en vez de eliminarlos; si el caracter caia en medio de la cadena (no en un borde recortable con `.trim()`), la URL/API key seguia rota. Ahora se eliminan del todo.
+
+### Anadido
+- **Limite real de peticiones a Ignav por busqueda** (`MAX_IGNAV_REQUESTS_PER_SEARCH = 60` en `lib/live-engine.ts`): el limite anterior de 6 combinaciones origen x destino no protegia el multiplicador real de peticiones (aeropuertos del grupo x dias de rango x 2 x combos). Con un grupo de 4 aeropuertos y el maximo de dias/combos, una sola busqueda podia lanzar hasta 240 peticiones contra la cuota de 1000 de por vida. Ahora se calcula el numero real antes de lanzar nada y se corta con un mensaje explicito.
+
+### Eliminado
+- `app/api/debug/db-check` (endpoint temporal de diagnostico, ya no necesario).
+- `lib/search-engine.ts` + `app/api/search/route.ts` (motor mock huerfano, sin uso desde la UI). Las 2 funciones que `app/api/meta/route.ts` seguia importando de ahi (`listDestinationGroups`, `listOriginAirports`) se movieron a `lib/meta-queries.ts` nuevo.
+
 ## [0.3.0] - 2026-09-14
 
 ### Anadido

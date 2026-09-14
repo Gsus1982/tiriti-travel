@@ -13,10 +13,10 @@ function addMinutes(iso: string, minutes: number): string {
   return d.toISOString();
 }
 
-export async function searchItineraries(filters: SearchFilters): Promise<Itinerary[]> {
+type SharedParams = Omit<SearchFilters, 'originIatas' | 'destinationGroupIds'>;
+
+async function searchForPair(originIata: string, destinationGroupId: string, shared: SharedParams): Promise<Itinerary[]> {
   const {
-    originIata,
-    destinationGroupId,
     outboundDateFrom,
     outboundDateTo,
     inboundDateFrom,
@@ -28,14 +28,12 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
     inboundNotBeforeHour,
     maxPriceTotal,
     airlinesInclude,
-    airlinesExclude,
-    sortBy
-  } = filters;
+    airlinesExclude
+  } = shared;
 
   const groupAirports = (await sql`
     SELECT iata, city FROM airports WHERE group_id = ${destinationGroupId}
   `) as { iata: string; city: string }[];
-
   const groupIatas = groupAirports.map((a) => a.iata);
   if (groupIatas.length === 0) return [];
 
@@ -56,7 +54,6 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
   `) as Leg[];
 
   const cityByIata = new Map(groupAirports.map((a) => [a.iata, a.city]));
-
   const results: Itinerary[] = [];
 
   for (const outbound of outboundLegs) {
@@ -94,12 +91,12 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
       const totalPax = pax.adults + pax.children;
       const pricePerPerson = Number(outbound.price_eur) + Number(inbound.price_eur);
       const totalPrice = pricePerPerson * totalPax + (interCityTransfer?.price_eur ?? 0) * totalPax;
+      if (maxPriceTotal !== undefined && totalPrice > maxPriceTotal) continue;
 
       const transferRow = (await sql`
         SELECT airport_to_center_min FROM hotel_transfer WHERE airport_iata = ${inbound.origin_iata} LIMIT 1
       `) as { airport_to_center_min: number }[];
       const airportTransferMinutes = transferRow[0]?.airport_to_center_min ?? 45;
-
       const hotelCheckoutAt = addMinutes(inbound.departure_at, AIRPORT_TO_AIRPORT_BUFFER_MIN + airportTransferMinutes);
 
       const notes: string[] = [];
@@ -108,9 +105,7 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
         const toCity = cityByIata.get(inbound.origin_iata) ?? inbound.origin_iata;
         notes.push(
           `Open-jaw: llegas a ${fromCity} y sales desde ${toCity}.` +
-            (interCityTransfer
-              ? ` Traslado interno estimado: ${interCityTransfer.duration_min} min en ${interCityTransfer.mode}.`
-              : ' Sin dato de traslado interno registrado; verificar manualmente.')
+            (interCityTransfer ? ` Traslado interno estimado: ${interCityTransfer.duration_min} min en ${interCityTransfer.mode}.` : ' Sin dato de traslado interno registrado; verificar manualmente.')
         );
       }
       if (!outbound.cabin_baggage_included || !inbound.cabin_baggage_included) {
@@ -131,18 +126,25 @@ export async function searchItineraries(filters: SearchFilters): Promise<Itinera
     }
   }
 
-  let filtered = results;
-  if (maxPriceTotal !== undefined) {
-    filtered = filtered.filter((r) => r.totalPrice <= maxPriceTotal);
-  }
+  return results;
+}
 
-  filtered.sort((a, b) => {
+export async function searchItineraries(filters: SearchFilters): Promise<Itinerary[]> {
+  const { originIatas, destinationGroupIds, sortBy, ...shared } = filters;
+
+  const allResults = await Promise.all(
+    originIatas.flatMap((originIata) => destinationGroupIds.map((groupId) => searchForPair(originIata, groupId, shared)))
+  );
+
+  const merged = allResults.flat();
+
+  merged.sort((a, b) => {
     if (sortBy === 'price') return a.totalPrice - b.totalPrice;
     if (sortBy === 'duration') return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 
-  return filtered;
+  return merged;
 }
 
 export async function listDestinationGroups() {

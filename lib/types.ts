@@ -4,8 +4,8 @@ export type Pax = {
 };
 
 export type SearchFilters = {
-  originIata: string;
-  destinationGroupId: string;
+  originIatas: string[];
+  destinationGroupIds: string[];
   outboundDateFrom: string;
   outboundDateTo: string;
   inboundDateFrom: string;

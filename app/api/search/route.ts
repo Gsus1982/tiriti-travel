@@ -5,23 +5,34 @@ import type { SearchFilters } from '@/lib/types';
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
+type Body = Partial<Omit<SearchFilters, 'originIatas' | 'destinationGroupIds'>> & {
+  originIatas?: string[];
+  originIata?: string;
+  destinationGroupIds?: string[];
+  destinationGroupId?: string;
+  outboundDate?: string;
+  inboundDate?: string;
+};
+
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as Partial<SearchFilters> & { outboundDate?: string; inboundDate?: string };
+    const body = (await req.json()) as Body;
 
+    const originIatas = body.originIatas ?? (body.originIata ? [body.originIata] : undefined);
+    const destinationGroupIds = body.destinationGroupIds ?? (body.destinationGroupId ? [body.destinationGroupId] : undefined);
     const outboundDateFrom = body.outboundDateFrom ?? body.outboundDate;
     const inboundDateFrom = body.inboundDateFrom ?? body.inboundDate;
 
-    if (!body.originIata || !body.destinationGroupId || !outboundDateFrom || !inboundDateFrom) {
+    if (!originIatas?.length || !destinationGroupIds?.length || !outboundDateFrom || !inboundDateFrom) {
       return NextResponse.json(
-        { error: 'Faltan campos obligatorios: originIata, destinationGroupId, outboundDateFrom, inboundDateFrom' },
+        { error: 'Faltan campos obligatorios: originIatas, destinationGroupIds, outboundDateFrom, inboundDateFrom' },
         { status: 400 }
       );
     }
 
     const filters: SearchFilters = {
-      originIata: body.originIata,
-      destinationGroupId: body.destinationGroupId,
+      originIatas,
+      destinationGroupIds,
       outboundDateFrom,
       outboundDateTo: body.outboundDateTo ?? outboundDateFrom,
       inboundDateFrom,

@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { LiveItinerary } from '@/lib/live-engine';
 import { parseSearchQuery } from '@/lib/nlp-search';
+import RouteMap from '@/components/RouteMap';
+import ToolsPanel from '@/components/ToolsPanel';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -210,6 +212,8 @@ export default function HomePage() {
           Solo vuelos directos, ida y vuelta, desde ALC, MAD, VLC y RMU. Datos en vivo de Ignav, no estimaciones.
         </p>
       </header>
+
+      <RouteMap />
 
       <section className="bg-white rounded-xl shadow p-6 space-y-3">
         <h2 className="text-lg font-semibold">Busqueda en lenguaje natural (beta)</h2>
@@ -455,6 +459,19 @@ export default function HomePage() {
           </div>
         )}
       </section>
+
+      <ToolsPanel
+        originIatas={originIatas}
+        destinationGroupIds={destinationGroupIds}
+        destinationIatas={selectedDestIatas}
+        outboundDateFrom={outboundDateFrom}
+        outboundDateTo={outboundDateTo}
+        inboundDateFrom={inboundDateFrom}
+        inboundDateTo={inboundDateTo}
+        adults={adults}
+        children={children}
+        maxPriceTotal={maxPriceTotal}
+      />
 
       {liveResults && (
         <section className="bg-white rounded-xl shadow p-6">

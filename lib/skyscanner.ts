@@ -52,7 +52,16 @@ export type SkyAirport = {
 /** Busca el skyId/entityId de un aeropuerto o ciudad por texto libre (necesario antes de buscar vuelos). */
 export async function searchAirport(query: string): Promise<SkyAirport[]> {
   const data = await skyFetch('/flights/searchAirport', { query, locale: 'es-ES' });
-  return data?.data ?? [];
+  const raw: any[] = data?.data ?? [];
+  // FIX (auditoria): esta misma API (verificada en buscador_viajes.py, el script que ya
+  // usas y funciona) a veces devuelve skyId/entityId anidados bajo
+  // navigation.relevantFlightParams en vez de en la raiz del item. Sin este fallback,
+  // estos campos llegaban undefined y searchFlights fallaba silenciosamente.
+  return raw.map((item) => ({
+    skyId: item.skyId ?? item.navigation?.relevantFlightParams?.skyId,
+    entityId: item.entityId ?? item.navigation?.relevantFlightParams?.entityId,
+    presentation: item.presentation ?? { title: query }
+  }));
 }
 
 export type SkyFlightSearchParams = {

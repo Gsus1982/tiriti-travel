@@ -2,6 +2,41 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.3.4] - 2026-09-14 (integracion Sky Scrapper)
+
+A peticion explicita del usuario: mezclar resultados de Ignav y Sky Scrapper (RapidAPI) en
+la misma lista, marcando de que fuente viene cada uno.
+
+### Anadido
+- `lib/skyscanner-adapter.ts` nuevo: adapta las respuestas de Sky Scrapper (ida+vuelta en
+  una sola llamada, a diferencia de Ignav que necesita 2 busquedas de solo ida) al formato
+  interno `LiveItinerary`. Solo admite tramos directos (`stopCount === 0`), igual que Ignav.
+- Nuevo campo `source: 'ignav' | 'skyscanner'` en `LiveItinerary`. `FlightResultCard.tsx`
+  muestra una etiqueta con la fuente de cada resultado.
+- Nueva casilla "Incluir Sky Scrapper" en el formulario (desactivada por defecto). Sin
+  marcar, el comportamiento no cambia nada respecto a antes.
+- `lib/live-engine.ts`: si la casilla esta marcada Y `RAPIDAPI_SKY_SCRAPPER_KEY` esta
+  configurada, se consulta Sky Scrapper para cada combinacion origen x aeropuerto de
+  destino (tope propio de 6 llamadas) y se mezcla con los resultados de Ignav antes de
+  ordenar. Sin la variable de entorno configurada, la casilla no tiene efecto (silencioso,
+  no rompe nada).
+
+### Importante -- cuota y verificacion
+- **Cuota de Sky Scrapper: ~100 peticiones AL MES** (no de por vida como Ignav). Por eso
+  solo se consulta 1 vez por combinacion (la primera fecha de cada rango, no el rango
+  completo) y con un tope mucho mas bajo que el de Ignav. Si usas la MISMA key de RapidAPI
+  que en tu script personal `buscador_viajes.py`, ambos consumen de la misma bolsa de
+  cuota -- ver aviso en docs/STATUS.md.
+- **El parseo de la respuesta de ida+vuelta de Sky Scrapper NO se ha podido verificar
+  contra la API real** (sin key configurada ni acceso de red a
+  sky-scrapper.p.rapidapi.com desde el entorno de esta sesion). Esta escrito con la mejor
+  informacion disponible (verificada contra tu script `buscador_viajes.py`, que solo usa
+  busquedas de solo ida) mas la convencion habitual de esta familia de APIs para
+  ida+vuelta. Probado con datos simulados (ver docs/STATUS.md), no con una respuesta real.
+  Corrige tambien un bug latente en `lib/skyscanner.ts`: `searchAirport` no extraia
+  `skyId`/`entityId` cuando venian anidados bajo `navigation.relevantFlightParams` (la
+  misma API a veces devuelve el campo asi, como ya maneja tu script con un fallback).
+
 ## [0.3.3] - 2026-09-14 (tema claro real + fotos de ciudad + fixes de logica)
 
 El usuario mando una captura de la referencia real (tema CLARO con acento indigo, tarjetas

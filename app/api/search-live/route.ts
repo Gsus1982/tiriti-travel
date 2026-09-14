@@ -59,7 +59,8 @@ export async function POST(req: NextRequest) {
       maxPriceTotal: body.maxPriceTotal,
       airlinesInclude: body.airlinesInclude,
       airlinesExclude: body.airlinesExclude,
-      sortBy: body.sortBy ?? 'checkout_time'
+      sortBy: body.sortBy ?? 'checkout_time',
+      includeSkyScanner: body.includeSkyScanner ?? false
     } as LiveFilters;
 
     const { itineraries: rawItineraries, warnings } = await searchLiveItineraries(filters);

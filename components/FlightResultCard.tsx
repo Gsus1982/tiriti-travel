@@ -35,6 +35,13 @@ export default function FlightResultCard({
               <span className="text-[10px] font-medium uppercase tracking-wide bg-indigo-pale text-indigo-dark px-2 py-0.5 rounded-full">
                 Directo
               </span>
+              <span
+                className={`text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full ${
+                  result.source === 'skyscanner' ? 'bg-sky-50 text-sky-600' : 'bg-slate-100 text-slate-500'
+                }`}
+              >
+                {result.source === 'skyscanner' ? 'Sky Scrapper' : 'Ignav'}
+              </span>
               {result.isOpenJaw && (
                 <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full">
                   Open-jaw

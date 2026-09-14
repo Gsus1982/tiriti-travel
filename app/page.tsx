@@ -76,6 +76,7 @@ export default function HomePage() {
   const [children, setChildren] = useState(1);
   const [requireCabinBaggage, setRequireCabinBaggage] = useState(false);
   const [allowOpenJaw, setAllowOpenJaw] = useState(true);
+  const [includeSkyScanner, setIncludeSkyScanner] = useState(false);
   const [outboundNotBeforeHour, setOutboundNotBeforeHour] = useState<number | ''>('');
   const [inboundNotBeforeHour, setInboundNotBeforeHour] = useState<number | ''>(6);
   const [maxPriceTotal, setMaxPriceTotal] = useState<number | ''>('');
@@ -191,6 +192,7 @@ export default function HomePage() {
       pax: { adults, children },
       requireCabinBaggage,
       allowOpenJaw,
+      includeSkyScanner,
       outboundNotBeforeHour: outboundNotBeforeHour === '' ? undefined : Number(outboundNotBeforeHour),
       inboundNotBeforeHour: inboundNotBeforeHour === '' ? undefined : Number(inboundNotBeforeHour),
       maxPriceTotal: maxPriceTotal === '' ? undefined : Number(maxPriceTotal),
@@ -550,6 +552,10 @@ export default function HomePage() {
             <label className="text-xs font-medium text-slate-600 flex items-center gap-2 mt-5">
               <input type="checkbox" checked={allowOpenJaw} onChange={(e) => setAllowOpenJaw(e.target.checked)} />
               Permitir open-jaw en destino
+            </label>
+            <label className="text-xs font-medium text-slate-600 flex items-center gap-2 mt-5">
+              <input type="checkbox" checked={includeSkyScanner} onChange={(e) => setIncludeSkyScanner(e.target.checked)} />
+              Incluir Sky Scrapper (cuota mensual limitada)
             </label>
           </div>
 

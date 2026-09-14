@@ -1,6 +1,68 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: integracion Sky Scrapper (RapidAPI)
+
+### Resumen ejecutivo
+El usuario pidio explicitamente mezclar Sky Scrapper con Ignav ("mezclar resultados de
+ambas y marcar de donde viene cada uno"). Implementado en `lib/skyscanner-adapter.ts` +
+cambios en `live-engine.ts`, `search-live/route.ts`, `page.tsx` y `FlightResultCard.tsx`.
+
+### Como funciona
+- Casilla nueva "Incluir Sky Scrapper" en el formulario, **desactivada por defecto**. Sin
+  marcarla, cero cambios de comportamiento respecto a antes.
+- Si esta marcada y `RAPIDAPI_SKY_SCRAPPER_KEY` esta configurada en Vercel: se consulta
+  Sky Scrapper para cada combinacion origen x aeropuerto de destino, usando SOLO la
+  primera fecha de ida y la primera de vuelta del rango elegido (no el rango completo).
+  Tope propio de 6 llamadas por busqueda.
+- Los resultados se mezclan con los de Ignav en la misma lista y cada tarjeta muestra una
+  etiqueta ("Ignav" / "Sky Scrapper") indicando la fuente.
+- Si la variable de entorno no esta configurada, la casilla no tiene ningun efecto
+  (silencioso, no rompe la busqueda).
+
+### AVISO IMPORTANTE: sin verificar contra la API real
+Esta sesion no tiene acceso de red a `sky-scrapper.p.rapidapi.com` ni una
+`RAPIDAPI_SKY_SCRAPPER_KEY` configurada, asi que el parseo de la respuesta de **ida+vuelta**
+de Sky Scrapper no se ha podido probar contra datos reales. Lo que SI esta verificado:
+- La forma de una respuesta de SOLO IDA de esta misma API, contra tu propio script
+  `buscador_viajes.py` (que ya usas y funciona): `legs[0].stopCount`,
+  `legs[0].durationInMinutes`, `legs[0].carriers.marketing[0].name`, `price.raw`.
+- El parseo se ha probado con datos SIMULADOS plausibles (ver commit) que siguen la
+  convencion habitual de esta familia de APIs para ida+vuelta (`legs[0]` = ida, `legs[1]`
+  = vuelta), incluyendo el caso de campos anidados en formas ligeramente distintas.
+
+**Cuando pruebes esto con una key real, revisa especialmente:**
+1. Que `legs[1]` sea de verdad el tramo de VUELTA (y no algo distinto, como un segundo
+   segmento de la misma ida con escala).
+2. Que `origin.displayCode` / `destination.displayCode` traigan el codigo IATA (si vienen
+   vacios, hay un fallback a `.id` pero conviene confirmarlo).
+3. Los avisos de la busqueda («warnings») mostraran cualquier error de Sky Scrapper sin
+   romper el resto de la busqueda (Ignav sigue funcionando aparte) -- si algo no encaja,
+   apareceran ahi con el mensaje de error real de la API.
+
+### Bug adicional corregido de paso
+`lib/skyscanner.ts`: `searchAirport` no extraia `skyId`/`entityId` cuando la API los
+devolvia anidados bajo `navigation.relevantFlightParams` en vez de en la raiz del item
+-- tu propio script ya maneja este mismo fallback. Sin el, `searchFlights` habria recibido
+`skyId`/`entityId` `undefined` y fallado en silencio.
+
+### Cuota: ojo si compartes la key con tu script personal
+Si `RAPIDAPI_SKY_SCRAPPER_KEY` en Vercel es la MISMA key que usas en tu
+`buscador_viajes.py` local, ambos consumen de la misma bolsa de ~100 peticiones/mes de
+RapidAPI. Si quieres usarlos independientemente sin que se pisen la cuota, hace falta una
+key de RapidAPI distinta para cada uno.
+
+### Pendiente / mejoras futuras (no implementadas en esta sesion)
+- Cache persistente en BD de resoluciones IATA -> skyId/entityId (tabla nueva, ej.
+  `skyscanner_airport_cache(iata TEXT PRIMARY KEY, sky_id TEXT, entity_id TEXT)`) para no
+  gastar cuota re-resolviendo los mismos aeropuertos (ALC, MAD, VLC, RMU, destinos
+  habituales) en cada busqueda -- ahora mismo la cache es solo en memoria y dura lo que
+  dura una invocacion de la funcion serverless.
+- Filtros en panel lateral (pendiente de la sesion de diseno anterior).
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: tema claro real + fotos de ciudad + fixes de logica
+
 
 ### Resumen ejecutivo
 El usuario mando una captura de la referencia real (app "aeroluxe"): tema CLARO con acento

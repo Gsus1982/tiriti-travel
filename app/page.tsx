@@ -5,7 +5,10 @@ import type { LiveItinerary } from '@/lib/live-engine';
 import { parseSearchQuery } from '@/lib/nlp-search';
 import RouteMap from '@/components/RouteMap';
 import ToolsPanel from '@/components/ToolsPanel';
-import { IconPlane, IconSliders, IconMapPin } from '@/components/Icons';
+import { IconSliders, IconMapPin } from '@/components/Icons';
+
+const HERO_IMAGE_URL =
+  'https://st.perplexity.ai/estatic/0b226c450798410ac541646c86ec31afd840e5beab817a5d84fa821e7db61981ec84c3b4a3f072a7a2e1899c9fb06c6e0313946104e1450d38d221a8f7c3e7422d4ae0f9cf9af1e0268ddda3c60a281353ebfe0b19e27fe6c7fccada88b5b3df0bee15765f0afd9f6426fc8cf44a50ce';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -44,7 +47,7 @@ export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [travelIdeasMode, setTravelIdeasMode] = useState(false);
   const [originIatas, setOriginIatas] = useState<string[]>(['ALC']);
-  const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>(['poland']);
+  const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>([]);
   const [selectedDestIatas, setSelectedDestIatas] = useState<string[]>([]);
   const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
   const [outboundDateTo, setOutboundDateTo] = useState('2026-12-05');
@@ -71,7 +74,7 @@ export default function HomePage() {
   const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
   const [realDestError, setRealDestError] = useState<string | null>(null);
   const [realDestFilter, setRealDestFilter] = useState('');
-  const [showRealDestPanel, setShowRealDestPanel] = useState(false);
+  const [showCuratedGroups, setShowCuratedGroups] = useState(false);
 
   useEffect(() => {
     fetch('/api/meta')
@@ -173,7 +176,7 @@ export default function HomePage() {
     const allGroupIds = (meta?.groups ?? []).map((g) => g.id);
     if (originIatas.length * allGroupIds.length > 6) {
       setError(
-        '"Quiero viajar" con todos los destinos supera el limite de 6 combinaciones origen x destino que admite Ignav en modo gratuito. Reduce los origenes seleccionados o desactiva "Quiero viajar" y elige destinos concretos.'
+        '"Quiero viajar" con todos los grupos curados supera el limite de 6 combinaciones origen x destino de Ignav. Reduce los origenes seleccionados o desactiva "Quiero viajar" y elige destinos concretos.'
       );
       return;
     }
@@ -208,19 +211,22 @@ export default function HomePage() {
   }
 
   const originsList = meta?.origins ?? [{ iata: 'ALC', city: 'Alicante' }];
-  const groupsList = meta?.groups ?? [{ id: 'poland', name: 'Polonia', country: 'Polonia' }];
+  const groupsList = meta?.groups ?? [];
 
   return (
     <div className="space-y-10">
-      <header className="rounded-2xl bg-white border border-slate-200 px-6 py-12 md:py-16 text-center shadow-sm">
-        <div className="mx-auto mb-5 flex h-12 w-12 items-center justify-center rounded-full bg-brand-50 text-brand-600">
-          <IconPlane className="w-6 h-6" />
-        </div>
-        <p className="text-xs font-semibold uppercase tracking-[0.25em] text-brand-600">Tiriti Travel</p>
-        <h1 className="mt-3 text-3xl md:text-5xl font-bold tracking-tight text-slate-900">
+      <header
+        className="relative overflow-hidden rounded-2xl border border-slate-200 shadow-sm px-6 py-16 md:py-24 text-center text-white"
+        style={{
+          backgroundImage: `linear-gradient(180deg, rgba(15,23,42,0.55), rgba(15,23,42,0.75)), url(${HERO_IMAGE_URL})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+      >
+        <h1 className="text-3xl md:text-5xl font-bold tracking-tight">
           Encuentra tu vuelo directo
         </h1>
-        <p className="mt-4 max-w-lg mx-auto text-sm text-slate-500 leading-relaxed">
+        <p className="mt-4 max-w-lg mx-auto text-sm md:text-base text-white/90 leading-relaxed">
           Ida y vuelta sin escalas desde Alicante, Madrid, Valencia y Murcia. Datos en vivo de Ignav,
           nunca estimaciones.
         </p>
@@ -267,41 +273,85 @@ export default function HomePage() {
           </div>
           <label className="flex items-center gap-2 text-sm text-slate-700">
             <input type="checkbox" checked={travelIdeasMode} onChange={(e) => setTravelIdeasMode(e.target.checked)} />
-            Quiero viajar, propon ideas
+            Quiero viajar, propon ideas (grupos curados)
           </label>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div>
-            <p className="text-sm font-medium text-slate-700 mb-2">Origenes</p>
-            <div className="flex flex-wrap gap-2">
-              {originsList.map((o) => (
-                <label
-                  key={o.iata}
-                  className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300 text-slate-600 hover:border-brand-300'}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={originIatas.includes(o.iata)}
-                    onChange={() => setOriginIatas((prev) => toggle(prev, o.iata))}
-                  />
-                  {o.city} ({o.iata})
-                </label>
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowRealDestPanel((v) => !v)}
-              className="mt-3 inline-flex items-center gap-1 text-xs font-medium text-brand-600 hover:text-brand-500"
-            >
-              <IconMapPin className="w-3.5 h-3.5" />
-              {showRealDestPanel ? 'Ocultar destinos reales' : `Ver ${realDestinations.length} destinos reales disponibles`}
-            </button>
+        <div>
+          <p className="text-sm font-medium text-slate-700 mb-2">Origenes</p>
+          <div className="flex flex-wrap gap-2">
+            {originsList.map((o) => (
+              <label
+                key={o.iata}
+                className={`text-xs px-3 py-1.5 rounded-full border cursor-pointer transition-colors ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300 text-slate-600 hover:border-brand-300'}`}
+              >
+                <input
+                  type="checkbox"
+                  className="hidden"
+                  checked={originIatas.includes(o.iata)}
+                  onChange={() => setOriginIatas((prev) => toggle(prev, o.iata))}
+                />
+                {o.city} ({o.iata})
+              </label>
+            ))}
           </div>
-          <div>
-            <p className="text-sm font-medium text-slate-700 mb-2">Grupos curados (evento o temporada)</p>
-            <div className={`flex flex-wrap gap-2 ${travelIdeasMode ? 'opacity-40 pointer-events-none' : ''}`}>
+        </div>
+
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <IconMapPin className="w-4 h-4 text-brand-600" />
+            <p className="text-sm font-medium text-slate-700">
+              Destinos ({filteredRealDestinations.length} vuelos directos reales desde tus origenes)
+            </p>
+          </div>
+          {realDestError && (
+            <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2 mb-2">
+              No se pudo cargar el listado: {realDestError}
+            </p>
+          )}
+          <input
+            type="text"
+            placeholder="Filtrar por ciudad, pais o codigo IATA..."
+            className="w-full border border-slate-300 rounded-lg p-2 text-sm mb-2"
+            value={realDestFilter}
+            onChange={(e) => setRealDestFilter(e.target.value)}
+          />
+          <div className="max-h-64 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1.5 text-xs border border-slate-200 rounded-xl p-2 bg-slate-50">
+            {filteredRealDestinations.map((d) => (
+              <label
+                key={d.dest_iata}
+                className={`px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${selectedDestIatas.includes(d.dest_iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-200 hover:border-brand-300'}`}
+              >
+                <input
+                  type="checkbox"
+                  className="hidden"
+                  checked={selectedDestIatas.includes(d.dest_iata)}
+                  onChange={() => setSelectedDestIatas((prev) => toggle(prev, d.dest_iata))}
+                />
+                <span className="font-medium">{d.dest_name}</span> ({d.dest_iata})
+                <br />
+                <span className={selectedDestIatas.includes(d.dest_iata) ? 'text-white/80' : 'text-slate-400'}>
+                  {d.country} &middot; desde {d.served_from.join(', ')}
+                </span>
+              </label>
+            ))}
+            {filteredRealDestinations.length === 0 && !realDestError && (
+              <p className="text-slate-400 col-span-full">Sin resultados o cache aun no sincronizada.</p>
+            )}
+          </div>
+          {selectedDestIatas.length > 0 && (
+            <p className="text-xs text-slate-500 mt-2">{selectedDestIatas.length} destino(s) seleccionado(s).</p>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setShowCuratedGroups((v) => !v)}
+            className="mt-3 text-xs font-medium text-brand-600 hover:text-brand-500"
+          >
+            {showCuratedGroups ? 'Ocultar' : 'Ver'} sugerencias con evento o temporada (mercados navidenos, festivales...)
+          </button>
+          {showCuratedGroups && (
+            <div className={`flex flex-wrap gap-2 mt-2 ${travelIdeasMode ? 'opacity-40 pointer-events-none' : ''}`}>
               {groupsList.map((g) => (
                 <label
                   key={g.id}
@@ -317,62 +367,13 @@ export default function HomePage() {
                 </label>
               ))}
             </div>
-            {selectedDestIatas.length > 0 && (
-              <p className="text-xs text-slate-500 mt-2">
-                + {selectedDestIatas.length} destino(s) suelto(s): {selectedDestIatas.join(', ')}
-              </p>
-            )}
-            {travelIdeasMode && (
-              <p className="text-xs text-slate-500 mt-2">
-                Se buscaran todos los grupos curados con los filtros de abajo; no hace falta elegir uno.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {showRealDestPanel && (
-          <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
-            <p className="text-xs text-slate-600">
-              Destinos con vuelo directo desde {originIatas.join(', ') || 'los origenes elegidos'}, segun la ultima
-              sincronizacion con Aena. Marca los que quieras anadir a la busqueda.
+          )}
+          {travelIdeasMode && (
+            <p className="text-xs text-slate-500 mt-2">
+              En modo "Quiero viajar" se buscan todos los grupos curados con evento/temporada; no hace falta elegir uno.
             </p>
-            {realDestError && (
-              <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded p-2">
-                No se pudo cargar el listado: {realDestError}
-              </p>
-            )}
-            <input
-              type="text"
-              placeholder="Filtrar por ciudad, pais o IATA..."
-              className="w-full border border-slate-300 rounded-lg p-2 text-xs"
-              value={realDestFilter}
-              onChange={(e) => setRealDestFilter(e.target.value)}
-            />
-            <div className="max-h-56 overflow-y-auto grid grid-cols-2 md:grid-cols-3 gap-1.5 text-xs">
-              {filteredRealDestinations.map((d) => (
-                <label
-                  key={d.dest_iata}
-                  className={`px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${selectedDestIatas.includes(d.dest_iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-200 hover:border-brand-300'}`}
-                >
-                  <input
-                    type="checkbox"
-                    className="hidden"
-                    checked={selectedDestIatas.includes(d.dest_iata)}
-                    onChange={() => setSelectedDestIatas((prev) => toggle(prev, d.dest_iata))}
-                  />
-                  <span className="font-medium">{d.dest_name}</span> ({d.dest_iata})
-                  <br />
-                  <span className={selectedDestIatas.includes(d.dest_iata) ? 'text-white/80' : 'text-slate-400'}>
-                    {d.country} &middot; desde {d.served_from.join(', ')}
-                  </span>
-                </label>
-              ))}
-              {filteredRealDestinations.length === 0 && !realDestError && (
-                <p className="text-slate-400 col-span-full">Sin resultados o cache aun no sincronizada.</p>
-              )}
-            </div>
-          </div>
-        )}
+          )}
+        </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100">
           <div className="col-span-2 grid grid-cols-2 gap-3">

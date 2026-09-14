@@ -3,7 +3,7 @@ import { sql } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-export const maxDuration = 60;
+export const maxDuration = 10;
 
 const AENA_AIRPORT_SLUGS: Record<string, string> = {
   ALC: 'alicante-elche-miguel-hernandez',
@@ -57,36 +57,31 @@ function parseDestinationsHtml(html: string): ParsedDestination[] {
   return results;
 }
 
-async function fetchAenaDestinations(origin: string): Promise<ParsedDestination[]> {
-  const slug = AENA_AIRPORT_SLUGS[origin];
-  const path = DEST_PATH_BY_ORIGIN[origin];
-  if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
-  const url = `https://www.aena.es/es/${slug}/${path}`;
-  const res = await fetch(url, {
-    headers: {
-      'User-Agent': 'TiritiTravelSyncBot/1.0 (uso personal, sincronizacion diaria de destinos)',
-      'Accept-Language': 'es-ES,es;q=0.9',
-    },
-    cache: 'no-store',
-  });
-  if (!res.ok) {
-    throw new Error(`Aena respondio ${res.status} para ${origin} (${url})`);
+async function fetchAenaDestinations(origin: string): Promise<{ origin: string; dests: ParsedDestination[]; error?: string }> {
+  try {
+    const slug = AENA_AIRPORT_SLUGS[origin];
+    const path = DEST_PATH_BY_ORIGIN[origin];
+    if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
+    const url = `https://www.aena.es/es/${slug}/${path}`;
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'TiritiTravelSyncBot/1.0 (uso personal, sincronizacion diaria de destinos)',
+        'Accept-Language': 'es-ES,es;q=0.9',
+      },
+      cache: 'no-store',
+    });
+    if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
+    const html = await res.text();
+    const parsed = parseDestinationsHtml(html);
+    if (parsed.length < 5) {
+      throw new Error(`Parseo sospechoso para ${origin}: solo ${parsed.length} destinos.`);
+    }
+    return { origin, dests: parsed };
+  } catch (err) {
+    return { origin, dests: [], error: err instanceof Error ? err.message : String(err) };
   }
-  const html = await res.text();
-  const parsed = parseDestinationsHtml(html);
-  if (parsed.length < 5) {
-    throw new Error(`Parseo sospechoso para ${origin}: solo ${parsed.length} destinos. Aena puede haber cambiado el formato.`);
-  }
-  return parsed;
 }
 
-/**
- * Inserta TODOS los destinos de un origen en una sola consulta usando
- * UNNEST sobre arrays paralelos, en vez de una consulta por fila.
- * Reduce ~230 peticiones HTTP secuenciales a la BD a solo 1 por origen,
- * evitando el timeout de la funcion serverless (causa real del 504
- * detectado en produccion: la version anterior hacia 1 await por fila).
- */
 async function upsertDestinations(origin: string, dests: ParsedDestination[]): Promise<void> {
   if (dests.length === 0) return;
   const destIatas = dests.map((d) => d.destIata);
@@ -120,21 +115,33 @@ export async function GET(request: Request) {
   }
 
   const origins = Object.keys(AENA_AIRPORT_SLUGS);
+
+  // Las 4 descargas de Aena se hacen EN PARALELO (no secuenciales), porque
+  // el plan gratuito de Vercel limita las funciones serverless a 10s y
+  // 4 peticiones HTTP secuenciales a un sitio externo pueden superar eso
+  // facilmente (causa real del 504 detectado en produccion).
+  const fetchResults = await Promise.all(origins.map((o) => fetchAenaDestinations(o)));
+
   const summary: Record<string, number | string> = {};
   let totalDestinations = 0;
   let hadError = false;
   let lastError = '';
 
-  for (const origin of origins) {
+  for (const result of fetchResults) {
+    if (result.error) {
+      hadError = true;
+      lastError = result.error;
+      summary[result.origin] = `ERROR: ${result.error}`;
+      continue;
+    }
+    totalDestinations += result.dests.length;
+    summary[result.origin] = result.dests.length;
     try {
-      const dests = await fetchAenaDestinations(origin);
-      totalDestinations += dests.length;
-      summary[origin] = dests.length;
-      await upsertDestinations(origin, dests);
+      await upsertDestinations(result.origin, result.dests);
     } catch (err) {
       hadError = true;
       lastError = err instanceof Error ? err.message : String(err);
-      summary[origin] = `ERROR: ${lastError}`;
+      summary[result.origin] = `ERROR al guardar: ${lastError}`;
     }
   }
 

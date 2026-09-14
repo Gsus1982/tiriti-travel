@@ -13,9 +13,7 @@ function addMinutes(iso: string, minutes: number): string {
   return d.toISOString();
 }
 
-type SharedParams = Omit<SearchFilters, 'originIatas' | 'destinationGroupIds'>;
-
-async function searchForPair(originIata: string, destinationGroupId: string, shared: SharedParams): Promise<Itinerary[]> {
+async function searchForPair(originIata: string, destinationGroupId: string, filters: SearchFilters): Promise<Itinerary[]> {
   const {
     outboundDateFrom,
     outboundDateTo,
@@ -29,7 +27,7 @@ async function searchForPair(originIata: string, destinationGroupId: string, sha
     maxPriceTotal,
     airlinesInclude,
     airlinesExclude
-  } = shared;
+  } = filters;
 
   const groupAirports = (await sql`
     SELECT iata, city FROM airports WHERE group_id = ${destinationGroupId}
@@ -130,10 +128,10 @@ async function searchForPair(originIata: string, destinationGroupId: string, sha
 }
 
 export async function searchItineraries(filters: SearchFilters): Promise<Itinerary[]> {
-  const { originIatas, destinationGroupIds, sortBy, ...shared } = filters;
+  const { originIatas, destinationGroupIds, sortBy } = filters;
 
   const allResults = await Promise.all(
-    originIatas.flatMap((originIata) => destinationGroupIds.map((groupId) => searchForPair(originIata, groupId, shared)))
+    originIatas.flatMap((originIata) => destinationGroupIds.map((groupId) => searchForPair(originIata, groupId, filters)))
   );
 
   const merged = allResults.flat();

@@ -103,12 +103,10 @@ async function safeSearchOneWay(
   }
 }
 
-type SharedParams = Omit<LiveFilters, 'originIatas' | 'destinationGroupIds'>;
-
 async function searchLiveForPair(
   originIata: string,
   destinationGroupId: string,
-  shared: SharedParams,
+  filters: LiveFilters,
   warnings: string[]
 ): Promise<LiveItinerary[]> {
   const {
@@ -124,7 +122,7 @@ async function searchLiveForPair(
     maxPriceTotal,
     airlinesInclude,
     airlinesExclude
-  } = shared;
+  } = filters;
 
   const outboundDates = datesBetween(outboundDateFrom, outboundDateTo);
   const inboundDates = datesBetween(inboundDateFrom, inboundDateTo);
@@ -271,10 +269,10 @@ async function searchLiveForPair(
 }
 
 export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveSearchResult> {
-  const { originIatas, destinationGroupIds, sortBy, ...shared } = filters;
+  const { originIatas, destinationGroupIds, sortBy } = filters;
 
-  const outboundDates = datesBetween(shared.outboundDateFrom, shared.outboundDateTo);
-  const inboundDates = datesBetween(shared.inboundDateFrom, shared.inboundDateTo);
+  const outboundDates = datesBetween(filters.outboundDateFrom, filters.outboundDateTo);
+  const inboundDates = datesBetween(filters.inboundDateFrom, filters.inboundDateTo);
   if (outboundDates.length > MAX_DATE_RANGE_DAYS || inboundDates.length > MAX_DATE_RANGE_DAYS) {
     throw new Error(`El rango de fechas maximo permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} dias por tramo.`);
   }
@@ -289,7 +287,7 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
   const warnings: string[] = [];
   const allResults: LiveItinerary[][] = await Promise.all(
     originIatas.flatMap((originIata) =>
-      destinationGroupIds.map((groupId) => searchLiveForPair(originIata, groupId, shared, warnings))
+      destinationGroupIds.map((groupId) => searchLiveForPair(originIata, groupId, filters, warnings))
     )
   );
 

@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { neon } from '@neondatabase/serverless';
+import { sql } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -80,12 +80,6 @@ async function fetchAenaDestinations(origin: string): Promise<ParsedDestination[
   return parsed;
 }
 
-function getSql() {
-  const raw = process.env.DATABASE_URL;
-  if (!raw) throw new Error('DATABASE_URL no configurada');
-  return neon(raw);
-}
-
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret') || request.headers.get('x-cron-secret');
@@ -95,7 +89,6 @@ export async function GET(request: Request) {
   }
 
   const origins = Object.keys(AENA_AIRPORT_SLUGS);
-  const sql = getSql();
   const summary: Record<string, number | string> = {};
   let totalDestinations = 0;
   let hadError = false;
@@ -107,25 +100,14 @@ export async function GET(request: Request) {
       totalDestinations += dests.length;
       summary[origin] = dests.length;
 
-      const batchSize = 50;
-      for (let i = 0; i < dests.length; i += batchSize) {
-        const batch = dests.slice(i, i + batchSize);
-        const values: string[] = [];
-        const params: unknown[] = [];
-        batch.forEach((d, idx) => {
-          const base = idx * 5;
-          values.push(`($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5})`);
-          params.push(origin, d.destIata, d.destName, d.country, d.airlinesRaw);
-        });
-        const query = `
+      for (const d of dests) {
+        await sql`
           INSERT INTO aena_destinations (origin_iata, dest_iata, dest_name, country, airlines_raw)
-          VALUES ${values.join(',')}
+          VALUES (${origin}, ${d.destIata}, ${d.destName}, ${d.country}, ${d.airlinesRaw})
           ON CONFLICT (origin_iata, dest_iata)
           DO UPDATE SET dest_name = EXCLUDED.dest_name, country = EXCLUDED.country,
                         airlines_raw = EXCLUDED.airlines_raw, scraped_at = now()
         `;
-        // @ts-expect-error - neon serverless soporta query parametrizada via sql.query
-        await sql.query(query, params);
       }
 
       const currentIatas = dests.map((d) => d.destIata);

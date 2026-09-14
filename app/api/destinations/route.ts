@@ -1,14 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { neon } from '@neondatabase/serverless';
+import { sql } from '@/lib/db';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
-
-function getSql() {
-  const raw = process.env.DATABASE_URL;
-  if (!raw) throw new Error('DATABASE_URL no configurada');
-  return neon(raw);
-}
 
 export async function GET(request: NextRequest) {
   try {
@@ -17,8 +11,6 @@ export async function GET(request: NextRequest) {
     const origins = (originsParam ? originsParam.split(',') : ['ALC', 'MAD', 'VLC', 'RMU'])
       .map((o) => o.trim().toUpperCase())
       .filter(Boolean);
-
-    const sql = getSql();
 
     const rows = await sql`
       SELECT dest_iata, dest_name, country,

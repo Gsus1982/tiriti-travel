@@ -1,8 +1,9 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import type { Itinerary } from '@/lib/types';
 import type { LiveItinerary } from '@/lib/live-engine';
+import { parseSearchQuery } from '@/lib/nlp-search';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -40,6 +41,9 @@ export default function HomePage() {
   const [bookingLinks, setBookingLinks] = useState<BookingLinksState>({});
   const [loadingLinks, setLoadingLinks] = useState<string | null>(null);
 
+  const [nlpText, setNlpText] = useState('');
+  const [nlpWarnings, setNlpWarnings] = useState<string[]>([]);
+
   useEffect(() => {
     fetch('/api/meta')
       .then((r) => r.json())
@@ -48,6 +52,22 @@ export default function HomePage() {
   }, []);
 
   const combos = originIatas.length * destinationGroupIds.length;
+
+  function handleInterpret() {
+    if (!meta || !nlpText.trim()) return;
+    const refDate = new Date(outboundDateFrom || Date.now());
+    const parsed = parseSearchQuery(nlpText, meta, { year: refDate.getFullYear(), month: refDate.getMonth() + 1 });
+
+    if (parsed.originIatas.length) setOriginIatas(parsed.originIatas);
+    if (parsed.destinationGroupIds.length) setDestinationGroupIds(parsed.destinationGroupIds);
+    if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
+    if (parsed.outboundDateTo) setOutboundDateTo(parsed.outboundDateTo);
+    if (parsed.inboundDateFrom) setInboundDateFrom(parsed.inboundDateFrom);
+    if (parsed.inboundDateTo) setInboundDateTo(parsed.inboundDateTo);
+    if (parsed.outboundNotBeforeHour !== undefined) setOutboundNotBeforeHour(parsed.outboundNotBeforeHour);
+    if (parsed.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(parsed.inboundNotBeforeHour);
+    setNlpWarnings(parsed.warnings);
+  }
 
   async function handleSearch() {
     setLoading(true);
@@ -118,6 +138,37 @@ export default function HomePage() {
 
   return (
     <div className="space-y-6">
+      <section className="bg-white rounded-xl shadow p-6 space-y-3">
+        <h2 className="text-lg font-semibold">Busqueda en lenguaje natural (beta)</h2>
+        <p className="text-xs text-slate-500">
+          Escribe algo como: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h, regreso no antes de las 12h".
+          El sistema precargara los filtros; siempre revisa el resultado antes de buscar.
+        </p>
+        <textarea
+          className="w-full border rounded p-2 text-sm"
+          rows={2}
+          value={nlpText}
+          onChange={(e) => setNlpText(e.target.value)}
+          placeholder="Describe tu busqueda en una frase..."
+        />
+        <button
+          onClick={handleInterpret}
+          className="bg-slate-700 hover:bg-slate-600 text-white text-sm font-medium px-4 py-1.5 rounded-lg"
+        >
+          Interpretar y precargar filtros
+        </button>
+        {nlpWarnings.length > 0 && (
+          <div className="text-amber-700 text-xs bg-amber-50 border border-amber-200 rounded p-2">
+            <p className="font-medium mb-1">Como se ha interpretado (revisa antes de buscar):</p>
+            <ul className="list-disc pl-4 space-y-0.5">
+              {nlpWarnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </section>
+
       <section className="bg-white rounded-xl shadow p-6 space-y-4">
         <div className="flex items-center gap-4">
           <h2 className="text-lg font-semibold">Filtros de busqueda</h2>
@@ -142,7 +193,10 @@ export default function HomePage() {
             <p className="text-sm font-medium mb-1">Origenes (elige uno o varios)</p>
             <div className="flex flex-wrap gap-2">
               {originsList.map((o) => (
-                <label key={o.iata} className={`text-xs px-2 py-1 rounded border cursor-pointer ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}>
+                <label
+                  key={o.iata}
+                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${originIatas.includes(o.iata) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}
+                >
                   <input
                     type="checkbox"
                     className="hidden"
@@ -158,7 +212,10 @@ export default function HomePage() {
             <p className="text-sm font-medium mb-1">Destinos (elige uno o varios)</p>
             <div className="flex flex-wrap gap-2">
               {groupsList.map((g) => (
-                <label key={g.id} className={`text-xs px-2 py-1 rounded border cursor-pointer ${destinationGroupIds.includes(g.id) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}>
+                <label
+                  key={g.id}
+                  className={`text-xs px-2 py-1 rounded border cursor-pointer ${destinationGroupIds.includes(g.id) ? 'bg-brand-600 text-white border-brand-600' : 'bg-white border-slate-300'}`}
+                >
                   <input
                     type="checkbox"
                     className="hidden"
@@ -203,11 +260,25 @@ export default function HomePage() {
           </label>
           <label className="text-sm">
             Ida no antes de (hora)
-            <input type="number" min={0} max={23} className="mt-1 w-full border rounded p-2" value={outboundNotBeforeHour} onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))} />
+            <input
+              type="number"
+              min={0}
+              max={23}
+              className="mt-1 w-full border rounded p-2"
+              value={outboundNotBeforeHour}
+              onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
+            />
           </label>
           <label className="text-sm">
             Vuelta no antes de (hora)
-            <input type="number" min={0} max={23} className="mt-1 w-full border rounded p-2" value={inboundNotBeforeHour} onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))} />
+            <input
+              type="number"
+              min={0}
+              max={23}
+              className="mt-1 w-full border rounded p-2"
+              value={inboundNotBeforeHour}
+              onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
+            />
           </label>
           <label className="text-sm">
             Precio max. total

@@ -5,10 +5,11 @@ import { datesBetween } from './types';
 
 const AIRPORT_BUFFER_MIN = 120;
 const MAX_DATE_RANGE_DAYS = 5;
+const MAX_ORIGIN_GROUP_COMBOS = 6;
 
 export type LiveFilters = {
-  originIata: string;
-  destinationGroupId: string;
+  originIatas: string[];
+  destinationGroupIds: string[];
   outboundDateFrom: string;
   outboundDateTo: string;
   inboundDateFrom: string;
@@ -42,6 +43,9 @@ export type LiveLeg = {
 };
 
 export type LiveItinerary = {
+  originIata: string;
+  destinationGroupId: string;
+  destinationGroupName: string;
   outbound: LiveLeg;
   inbound: LiveLeg;
   isOpenJaw: boolean;
@@ -99,10 +103,15 @@ async function safeSearchOneWay(
   }
 }
 
-export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveSearchResult> {
+type SharedParams = Omit<LiveFilters, 'originIatas' | 'destinationGroupIds'>;
+
+async function searchLiveForPair(
+  originIata: string,
+  destinationGroupId: string,
+  shared: SharedParams,
+  warnings: string[]
+): Promise<LiveItinerary[]> {
   const {
-    originIata,
-    destinationGroupId,
     outboundDateFrom,
     outboundDateTo,
     inboundDateFrom,
@@ -114,31 +123,24 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     inboundNotBeforeHour,
     maxPriceTotal,
     airlinesInclude,
-    airlinesExclude,
-    sortBy
-  } = filters;
-
-  const warnings: string[] = [];
+    airlinesExclude
+  } = shared;
 
   const outboundDates = datesBetween(outboundDateFrom, outboundDateTo);
   const inboundDates = datesBetween(inboundDateFrom, inboundDateTo);
 
-  if (outboundDates.length > MAX_DATE_RANGE_DAYS || inboundDates.length > MAX_DATE_RANGE_DAYS) {
-    throw new Error(
-      `El rango de fechas maximo permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} dias por tramo (para no agotar la cuota gratuita). Reduce el rango de ida o de vuelta.`
-    );
-  }
-
-  const groupAirports = (await sql`
+  const groupRows = (await sql`
     SELECT iata, city FROM airports WHERE group_id = ${destinationGroupId}
   `) as { iata: string; city: string }[];
-  if (groupAirports.length === 0) return { itineraries: [], warnings };
+  const groupNameRows = (await sql`SELECT name FROM destination_groups WHERE id = ${destinationGroupId} LIMIT 1`) as { name: string }[];
+  const groupName = groupNameRows[0]?.name ?? destinationGroupId;
+  if (groupRows.length === 0) return [];
 
-  const cityByIata = new Map(groupAirports.map((a) => [a.iata, a.city]));
+  const cityByIata = new Map(groupRows.map((a) => [a.iata, a.city]));
   const minCarryOn = requireCabinBaggage ? 1 : undefined;
 
   const outboundCalls: Promise<IgnavOneWayResponse>[] = [];
-  for (const a of groupAirports) {
+  for (const a of groupRows) {
     for (const date of outboundDates) {
       outboundCalls.push(
         safeSearchOneWay(
@@ -161,7 +163,7 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
   }
 
   const inboundCalls: Promise<IgnavOneWayResponse>[] = [];
-  for (const a of groupAirports) {
+  for (const a of groupRows) {
     for (const date of inboundDates) {
       inboundCalls.push(
         safeSearchOneWay(
@@ -186,27 +188,13 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
   const [outboundResponses, inboundResponses] = await Promise.all([Promise.all(outboundCalls), Promise.all(inboundCalls)]);
 
   const outboundLegs: LiveLeg[] = [];
-  for (const resp of outboundResponses) {
-    for (const it of resp.itineraries) {
-      const leg = itineraryToLeg(it);
-      if (leg) outboundLegs.push(leg);
-    }
-  }
+  for (const resp of outboundResponses) for (const it of resp.itineraries) { const leg = itineraryToLeg(it); if (leg) outboundLegs.push(leg); }
 
   const inboundLegs: LiveLeg[] = [];
-  for (const resp of inboundResponses) {
-    for (const it of resp.itineraries) {
-      const leg = itineraryToLeg(it);
-      if (leg) inboundLegs.push(leg);
-    }
-  }
+  for (const resp of inboundResponses) for (const it of resp.itineraries) { const leg = itineraryToLeg(it); if (leg) inboundLegs.push(leg); }
 
-  if (outboundLegs.length === 0) {
-    warnings.push('Ignav no devolvio ningun vuelo de ida directo para los aeropuertos y fechas indicados.');
-  }
-  if (inboundLegs.length === 0) {
-    warnings.push('Ignav no devolvio ningun vuelo de vuelta directo para los aeropuertos y fechas indicados.');
-  }
+  if (outboundLegs.length === 0) warnings.push(`[${originIata} -> ${groupName}] Ignav no devolvio vuelos de ida directos.`);
+  if (inboundLegs.length === 0) warnings.push(`[${groupName} -> ${originIata}] Ignav no devolvio vuelos de vuelta directos.`);
 
   const results: LiveItinerary[] = [];
 
@@ -225,24 +213,18 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
           ORDER BY duration_min ASC LIMIT 1
         `) as { mode: string; duration_min: number; price_eur: string | null }[];
         if (rows[0]) {
-          interCityTransfer = {
-            mode: rows[0].mode,
-            duration_min: rows[0].duration_min,
-            price_eur: rows[0].price_eur ? Number(rows[0].price_eur) : null
-          };
+          interCityTransfer = { mode: rows[0].mode, duration_min: rows[0].duration_min, price_eur: rows[0].price_eur ? Number(rows[0].price_eur) : null };
         }
       }
 
       const totalPax = pax.adults + pax.children;
       const totalPrice = outbound.price_amount + inbound.price_amount + (interCityTransfer?.price_eur ?? 0) * totalPax;
-
       if (maxPriceTotal !== undefined && totalPrice > maxPriceTotal) continue;
 
       const transferRow = (await sql`
         SELECT airport_to_center_min FROM hotel_transfer WHERE airport_iata = ${inbound.origin_iata} LIMIT 1
       `) as { airport_to_center_min: number }[];
       const airportTransferMinutes = transferRow[0]?.airport_to_center_min ?? 45;
-
       const hotelCheckoutAt = addMinutes(inbound.departure_at, AIRPORT_BUFFER_MIN + airportTransferMinutes);
 
       const notes: string[] = [];
@@ -259,9 +241,7 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
         const toCity = cityByIata.get(inbound.origin_iata) ?? inbound.origin_iata;
         notes.push(
           `Open-jaw: llegas a ${fromCity} y sales desde ${toCity}.` +
-            (interCityTransfer
-              ? ` Traslado interno estimado: ${interCityTransfer.duration_min} min en ${interCityTransfer.mode}.`
-              : ' Sin dato de traslado interno registrado; verificar manualmente.')
+            (interCityTransfer ? ` Traslado interno estimado: ${interCityTransfer.duration_min} min en ${interCityTransfer.mode}.` : ' Sin dato de traslado interno registrado; verificar manualmente.')
         );
       }
       if (outbound.cabin_baggage_included === null || inbound.cabin_baggage_included === null) {
@@ -270,15 +250,56 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
         notes.push('Aviso: la tarifa puede no incluir equipaje de mano tipo trolley.');
       }
 
-      results.push({ outbound, inbound, isOpenJaw, interCityTransfer, totalPrice, currency: outbound.price_currency, hotelCheckoutAt, airportTransferMinutes, notes });
+      results.push({
+        originIata,
+        destinationGroupId,
+        destinationGroupName: groupName,
+        outbound,
+        inbound,
+        isOpenJaw,
+        interCityTransfer,
+        totalPrice,
+        currency: outbound.price_currency,
+        hotelCheckoutAt,
+        airportTransferMinutes,
+        notes
+      });
     }
   }
 
-  results.sort((a, b) => {
+  return results;
+}
+
+export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveSearchResult> {
+  const { originIatas, destinationGroupIds, sortBy, ...shared } = filters;
+
+  const outboundDates = datesBetween(shared.outboundDateFrom, shared.outboundDateTo);
+  const inboundDates = datesBetween(shared.inboundDateFrom, shared.inboundDateTo);
+  if (outboundDates.length > MAX_DATE_RANGE_DAYS || inboundDates.length > MAX_DATE_RANGE_DAYS) {
+    throw new Error(`El rango de fechas maximo permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} dias por tramo.`);
+  }
+
+  const combos = originIatas.length * destinationGroupIds.length;
+  if (combos > MAX_ORIGIN_GROUP_COMBOS) {
+    throw new Error(
+      `Has seleccionado ${originIatas.length} origen(es) x ${destinationGroupIds.length} destino(s) = ${combos} combinaciones. El maximo permitido en modo Ignav es ${MAX_ORIGIN_GROUP_COMBOS}, para proteger tu cuota gratuita. Reduce el numero de origenes o destinos seleccionados.`
+    );
+  }
+
+  const warnings: string[] = [];
+  const allResults: LiveItinerary[][] = await Promise.all(
+    originIatas.flatMap((originIata) =>
+      destinationGroupIds.map((groupId) => searchLiveForPair(originIata, groupId, shared, warnings))
+    )
+  );
+
+  const merged = allResults.flat();
+
+  merged.sort((a, b) => {
     if (sortBy === 'price') return a.totalPrice - b.totalPrice;
     if (sortBy === 'duration') return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 
-  return { itineraries: results, warnings };
+  return { itineraries: merged, warnings };
 }

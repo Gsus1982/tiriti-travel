@@ -80,6 +80,37 @@ async function fetchAenaDestinations(origin: string): Promise<ParsedDestination[
   return parsed;
 }
 
+/**
+ * Inserta TODOS los destinos de un origen en una sola consulta usando
+ * UNNEST sobre arrays paralelos, en vez de una consulta por fila.
+ * Reduce ~230 peticiones HTTP secuenciales a la BD a solo 1 por origen,
+ * evitando el timeout de la funcion serverless (causa real del 504
+ * detectado en produccion: la version anterior hacia 1 await por fila).
+ */
+async function upsertDestinations(origin: string, dests: ParsedDestination[]): Promise<void> {
+  if (dests.length === 0) return;
+  const destIatas = dests.map((d) => d.destIata);
+  const destNames = dests.map((d) => d.destName);
+  const countries = dests.map((d) => d.country);
+  const airlines = dests.map((d) => d.airlinesRaw);
+
+  await sql`
+    INSERT INTO aena_destinations (origin_iata, dest_iata, dest_name, country, airlines_raw)
+    SELECT ${origin}, u.dest_iata, u.dest_name, u.country, u.airlines_raw
+    FROM unnest(${destIatas}::text[], ${destNames}::text[], ${countries}::text[], ${airlines}::text[])
+      AS u(dest_iata, dest_name, country, airlines_raw)
+    ON CONFLICT (origin_iata, dest_iata)
+    DO UPDATE SET dest_name = EXCLUDED.dest_name, country = EXCLUDED.country,
+                  airlines_raw = EXCLUDED.airlines_raw, scraped_at = now()
+  `;
+
+  await sql`
+    DELETE FROM aena_destinations
+    WHERE origin_iata = ${origin}
+      AND dest_iata NOT IN (SELECT unnest(${destIatas}::text[]))
+  `;
+}
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret') || request.headers.get('x-cron-secret');
@@ -99,25 +130,7 @@ export async function GET(request: Request) {
       const dests = await fetchAenaDestinations(origin);
       totalDestinations += dests.length;
       summary[origin] = dests.length;
-
-      for (const d of dests) {
-        await sql`
-          INSERT INTO aena_destinations (origin_iata, dest_iata, dest_name, country, airlines_raw)
-          VALUES (${origin}, ${d.destIata}, ${d.destName}, ${d.country}, ${d.airlinesRaw})
-          ON CONFLICT (origin_iata, dest_iata)
-          DO UPDATE SET dest_name = EXCLUDED.dest_name, country = EXCLUDED.country,
-                        airlines_raw = EXCLUDED.airlines_raw, scraped_at = now()
-        `;
-      }
-
-      const currentIatas = dests.map((d) => d.destIata);
-      if (currentIatas.length > 5) {
-        await sql`
-          DELETE FROM aena_destinations
-          WHERE origin_iata = ${origin}
-            AND dest_iata NOT IN (SELECT unnest(${currentIatas}::text[]))
-        `;
-      }
+      await upsertDestinations(origin, dests);
     } catch (err) {
       hadError = true;
       lastError = err instanceof Error ? err.message : String(err);

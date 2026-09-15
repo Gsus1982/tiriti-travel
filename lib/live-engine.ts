@@ -210,6 +210,13 @@ async function searchLiveForTarget(
 
   const cityByIata = new Map(groupRows.map((a) => [a.iata, a.city]));
   const minCarryOn = requireCabinBaggage ? 1 : undefined;
+  // FIX critico (bug reportado: TODAS las busquedas fallaban con error 400 de Ignav):
+  // airlinesInclude/airlinesExclude llegan como array VACIO [] (no undefined) cuando el
+  // usuario no rellena el filtro -- Ignav rechaza un array vacio explicito
+  // ("airlines_include must include at least one airline code when provided"). Se
+  // omite el campo entero cuando esta vacio, en vez de mandar [].
+  const safeAirlinesInclude = airlinesInclude?.length ? airlinesInclude : undefined;
+  const safeAirlinesExclude = airlinesExclude?.length ? airlinesExclude : undefined;
 
   const outboundCalls: Promise<IgnavOneWayResponse>[] = [];
   for (const a of groupRows) {
@@ -224,8 +231,8 @@ async function searchLiveForTarget(
             children: pax.children,
             max_stops: 0,
             min_carry_on_bags: minCarryOn,
-            airlines_include: airlinesInclude,
-            airlines_exclude: airlinesExclude,
+            airlines_include: safeAirlinesInclude,
+            airlines_exclude: safeAirlinesExclude,
             departure_time_range: outboundNotBeforeHour !== undefined ? { earliest_hour: outboundNotBeforeHour } : undefined
           },
           warnings
@@ -247,8 +254,8 @@ async function searchLiveForTarget(
             children: pax.children,
             max_stops: 0,
             min_carry_on_bags: minCarryOn,
-            airlines_include: airlinesInclude,
-            airlines_exclude: airlinesExclude,
+            airlines_include: safeAirlinesInclude,
+            airlines_exclude: safeAirlinesExclude,
             departure_time_range: inboundNotBeforeHour !== undefined ? { earliest_hour: inboundNotBeforeHour } : undefined
           },
           warnings

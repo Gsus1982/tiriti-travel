@@ -30,3 +30,45 @@ body {
   background-color: #6366f1;
   color: #ffffff;
 }
+
+/* Marco neon animado (tipo Siri) para el cuadro de busqueda en lenguaje natural,
+   potenciado por IA -- un degradado conico gira alrededor del borde. Colores
+   coherentes con el resto de acentos de la app (indigo/violeta/fucsia, mismo trio que
+   el boton "Sorprendeme"). Recortado a solo el borde via mask, no rellena el fondo. */
+@property --ai-glow-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+@keyframes ai-glow-rotate {
+  to {
+    --ai-glow-angle: 360deg;
+  }
+}
+
+.ai-glow-border {
+  position: relative;
+  isolation: isolate;
+}
+
+.ai-glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: inherit;
+  padding: 2px;
+  background: conic-gradient(from var(--ai-glow-angle), #6366f1, #a855f7, #ec4899, #6366f1);
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: ai-glow-rotate 5s linear infinite;
+  pointer-events: none;
+  z-index: -1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-glow-border::before {
+    animation: none;
+  }
+}

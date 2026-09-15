@@ -2,6 +2,34 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.8.0] - 2026-09-15 (integracion real de IA + cuadro de busqueda destacado)
+
+### Anadido
+- **Integracion real de OpenAI para interpretar la busqueda en lenguaje natural**
+  (`lib/ai-parse.ts` + `app/api/ai-parse/route.ts`), sustituyendo al parser de regex
+  como primera opcion. A diferencia del regex, puede razonar sobre cosas como "un pais
+  nordico" (elige entre Suecia/Noruega/Finlandia/Dinamarca/Islandia) y explica en
+  lenguaje natural como ha interpretado la frase. Usa `gpt-4o-mini` por defecto,
+  configurable via variable de entorno `OPENAI_MODEL` sin tocar codigo. **Si la IA
+  falla o no esta configurada, cae automaticamente al parser de regex local -- la
+  busqueda nunca se queda sin interpretacion.**
+  **AVISO: no se ha podido verificar contra la API real de OpenAI** (sin acceso de red
+  a `api.openai.com` desde el entorno de esta sesion) -- probar con una consulta real y
+  revisar `docs/STATUS.md` si algo no encaja.
+- **Cuadro de busqueda en lenguaje natural destacado de nuevo** (ya no plegado), con un
+  marco neon animado alrededor (degradado indigo-violeta-fucsia girando, estilo Siri)
+  para marcarlo como la pieza potenciada por IA de la app.
+
+## [0.7.1] - 2026-09-15 (HOTFIX CRITICO)
+
+### Corregido
+- **Bug critico que rompia TODAS las busquedas** desde que se desplego el filtro de
+  aerolineas (v0.6.0): `airlinesInclude`/`airlinesExclude` llegaban como array vacio
+  `[]` (no `undefined`) cuando el usuario no rellenaba esos campos, e Ignav rechazaba
+  eso con un error 400 (`empty_airline_filter`) en TODA peticion, no solo las que
+  usaban el filtro. Reportado por el usuario con una busqueda de prueba real.
+  Desplegado en produccion de inmediato, antes que el resto de cambios de esta sesion.
+
 ## [0.7.0] - 2026-09-15 (produccion, identidad propia, reorganizacion)
 
 **Version en produccion.** Primera version desplegada a `main` desde el rediseno claro

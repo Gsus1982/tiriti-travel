@@ -102,7 +102,8 @@ Reglas:
 - Si hay varias fechas alternativas para el mismo sentido (ida o vuelta), usa el rango completo (DateFrom = la más temprana, DateTo = la más tardía) -- NUNCA asumas que la última fecha mencionada es la vuelta si el texto no lo dice explícitamente.
 - outboundNotBeforeHour/inboundNotBeforeHour: hora mínima de salida en cada sentido, si se menciona.
 - explanation: 1-3 frases en español explicando cómo se ha interpretado la frase, mencionando cualquier ambigüedad.
-- No inventes destinos que no estén en la lista de destinos reales o grupos curados proporcionada.`;
+- No inventes destinos que no estén en la lista de destinos reales o grupos curados proporcionada.
+- LÍMITE DE CUOTA (importante): cada búsqueda contra Ignav cuesta cuota gratuita limitada. El número de orígenes elegidos MULTIPLICADO por el número total de destinos (grupos + sueltos) NO puede superar 6. Si la frase es abierta ("el lugar más atractivo", "sorpréndeme", sin destino concreto), elige COMO MUCHO ${Math.floor(6 / Math.max(context.origins.length, 1))} destino(s) por cada origen que detectes en la frase -- prioriza calidad sobre cantidad, no listes muchas opciones "por si acaso".`;
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
@@ -136,5 +137,28 @@ Reglas:
   if (!content) throw new Error('Respuesta de OpenAI sin contenido');
 
   const parsed = JSON.parse(content) as AIParsedFilters;
+
+  // FIX (bug real reportado): pedirle el limite a la IA en el prompt no basta -- los
+  // modelos no siempre obedecen un numero exacto, y con una frase abierta ("el lugar
+  // mas atractivo para esas fechas") podia devolver muchos destinos sueltos que, al
+  // multiplicarse por los origenes detectados, superaban con creces el limite de 6
+  // combinaciones de Ignav (visto: 2 origenes x 9 destinos = 18), haciendo que la
+  // busqueda fallara sin dar NINGUN resultado. Aqui se recorta de forma dura,
+  // independientemente de lo que haya respondido la IA, y se avisa en la explicacion.
+  const originCount = Math.max(parsed.originIatas.length, 1);
+  const maxTotalDestinations = Math.max(1, Math.floor(6 / originCount));
+  const totalDestinations = parsed.destinationGroupIds.length + parsed.destinationIatas.length;
+  if (totalDestinations > maxTotalDestinations) {
+    const destinationIatas = [...parsed.destinationIatas];
+    const destinationGroupIds = [...parsed.destinationGroupIds];
+    while (destinationGroupIds.length + destinationIatas.length > maxTotalDestinations) {
+      if (destinationIatas.length > 0) destinationIatas.pop();
+      else destinationGroupIds.pop();
+    }
+    parsed.destinationIatas = destinationIatas;
+    parsed.destinationGroupIds = destinationGroupIds;
+    parsed.explanation += ` (Se ha limitado a ${maxTotalDestinations} destino(s) para no superar el maximo de 6 combinaciones origen x destino que protege tu cuota gratuita de Ignav.)`;
+  }
+
   return parsed;
 }

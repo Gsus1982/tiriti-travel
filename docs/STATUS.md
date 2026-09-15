@@ -18,6 +18,55 @@
 > hacerse demasiado largo para ser util, dimelo y lo resumimos/archivamos las entradas
 > mas antiguas -- de momento se mantienen todas.
 
+## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: FIX real de la IA superando la cuota de combinaciones
+
+### Contexto
+El usuario probo en el preview del PR #20: escribio "Busco un viaje entre el 5 y el 8
+de diciembre partiendo de Alicante o Valencia al lugar mas atractivo para esas fechas"
+(sin destino concreto). La IA interpreto bien origenes/fechas pero, al no tener destino
+explicito, eligio **9 destinos sueltos** como candidatos "interesantes". Con 2 origenes
+detectados (ALC, VLC), eso da 2x9=18 combinaciones -- muy por encima del maximo de 6
+que la propia app impone para proteger la cuota gratuita de Ignav. Al pulsar "Buscar
+con esta interpretacion" (o el boton de busqueda normal), saltaba el aviso de limite y
+no se ejecutaba ninguna busqueda -- el usuario lo describio como "no me ha devuelto
+esto, es un desastre".
+
+### Causa raiz
+`lib/ai-parse.ts` nunca le decia al modelo cual era el limite real de combinaciones, y
+aunque se lo hubiera dicho, **pedirlo solo en el prompt no es suficiente** -- los
+modelos de lenguaje no garantizan obedecer un limite numerico exacto de forma fiable
+(esto ya se sabia conceptualmente por la experiencia con `lib/ai-surprise.ts`, que SI
+tenia un tope duro via `.slice()` tras la respuesta -- `ai-parse.ts` se quedo sin esa
+misma proteccion al escribirlo en la sesion anterior).
+
+### Fix
+Anadido un recorte DURO en `lib/ai-parse.ts`, tras recibir la respuesta de la IA y
+antes de devolverla: si `origenes x (grupos + destinos sueltos) > 6`, se recorta el
+array de destinos (empezando por los sueltos, ya que representan una suposicion mas
+libre que un grupo curado explicito) hasta que quepa, y se anade una nota a la
+`explanation` que ve el usuario para que sea transparente sobre el recorte, no
+silencioso. Tambien se reforzo el prompt para que el modelo intente por su cuenta
+proponer pocos destinos de calidad en vez de muchos "por si acaso", como primera linea
+de defensa (aunque el tope duro es la garantia real).
+
+**Verificado con pruebas aisladas** (no contra la API real, que sigue sin acceso desde
+esta sesion) replicando el caso EXACTO reportado (2 origenes, 9 destinos -> se recorta
+a 2x3=6) y 2 escenarios mas (1 origen: cabe hasta 6; 4 origenes: solo cabe 1).
+
+### Leccion para futuras sesiones
+Cuando una respuesta de IA alimenta un limite operativo estricto (como la cuota de
+Ignav), **el limite tiene que aplicarse en codigo despues de la respuesta, nunca solo
+pedirse en el prompt** -- esto ya se hizo bien en `ai-surprise.ts` pero se paso por
+alto en `ai-parse.ts` al escribirlo. Revisar si `ai-recommend.ts` necesita una
+proteccion similar (ahi el riesgo es menor: como mucho recomienda un indice fuera de
+rango, y eso ya esta cubierto con una validacion que lanza error y cae al fallback).
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Prueba aislada de la logica de recorte
+con 3 escenarios (incluido el caso exacto reportado).
+
+---
+
 ## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: buscar tras interpretar, Sorprendeme con criterio, recomendacion de la IA
 
 ### Contexto

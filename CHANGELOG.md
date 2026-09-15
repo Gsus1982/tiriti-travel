@@ -2,6 +2,25 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.9.1] - 2026-09-15 (FIX: la IA podia proponer mas destinos de los que caben en la cuota)
+
+El usuario probo "busco un viaje... al lugar mas atractivo para esas fechas" (sin
+destino concreto) y la IA selecciono 9 destinos sueltos que, con 2 origenes, daban 18
+combinaciones -- muy por encima del maximo de 6 que protege la cuota de Ignav. El boton
+"Buscar con esta interpretacion"/"Buscar vuelos" fallaba con el aviso de limite y no
+devolvia ningun resultado.
+
+### Corregido
+- `lib/ai-parse.ts`: anadido un tope DURO tras la respuesta de la IA que recorta el
+  numero de destinos (grupos + sueltos) para que `origenes x destinos` nunca supere 6,
+  independientemente de lo que haya devuelto el modelo -- pedirlo solo en el prompt no
+  basta, los modelos no siempre obedecen un numero exacto. Si se recorta, se anade una
+  nota a la explicacion mostrada al usuario para que sea transparente. Verificado con
+  pruebas aisladas replicando el caso exacto reportado (2 origenes x 9 destinos -> se
+  queda en 2x3=6) y otros 2 escenarios (1 origen, 4 origenes).
+- Reforzado tambien el prompt para que la IA intente por su cuenta proponer pocos
+  destinos de calidad en vez de muchos "por si acaso" en frases abiertas.
+
 ## [0.9.0] - 2026-09-15 (buscar tras interpretar, Sorprendeme con criterio, recomendacion de la IA)
 
 El usuario probo la integracion de OpenAI en el preview y confirmo que interpreta bien

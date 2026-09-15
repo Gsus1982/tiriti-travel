@@ -113,6 +113,24 @@ function addMinutes(iso: string, minutes: number): string {
   return d.toISOString();
 }
 
+/**
+ * Comprueba si un tramo coincide con alguna entrada de una lista de aerolineas, por
+ * nombre (substring, sin distinguir mayusculas) o por codigo de 2-3 letras al inicio
+ * del numero de vuelo (ej. "FR" en "FR1234"). Red de seguridad ademas de mandar el
+ * filtro a Ignav (airlines_include/airlines_exclude): no se ha podido verificar contra
+ * la API real si Ignav lo aplica exactamente como se espera, asi que se re-comprueba
+ * aqui sobre el resultado final, igual que ya se hace con "solo directos".
+ */
+function legMatchesAirlineList(list: string[], leg: LiveLeg): boolean {
+  const code = (leg.flight_number.match(/^[A-Z0-9]{2,3}/)?.[0] ?? '').toUpperCase();
+  const name = leg.airline.toLowerCase();
+  return list.some((entry) => {
+    const e = entry.trim();
+    if (!e) return false;
+    return name.includes(e.toLowerCase()) || code === e.toUpperCase();
+  });
+}
+
 async function safeSearchOneWay(
   params: Parameters<typeof searchOneWay>[0],
   warnings: string[]
@@ -292,6 +310,13 @@ async function searchLiveForTarget(
 
       const isOpenJaw = outbound.destination_iata !== inbound.origin_iata;
       if (isOpenJaw && !allowOpenJaw) continue;
+
+      if (airlinesInclude?.length && !(legMatchesAirlineList(airlinesInclude, outbound) || legMatchesAirlineList(airlinesInclude, inbound))) {
+        continue;
+      }
+      if (airlinesExclude?.length && (legMatchesAirlineList(airlinesExclude, outbound) || legMatchesAirlineList(airlinesExclude, inbound))) {
+        continue;
+      }
 
       let interCityTransfer: LiveItinerary['interCityTransfer'] = null;
       if (isOpenJaw) {

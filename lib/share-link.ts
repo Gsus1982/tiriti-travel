@@ -20,6 +20,8 @@ export type ShareableFilters = {
   outboundNotBeforeHour: number | '';
   inboundNotBeforeHour: number | '';
   excludeIatasText: string;
+  airlinesIncludeText: string;
+  airlinesExcludeText: string;
 };
 
 // Claves cortas a proposito -- es una URL para compartir (por ejemplo pegada en Notas
@@ -43,6 +45,8 @@ export function buildShareUrl(f: ShareableFilters): string {
   if (f.outboundNotBeforeHour !== '') params.set('oh', String(f.outboundNotBeforeHour));
   if (f.inboundNotBeforeHour !== '') params.set('ih', String(f.inboundNotBeforeHour));
   if (f.excludeIatasText.trim()) params.set('ex', f.excludeIatasText.trim());
+  if (f.airlinesIncludeText.trim()) params.set('ai', f.airlinesIncludeText.trim());
+  if (f.airlinesExcludeText.trim()) params.set('ae', f.airlinesExcludeText.trim());
 
   const base = typeof window !== 'undefined' ? `${window.location.origin}${window.location.pathname}` : '';
   return `${base}?${params.toString()}`;
@@ -93,6 +97,8 @@ export function parseShareParams(search: string): Partial<ShareableFilters> {
   if (inboundNotBeforeHour !== undefined) result.inboundNotBeforeHour = inboundNotBeforeHour;
 
   if (params.has('ex')) result.excludeIatasText = params.get('ex')!;
+  if (params.has('ai')) result.airlinesIncludeText = params.get('ai')!;
+  if (params.has('ae')) result.airlinesExcludeText = params.get('ae')!;
 
   return result;
 }

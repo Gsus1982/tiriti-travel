@@ -2,6 +2,29 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.6.0] - 2026-09-14 (filtro de aerolineas + perfil de viaje guardado)
+
+Primeros 2 pasos de la conversacion sobre "por que usar esto en vez de Skyscanner":
+funcionalidad basica que faltaba (filtro de aerolinea) + personalizacion (recordar quien
+viaja habitualmente).
+
+### Anadido
+- **Filtro de aerolineas preferidas/a evitar**: el backend ya soportaba
+  `airlinesInclude`/`airlinesExclude` (se mandaban a Ignav) pero no habia ninguna forma
+  de usarlo desde la interfaz -- anadidos 2 campos de texto en el panel lateral
+  ("Extras"). Ademas de mandarse a Ignav, se re-comprueba en `lib/live-engine.ts` sobre
+  el resultado final (por nombre o por codigo de 2-3 letras), como red de seguridad
+  igual que ya se hace con "solo directos" -- no se ha podido verificar contra la API
+  real si Ignav aplica el filtro exactamente como se espera.
+- **Perfil de viaje guardado** (`lib/travel-profile.ts`): origenes habituales, adultos,
+  ninos, equipaje de mano y open-jaw se recuerdan en `localStorage` y se precargan la
+  proxima vez que abras la app -- ya no hay que rellenarlos cada vez. Distinto del
+  historial de busquedas (que guarda busquedas concretas ya hechas): esto es tu
+  configuracion de fondo, la parte que casi nunca cambia entre una busqueda y la
+  siguiente.
+- Los 2 filtros de aerolinea tambien se guardan y restauran en el enlace para compartir
+  y en el historial de busquedas (`lib/share-link.ts` actualizado).
+
 ## [0.5.2] - 2026-09-14 (Sorprendeme sobre destinos reales + boton estable + menos reintentos)
 
 El usuario probo "Sorprendeme" en el movil: los botones cambiaban de tamano sin parar

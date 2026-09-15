@@ -5,6 +5,7 @@ import type { LiveItinerary } from '@/lib/live-engine';
 import { parseSearchQuery } from '@/lib/nlp-search';
 import { buildShareUrl, parseShareParams, summarizeFilters } from '@/lib/share-link';
 import { addSearchHistoryEntry } from '@/lib/search-history';
+import { getTravelProfile, saveTravelProfile } from '@/lib/travel-profile';
 import TopNav from '@/components/TopNav';
 import FlightPathStrip from '@/components/FlightPathStrip';
 import ToolsPanel from '@/components/ToolsPanel';
@@ -67,18 +68,20 @@ function groupByCity(list: RealDestination[]) {
 
 export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
-  const [originIatas, setOriginIatas] = useState<string[]>(['ALC']);
+  const [originIatas, setOriginIatas] = useState<string[]>(() => getTravelProfile()?.originIatas ?? ['ALC']);
   const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>([]);
   const [selectedDestIatas, setSelectedDestIatas] = useState<string[]>([]);
   const [excludeIatasText, setExcludeIatasText] = useState('');
+  const [airlinesIncludeText, setAirlinesIncludeText] = useState('');
+  const [airlinesExcludeText, setAirlinesExcludeText] = useState('');
   const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
   const [outboundDateTo, setOutboundDateTo] = useState('2026-12-05');
   const [inboundDateFrom, setInboundDateFrom] = useState('2026-12-08');
   const [inboundDateTo, setInboundDateTo] = useState('2026-12-08');
-  const [adults, setAdults] = useState(2);
-  const [children, setChildren] = useState(1);
-  const [requireCabinBaggage, setRequireCabinBaggage] = useState(false);
-  const [allowOpenJaw, setAllowOpenJaw] = useState(true);
+  const [adults, setAdults] = useState(() => getTravelProfile()?.adults ?? 2);
+  const [children, setChildren] = useState(() => getTravelProfile()?.children ?? 1);
+  const [requireCabinBaggage, setRequireCabinBaggage] = useState(() => getTravelProfile()?.requireCabinBaggage ?? false);
+  const [allowOpenJaw, setAllowOpenJaw] = useState(() => getTravelProfile()?.allowOpenJaw ?? true);
   const [includeSkyScanner, setIncludeSkyScanner] = useState(false);
   const [outboundNotBeforeHour, setOutboundNotBeforeHour] = useState<number | ''>('');
   const [inboundNotBeforeHour, setInboundNotBeforeHour] = useState<number | ''>(6);
@@ -130,7 +133,19 @@ export default function HomePage() {
     if (parsed.outboundNotBeforeHour !== undefined) setOutboundNotBeforeHour(parsed.outboundNotBeforeHour);
     if (parsed.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(parsed.inboundNotBeforeHour);
     if (parsed.excludeIatasText !== undefined) setExcludeIatasText(parsed.excludeIatasText);
+    if (parsed.airlinesIncludeText !== undefined) setAirlinesIncludeText(parsed.airlinesIncludeText);
+    if (parsed.airlinesExcludeText !== undefined) setAirlinesExcludeText(parsed.airlinesExcludeText);
   }, []);
+
+  // Guarda el "perfil de viaje" (quien viaja, origenes habituales) cada vez que cambia,
+  // para que la proxima vez que abras la app ya este precargado. Nota: si abres un
+  // enlace compartido con otros origenes/pax, tambien se guardaria eso como tu nuevo
+  // perfil -- aceptable para un uso personal (no hay otros usuarios), pero si esto se
+  // usara entre varias personas convendria guardar solo en cambios manuales directos,
+  // no en restauraciones desde URL/historial.
+  useEffect(() => {
+    saveTravelProfile({ originIatas, adults, children, requireCabinBaggage, allowOpenJaw });
+  }, [originIatas, adults, children, requireCabinBaggage, allowOpenJaw]);
 
   // Mensajes de progreso mientras se busca. Con hasta varias decenas de peticiones a
   // Ignav en paralelo, una busqueda puede tardar unos segundos sin ningun feedback --
@@ -184,6 +199,15 @@ export default function HomePage() {
         .map((s) => s.trim().toUpperCase())
         .filter(Boolean),
     [excludeIatasText]
+  );
+
+  const airlinesInclude = useMemo(
+    () => airlinesIncludeText.split(',').map((s) => s.trim()).filter(Boolean),
+    [airlinesIncludeText]
+  );
+  const airlinesExclude = useMemo(
+    () => airlinesExcludeText.split(',').map((s) => s.trim()).filter(Boolean),
+    [airlinesExcludeText]
   );
 
   const filteredRealDestinations = useMemo(() => {
@@ -240,6 +264,8 @@ export default function HomePage() {
       destinationGroupIds: groupIds,
       destinationIatas: iatas,
       excludeIatas,
+      airlinesInclude,
+      airlinesExclude,
       outboundDateFrom,
       outboundDateTo,
       inboundDateFrom,
@@ -281,7 +307,9 @@ export default function HomePage() {
         includeSkyScanner,
         outboundNotBeforeHour,
         inboundNotBeforeHour,
-        excludeIatasText
+        excludeIatasText,
+        airlinesIncludeText,
+        airlinesExcludeText
       };
       const url = buildShareUrl(shareFilters);
       const label = summarizeFilters(shareFilters, destinationLabels[0] ?? '');
@@ -371,7 +399,9 @@ export default function HomePage() {
       includeSkyScanner,
       outboundNotBeforeHour,
       inboundNotBeforeHour,
-      excludeIatasText
+      excludeIatasText,
+      airlinesIncludeText,
+      airlinesExcludeText
     };
   }
 
@@ -415,6 +445,8 @@ export default function HomePage() {
     if (parsed.outboundNotBeforeHour !== undefined) setOutboundNotBeforeHour(parsed.outboundNotBeforeHour);
     if (parsed.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(parsed.inboundNotBeforeHour);
     if (parsed.excludeIatasText !== undefined) setExcludeIatasText(parsed.excludeIatasText);
+    if (parsed.airlinesIncludeText !== undefined) setAirlinesIncludeText(parsed.airlinesIncludeText);
+    if (parsed.airlinesExcludeText !== undefined) setAirlinesExcludeText(parsed.airlinesExcludeText);
     setLiveResults(null);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }
@@ -829,6 +861,33 @@ export default function HomePage() {
                       />
                     </label>
                     <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Se quitan del selector y de los resultados.</p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      Aerolineas preferidas
+                      <input
+                        type="text"
+                        placeholder="Ej: Ryanair, Vueling, FR"
+                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                        value={airlinesIncludeText}
+                        onChange={(e) => setAirlinesIncludeText(e.target.value)}
+                      />
+                    </label>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                      Nombre o codigo de 2-3 letras, separados por coma. Vacio = todas.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                      Aerolineas a evitar
+                      <input
+                        type="text"
+                        placeholder="Ej: Wizz Air, W6"
+                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+                        value={airlinesExcludeText}
+                        onChange={(e) => setAirlinesExcludeText(e.target.value)}
+                      />
+                    </label>
                   </div>
                 </FilterAccordion>
               </div>

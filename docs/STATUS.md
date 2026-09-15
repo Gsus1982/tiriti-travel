@@ -1,5 +1,75 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: vision estrategica ("por que esto y no Skyscanner") + filtro de aerolineas + perfil de viaje
+
+### Contexto: la pregunta importante de esta sesion
+El usuario probo la app funcionando y planteo la pregunta correcta: "no termino de ver
+su utilidad respecto a Skyscanner u otros, mas bien como ejercicio o anecdota... en mi
+cabeza lo habia pensado como sustituto de esos grandes buscadores". Pidio propuestas
+reales de mejora, de cualquier aspecto, con la condicion de no gastar dinero (salvo
+tokens de IA que ya tenga comprados, y solo si aporta valor real).
+
+### Diagnostico y plan de diferenciacion (respuesta dada, para no repetirla)
+Un proyecto personal no puede competir en AMPLITUD con Skyscanner (cobertura mundial,
+escala). Puede competir en PROFUNDIDAD para la vida real del usuario, algo que a un
+buscador generico no le compensa hacer:
+1. **Hora de salida del hotel como criterio central** (ya existe, pero esta enterrada
+   como una columna mas -- deberia ser el titular de cada resultado).
+2. **Comparacion multi-origen real** (buscar a la vez desde ALC/MAD/VLC/RMU y comparar
+   cual compensa) -- Skyscanner obliga a hacer busquedas sueltas y comparar a mano.
+3. **Sin sesgo comercial** (no hay comision por destacar una OTA u otra).
+4. **Personalizacion real a la vida concreta del usuario** (familia de 2+1, 4
+   aeropuertos fijos, interes en mercados navidenos/eventos) en vez de tratar a todos
+   los usuarios igual.
+5. **Apoyo de IA real** (no un parser de regex) como pieza que de verdad cambia lo que
+   es la app: de "formulario de busqueda" a "asesor que razona y explica". Esto es lo
+   unico de la lista que cuesta dinero, y es minimo -- ver mas abajo.
+
+### Aclarado: facturacion de IA (pregunta directa del usuario)
+Verificado por busqueda web (fuente: Claude Help Center, articulo oficial de Anthropic):
+la suscripcion Claude Pro (20€/mes) **NO incluye ni un token de la API** -- son 2
+sistemas de facturacion completamente separados, hace falta cuenta aparte en
+console.anthropic.com con su propia tarjeta. Cancelar una no afecta a la otra. Mismo
+patron es de esperar en OpenAI (ChatGPT Plus vs. API de platform.openai.com son
+productos distintos) -- si el credito que tiene comprado el usuario es especificamente
+saldo de API en platform.openai.com (no ChatGPT Plus), SI serviria directamente para
+esto, sin limitacion tecnica. Precio real verificado de Claude Haiku 4.5 en esta sesion:
+1$/millon tokens entrada, 5$/millon salida -- una consulta tipica de interpretar/
+recomendar cuesta bastante menos de medio centimo. Dado que el usuario ya tiene credito
+de OpenAI sin gastar, la recomendacion es usar ESE (gpt-4o-mini o similar) para la pieza
+de IA cuando se monte, en vez de abrir facturacion nueva en Anthropic.
+
+### Implementado en esta sesion (los 2 primeros pasos, sin IA todavia)
+1. **Filtro de aerolineas conectado a la interfaz**: `airlinesInclude`/`airlinesExclude`
+   ya estaban soportados en el backend (se mandaban a Ignav) pero no habia ninguna
+   forma de usarlos desde la UI -- era codigo muerto en la practica. Anadidos 2 campos
+   de texto en el panel lateral + re-comprobacion en `live-engine.ts` sobre el
+   resultado final (por nombre o codigo de 2-3 letras) como red de seguridad, ya que no
+   se ha podido verificar contra la API real si Ignav aplica el filtro tal cual se
+   espera.
+2. **Perfil de viaje guardado** (`lib/travel-profile.ts`): origenes, adultos, ninos,
+   equipaje de mano y open-jaw se recuerdan en `localStorage` entre sesiones. Aviso
+   documentado en el propio codigo: como es un solo usuario, el perfil se sobreescribe
+   tambien al restaurar desde un enlace compartido o el historial -- aceptable aqui,
+   pero si esto se usara entre varias personas habria que cambiar el diseño para
+   guardar solo en cambios manuales directos.
+
+### Pendiente de la conversacion (no implementado, a la espera de decision del usuario)
+- La pieza de IA real (parseo de lenguaje natural + recomendaciones razonadas) --
+  pendiente de que el usuario confirme que usar OpenAI y proporcione una
+  `OPENAI_API_KEY` con el credito que ya tiene comprado.
+- "Mejor fin de semana del mes" (escanear un mes entero de calendario de precios y
+  sacar un ranking, en vez de que el usuario elija fechas a ciegas).
+- Filtros en panel lateral para origenes/destinos (la referencia visual los pone alli;
+  se dejaron a ancho completo en sesiones anteriores para no acumular mas cambios
+  estructurales de golpe).
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP 200
+y presencia de los campos nuevos en el HTML.
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: Sorprendeme sobre destinos reales + boton estable
 
 ### Contexto: el usuario probo y reporto 2 problemas + 2 preguntas

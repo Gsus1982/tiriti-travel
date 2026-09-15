@@ -2,6 +2,49 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.9.2] - 2026-09-15 (FIX: la IA elegia grupos curados con timeouts sistematicos en Ignav)
+
+Probando el fix anterior (0.9.1) con la misma frase abierta, la IA ya respetaba el
+limite de combinaciones (3 destinos) pero eligio destinos de los GRUPOS CURADOS
+(Atenas, Belgrado, Dublin) en vez de destinos reales -- y las ~30 peticiones a Ignav
+para esas rutas fallaron con timeout al 100%.
+
+### Corregido
+- `lib/ai-parse.ts`: reforzado el prompt para que la IA use SIEMPRE `destinationIatas`
+  (destinos reales verificados por Aena) en peticiones sin tema explicito, reservando
+  `destinationGroupIds` solo para cuando el texto pide claramente un tema/evento/pais
+  concreto. **Es la SEGUNDA vez, en sesiones distintas e independientes, que se
+  confirma que los grupos curados fallan sistematicamente con Ignav** (la primera fue
+  con "Sorprendeme" hace unas sesiones). Ver `docs/STATUS.md` (nueva seccion de
+  handoff al principio del archivo) para el diagnostico completo y las 2 opciones de
+  fix definitivo a decidir con el usuario si vuelve a fallar.
+- **`docs/STATUS.md` reorganizado**: anadida una seccion "ESTADO ACTUAL / HANDOFF" al
+  principio del archivo (antes del historial cronologico de sesiones) que resume de un
+  vistazo: que esta en produccion, la cadena de PRs pendientes y en que orden
+  mergearlos, los bugs reales encontrados y sus fixes, la limitacion de red que se
+  repite en todas las sesiones, y un mapa rapido de la arquitectura -- pensado
+  explicitamente para que cualquier sesion nueva (de Claude o de otra IA) pueda
+  continuar sin releer todo el historial del chat.
+
+## [0.9.1] - 2026-09-15 (FIX: la IA podia proponer mas destinos de los que caben en la cuota)
+
+El usuario probo "busco un viaje... al lugar mas atractivo para esas fechas" (sin
+destino concreto) y la IA selecciono 9 destinos sueltos que, con 2 origenes, daban 18
+combinaciones -- muy por encima del maximo de 6 que protege la cuota de Ignav. El boton
+"Buscar con esta interpretacion"/"Buscar vuelos" fallaba con el aviso de limite y no
+devolvia ningun resultado.
+
+### Corregido
+- `lib/ai-parse.ts`: anadido un tope DURO tras la respuesta de la IA que recorta el
+  numero de destinos (grupos + sueltos) para que `origenes x destinos` nunca supere 6,
+  independientemente de lo que haya devuelto el modelo -- pedirlo solo en el prompt no
+  basta, los modelos no siempre obedecen un numero exacto. Si se recorta, se anade una
+  nota a la explicacion mostrada al usuario para que sea transparente. Verificado con
+  pruebas aisladas replicando el caso exacto reportado (2 origenes x 9 destinos -> se
+  queda en 2x3=6) y otros 2 escenarios (1 origen, 4 origenes).
+- Reforzado tambien el prompt para que la IA intente por su cuenta proponer pocos
+  destinos de calidad en vez de muchos "por si acaso" en frases abiertas.
+
 ## [0.9.0] - 2026-09-15 (buscar tras interpretar, Sorprendeme con criterio, recomendacion de la IA)
 
 El usuario probo la integracion de OpenAI en el preview y confirmo que interpreta bien

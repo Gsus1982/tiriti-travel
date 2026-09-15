@@ -2,6 +2,35 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.9.0] - 2026-09-15 (buscar tras interpretar, Sorprendeme con criterio, recomendacion de la IA)
+
+El usuario probo la integracion de OpenAI en el preview y confirmo que interpreta bien
+las frases, pero senalo 3 cosas: no se podia buscar directamente tras interpretar,
+"Sorprendeme" seguia siendo un sorteo sin criterio real, y pidio usar mas el potencial
+de la IA para que la app sea mas util.
+
+### Anadido
+- **Boton "Buscar con esta interpretacion"** justo debajo de la explicacion de la IA --
+  antes habia que bajar hasta el formulario para encontrar el boton de busqueda.
+- **"Sorprendeme" con criterio real**: en vez de elegir destinos al azar, se le pide a
+  la IA que razone sobre popularidad de la ruta, distancia y epoca del ano para elegir
+  los destinos con mas papeletas de salir baratos/favorables para esas fechas
+  concretas -- y explica el criterio usado. Si la IA falla o no esta configurada, cae
+  al sorteo aleatorio de antes (mismo comportamiento, nunca se rompe).
+- **La IA recomienda un resultado y explica por que** (`lib/ai-recommend.ts` +
+  `/api/ai-recommend`): tras cada busqueda con resultados, se le pide a la IA que
+  revise los primeros y elija UNO considerando precio Y comodidad real (hora de salida
+  del hotel el dia de vuelta -- el criterio propio de esta app que ningun buscador
+  generico usa). El resultado elegido se marca con una insignia "Recomendado por la
+  IA" y se muestra la explicacion encima de la lista. Transforma la app de "listado de
+  vuelos" a "asesor que analiza y recomienda" -- el paso pedido explicitamente para que
+  se sienta mas potente y util.
+
+### Aviso
+Las 2 llamadas de IA nuevas (Sorprendeme y recomendacion) tampoco se han podido probar
+contra la API real de OpenAI desde esta sesion, igual que la interpretacion de lenguaje
+natural. Probar con una busqueda real antes de dar por bueno.
+
 ## [0.8.0] - 2026-09-15 (integracion real de IA + cuadro de busqueda destacado)
 
 ### Anadido

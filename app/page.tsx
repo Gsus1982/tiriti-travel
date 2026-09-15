@@ -99,6 +99,10 @@ export default function HomePage() {
   const [nlpExplanation, setNlpExplanation] = useState<string | null>(null);
   const [nlpUsedAI, setNlpUsedAI] = useState(false);
   const [nlpInterpreting, setNlpInterpreting] = useState(false);
+  const [surprisePicking, setSurprisePicking] = useState(false);
+  const [surpriseExplanation, setSurpriseExplanation] = useState<string | null>(null);
+  const [aiRecommendation, setAiRecommendation] = useState<{ rowKey: string; explanation: string } | null>(null);
+  const [recommending, setRecommending] = useState(false);
 
   const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
   const [realDestError, setRealDestError] = useState<string | null>(null);
@@ -329,7 +333,10 @@ export default function HomePage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
       if (data.warnings?.length) setWarnings(data.warnings);
-      setLiveResults(sortResults(data.itineraries ?? [], effectiveSortBy));
+      const sortedResults = sortResults(data.itineraries ?? [], effectiveSortBy);
+      setLiveResults(sortedResults);
+      setAiRecommendation(null);
+      if (sortedResults.length > 0) requestAiRecommendation(sortedResults);
 
       const shareFilters = {
         originIatas,
@@ -363,6 +370,39 @@ export default function HomePage() {
     }
   }
 
+  async function requestAiRecommendation(results: LiveItinerary[]) {
+    setRecommending(true);
+    try {
+      const summarized = results.slice(0, 12).map((r) => ({
+        originIata: r.originIata,
+        destinationName: r.destinationGroupName,
+        outboundDepartureAt: r.outbound.departure_at,
+        inboundDepartureAt: r.inbound.departure_at,
+        totalPrice: r.totalPrice,
+        currency: r.currency,
+        hotelCheckoutAt: r.hotelCheckoutAt,
+        isOpenJaw: r.isOpenJaw,
+        source: r.source
+      }));
+      const res = await fetch('/api/ai-recommend', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itineraries: summarized })
+      });
+      if (!res.ok) return; // Sin IA configurada o fallo -- la app funciona igual sin recomendacion, no es un error visible.
+      const data = await res.json();
+      const picked = results[data.recommendedIndex];
+      if (!picked) return;
+      const rowKey = `${picked.outbound.ignav_id}-${picked.inbound.ignav_id}`;
+      setAiRecommendation({ rowKey, explanation: data.explanation });
+    } catch {
+      // Silencioso a proposito: la recomendacion es un plus, no algo critico para poder
+      // ver y usar los resultados.
+    } finally {
+      setRecommending(false);
+    }
+  }
+
   async function handleSearch() {
     await runSearch();
   }
@@ -372,16 +412,8 @@ export default function HomePage() {
       setError('Elige al menos un origen antes de pulsar "Sorprendeme".');
       return;
     }
-    // FIX (bug real reportado): antes se elegia de los destinos CURADOS (por tema, ej.
-    // "mercados navidenos": Polonia, Riga, Zagreb/Split, Dublin, Belgrado...) sin
-    // comprobar si tenian vuelo directo real desde el origen elegido -- de ahi que casi
-    // siempre saliera una lista de avisos "Ignav no devolvio vuelos directos" y ningun
-    // resultado. Los destinos curados estan pensados para el buscador en lenguaje
-    // natural (cuando SI importa el tema, aunque la conectividad sea incierta), no para
-    // un "sorprendeme" a ciegas. Ahora se elige de los destinos REALES verificados por
-    // Aena (los mismos que cuenta el selector "Destinos" de abajo), que si tienen
-    // conectividad directa confirmada desde el origen -- reduce mucho el riesgo de que
-    // la busqueda vuelva vacia solo por falta de ruta.
+    // Los destinos REALES verificados por Aena (no los curados por tema) -- ver fix de
+    // sesion anterior, garantiza conectividad directa confirmada desde el origen.
     const pool = filteredRealDestinations.length > 0 ? filteredRealDestinations : realDestinations;
     if (pool.length === 0) {
       setError(
@@ -390,7 +422,42 @@ export default function HomePage() {
       return;
     }
     const maxDestinations = Math.max(1, Math.floor(6 / originIatas.length));
-    const iatas = [...pool].sort(() => Math.random() - 0.5).slice(0, maxDestinations).map((d) => d.dest_iata);
+    setError(null);
+    setSurpriseExplanation(null);
+    setSurprisePicking(true);
+
+    // Mejora (peticion explicita: "estudia las opciones mas economicas o favorables en
+    // una fecha", no al azar): se le pide a la IA que razone sobre popularidad de ruta,
+    // distancia y epoca del ano para elegir los destinos con mas papeletas de salir
+    // baratos/favorables, en vez de un sorteo puro. Si la IA falla o no esta
+    // configurada, cae a la seleccion aleatoria (mismo comportamiento que antes).
+    let iatas: string[];
+    try {
+      const res = await fetch('/api/ai-surprise', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          originLabels,
+          outboundDateFrom,
+          outboundDateTo,
+          inboundDateFrom,
+          inboundDateTo,
+          maxDestinations,
+          realDestinations: pool.map((d) => ({ dest_iata: d.dest_iata, dest_name: d.dest_name, country: d.country }))
+        })
+      });
+      if (!res.ok) throw new Error('IA no disponible');
+      const ai = await res.json();
+      if (!ai.destinationIatas?.length) throw new Error('Sin destinos validos de la IA');
+      iatas = ai.destinationIatas;
+      setSurpriseExplanation(typeof ai.explanation === 'string' ? ai.explanation : null);
+    } catch {
+      iatas = [...pool].sort(() => Math.random() - 0.5).slice(0, maxDestinations).map((d) => d.dest_iata);
+      setSurpriseExplanation(null);
+    } finally {
+      setSurprisePicking(false);
+    }
+
     setDestinationGroupIds([]);
     setSelectedDestIatas(iatas);
     setSortBy('price');
@@ -522,23 +589,31 @@ export default function HomePage() {
 
           <FlightPathStrip originLabels={originLabels} destinationLabels={destinationLabels} combos={combos} />
 
-          <button
-            type="button"
-            onClick={handleSurpriseMe}
-            disabled={loading || originIatas.length === 0}
-            className="w-full flex items-center justify-between gap-4 bg-gradient-to-r from-indigo via-violet-500 to-fuchsia-500 hover:brightness-110 text-white rounded-2xl shadow-lg shadow-indigo-500/20 px-5 py-4 md:px-8 md:py-5 transition-all disabled:opacity-40"
-          >
-            <div className="text-left min-w-0">
-              <p className="font-display text-lg md:text-xl">¿No sabes a donde ir?</p>
-              <p className="text-xs md:text-sm text-white/80 truncate">
-                Destinos reales al azar, con vuelo directo confirmado, ordenados por precio.
+          <div className="bg-gradient-to-r from-indigo via-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-indigo-500/20 overflow-hidden">
+            <button
+              type="button"
+              onClick={handleSurpriseMe}
+              disabled={loading || surprisePicking || originIatas.length === 0}
+              className="w-full flex items-center justify-between gap-4 text-white px-5 py-4 md:px-8 md:py-5 transition-all hover:brightness-110 disabled:opacity-40"
+            >
+              <div className="text-left min-w-0">
+                <p className="font-display text-lg md:text-xl">¿No sabes a donde ir?</p>
+                <p className="text-xs md:text-sm text-white/80 truncate">
+                  La IA estudia tus destinos reales y elige los mas favorables para tus fechas, ordenados por precio.
+                </p>
+              </div>
+              <span className="flex items-center gap-2 bg-white/15 rounded-full pl-4 pr-5 py-3 font-semibold shrink-0 whitespace-nowrap">
+                <IconSparkles className="w-5 h-5" />
+                {surprisePicking ? 'Pensando...' : loading ? 'Buscando...' : 'Sorprendeme'}
+              </span>
+            </button>
+            {surpriseExplanation && (
+              <p className="text-xs text-white/90 bg-black/10 px-5 py-2.5 md:px-8 flex items-center gap-1.5">
+                <IconSparkles className="w-3.5 h-3.5 shrink-0" />
+                {surpriseExplanation}
               </p>
-            </div>
-            <span className="flex items-center gap-2 bg-white/15 rounded-full pl-4 pr-5 py-3 font-semibold shrink-0 whitespace-nowrap">
-              <IconSparkles className="w-5 h-5" />
-              {loading ? 'Buscando...' : 'Sorprendeme'}
-            </span>
-          </button>
+            )}
+          </div>
 
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
@@ -575,9 +650,18 @@ export default function HomePage() {
                       {nlpInterpreting ? 'Interpretando...' : 'Interpretar y precargar filtros'}
                     </button>
                     {nlpExplanation && (
-                      <div className="text-indigo-dark dark:text-indigo-light text-sm bg-indigo-pale dark:bg-indigo-950 border border-indigo/20 rounded-lg p-3 flex gap-2">
-                        <IconSparkles className="w-4 h-4 shrink-0 mt-0.5" />
-                        <p>{nlpExplanation}</p>
+                      <div className="text-indigo-dark dark:text-indigo-light text-sm bg-indigo-pale dark:bg-indigo-950 border border-indigo/20 rounded-lg p-3 space-y-2">
+                        <div className="flex gap-2">
+                          <IconSparkles className="w-4 h-4 shrink-0 mt-0.5" />
+                          <p>{nlpExplanation}</p>
+                        </div>
+                        <button
+                          onClick={handleSearch}
+                          disabled={loading || originIatas.length === 0 || (destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
+                          className="bg-indigo hover:bg-indigo-dark text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
+                        >
+                          {loading ? 'Buscando...' : 'Buscar con esta interpretacion'}
+                        </button>
                       </div>
                     )}
                     {nlpWarnings.length > 0 && (
@@ -831,6 +915,22 @@ export default function HomePage() {
                     </p>
                   )}
 
+                  {recommending && (
+                    <p className="text-xs text-indigo flex items-center gap-1.5">
+                      <IconSparkles className="w-3.5 h-3.5 animate-pulse" />
+                      La IA esta analizando los resultados para recomendarte uno...
+                    </p>
+                  )}
+                  {aiRecommendation && (
+                    <div className="bg-indigo-pale dark:bg-indigo-950 border border-indigo/30 rounded-2xl p-4 flex gap-2.5">
+                      <IconSparkles className="w-5 h-5 text-indigo shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-indigo-dark dark:text-indigo-light">Recomendacion de la IA</p>
+                        <p className="text-sm text-ink dark:text-slate-200 mt-0.5">{aiRecommendation.explanation}</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="space-y-3">
                     {liveResults.map((r) => {
                       const rowKey = `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
@@ -841,6 +941,7 @@ export default function HomePage() {
                           bookingLinks={bookingLinks[rowKey]}
                           loadingLinks={loadingLinks === rowKey}
                           onShowLinks={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
+                          isRecommended={aiRecommendation?.rowKey === rowKey}
                         />
                       );
                     })}

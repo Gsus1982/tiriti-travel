@@ -1,7 +1,7 @@
 import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
 import { getAirlineBadge } from '@/lib/airline-badge';
-import { IconPlaneTakeoff, IconPlaneLanding } from './Icons';
+import { IconPlaneTakeoff, IconPlaneLanding, IconSparkles } from './Icons';
 
 type BookingLink = { provider_name: string; url: string; price?: { amount: number; currency: string } };
 
@@ -26,18 +26,30 @@ export default function FlightResultCard({
   result,
   bookingLinks,
   loadingLinks,
-  onShowLinks
+  onShowLinks,
+  isRecommended
 }: {
   result: LiveItinerary;
   bookingLinks?: BookingLink[];
   loadingLinks: boolean;
   onShowLinks: () => void;
+  isRecommended?: boolean;
 }) {
   const destinationLabel = result.destinationGroupName;
   const imageUrl = getCityImageUrl(destinationLabel);
 
   return (
-    <article className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm hover:shadow-md transition-shadow overflow-hidden">
+    <article
+      className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden ${
+        isRecommended ? 'border-2 border-indigo' : 'border border-slate-100 dark:border-slate-800'
+      }`}
+    >
+      {isRecommended && (
+        <div className="bg-indigo text-white text-[11px] font-semibold uppercase tracking-wide px-4 py-1.5 flex items-center gap-1.5">
+          <IconSparkles className="w-3 h-3" />
+          Recomendado por la IA
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row">
         <div className="sm:w-40 h-36 sm:h-auto shrink-0">
           <img src={imageUrl} alt={destinationLabel} className="w-full h-full object-cover" loading="lazy" />

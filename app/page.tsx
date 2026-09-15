@@ -12,7 +12,7 @@ import ToolsPanel from '@/components/ToolsPanel';
 import FlightResultCard from '@/components/FlightResultCard';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
-import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles, IconChevronDown } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles } from '@/components/Icons';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -96,6 +96,9 @@ export default function HomePage() {
 
   const [nlpText, setNlpText] = useState('');
   const [nlpWarnings, setNlpWarnings] = useState<string[]>([]);
+  const [nlpExplanation, setNlpExplanation] = useState<string | null>(null);
+  const [nlpUsedAI, setNlpUsedAI] = useState(false);
+  const [nlpInterpreting, setNlpInterpreting] = useState(false);
 
   const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
   const [realDestError, setRealDestError] = useState<string | null>(null);
@@ -235,20 +238,58 @@ export default function HomePage() {
     return [...groupNames, ...iataNames];
   }, [destinationGroupIds, selectedDestIatas, meta, realDestinations]);
 
-  function handleInterpret() {
+  async function handleInterpret() {
     if (!meta || !nlpText.trim()) return;
+    setNlpInterpreting(true);
+    setNlpExplanation(null);
     const refDate = new Date(outboundDateFrom || Date.now());
-    const parsed = parseSearchQuery(nlpText, meta, { year: refDate.getFullYear(), month: refDate.getMonth() + 1 });
 
-    if (parsed.originIatas.length) setOriginIatas(parsed.originIatas);
-    if (parsed.destinationGroupIds.length) setDestinationGroupIds(parsed.destinationGroupIds);
-    if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
-    if (parsed.outboundDateTo) setOutboundDateTo(parsed.outboundDateTo);
-    if (parsed.inboundDateFrom) setInboundDateFrom(parsed.inboundDateFrom);
-    if (parsed.inboundDateTo) setInboundDateTo(parsed.inboundDateTo);
-    if (parsed.outboundNotBeforeHour !== undefined) setOutboundNotBeforeHour(parsed.outboundNotBeforeHour);
-    if (parsed.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(parsed.inboundNotBeforeHour);
-    setNlpWarnings(parsed.warnings);
+    try {
+      const res = await fetch('/api/ai-parse', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          text: nlpText,
+          referenceDate: outboundDateFrom || new Date().toISOString().slice(0, 10),
+          origins: meta.origins,
+          groups: meta.groups,
+          realDestinations: realDestinations.map((d) => ({ dest_iata: d.dest_iata, dest_name: d.dest_name, country: d.country }))
+        })
+      });
+      if (!res.ok) throw new Error('IA no disponible');
+      const ai = await res.json();
+
+      if (ai.originIatas?.length) setOriginIatas(ai.originIatas);
+      if (ai.destinationGroupIds?.length) setDestinationGroupIds(ai.destinationGroupIds);
+      if (ai.destinationIatas?.length) setSelectedDestIatas(ai.destinationIatas);
+      if (ai.outboundDateFrom) setOutboundDateFrom(ai.outboundDateFrom);
+      if (ai.outboundDateTo) setOutboundDateTo(ai.outboundDateTo);
+      if (ai.inboundDateFrom) setInboundDateFrom(ai.inboundDateFrom);
+      if (ai.inboundDateTo) setInboundDateTo(ai.inboundDateTo);
+      if (ai.outboundNotBeforeHour !== null && ai.outboundNotBeforeHour !== undefined) setOutboundNotBeforeHour(ai.outboundNotBeforeHour);
+      if (ai.inboundNotBeforeHour !== null && ai.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(ai.inboundNotBeforeHour);
+      if (ai.maxPriceTotal !== null && ai.maxPriceTotal !== undefined) setMaxPriceTotal(ai.maxPriceTotal);
+      setNlpExplanation(typeof ai.explanation === 'string' ? ai.explanation : null);
+      setNlpWarnings([]);
+      setNlpUsedAI(true);
+    } catch {
+      // Fallback: parser de regex local (lib/nlp-search.ts) -- nunca deja al usuario
+      // sin interpretacion, aunque la IA no este configurada o falle.
+      const parsed = parseSearchQuery(nlpText, meta, { year: refDate.getFullYear(), month: refDate.getMonth() + 1 });
+      if (parsed.originIatas.length) setOriginIatas(parsed.originIatas);
+      if (parsed.destinationGroupIds.length) setDestinationGroupIds(parsed.destinationGroupIds);
+      if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
+      if (parsed.outboundDateTo) setOutboundDateTo(parsed.outboundDateTo);
+      if (parsed.inboundDateFrom) setInboundDateFrom(parsed.inboundDateFrom);
+      if (parsed.inboundDateTo) setInboundDateTo(parsed.inboundDateTo);
+      if (parsed.outboundNotBeforeHour !== undefined) setOutboundNotBeforeHour(parsed.outboundNotBeforeHour);
+      if (parsed.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(parsed.inboundNotBeforeHour);
+      setNlpWarnings(parsed.warnings);
+      setNlpExplanation(null);
+      setNlpUsedAI(false);
+    } finally {
+      setNlpInterpreting(false);
+    }
   }
 
   async function runSearch(groupIdsOverride?: string[], iataOverride?: string[], sortOverride?: 'checkout_time' | 'price' | 'duration') {
@@ -508,12 +549,12 @@ export default function HomePage() {
                   <h2 className="text-base font-semibold text-ink dark:text-slate-100">Quien, cuando y a donde</h2>
                 </div>
 
-                <details className="group bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
-                  <summary className="flex items-center justify-between cursor-pointer list-none text-sm font-medium text-ink dark:text-slate-100">
-                    O describelo con tus palabras
-                    <IconChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
-                  </summary>
-                  <div className="mt-3 space-y-3">
+                <div className="ai-glow-border rounded-xl">
+                  <div className="bg-slate-50 dark:bg-slate-800 rounded-xl px-4 py-4 space-y-3">
+                    <div className="flex items-center gap-1.5">
+                      <IconSparkles className="w-4 h-4 text-indigo" />
+                      <p className="text-sm font-semibold text-ink dark:text-slate-100">Describe tu viaje con tus palabras</p>
+                    </div>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
                       Ej.: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h,
                       regreso no antes de las 12h". Revisa siempre como se ha interpretado antes de buscar.
@@ -527,13 +568,23 @@ export default function HomePage() {
                     />
                     <button
                       onClick={handleInterpret}
-                      className="bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 text-ink dark:text-slate-100 text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
+                      disabled={nlpInterpreting || !nlpText.trim()}
+                      className="flex items-center gap-1.5 bg-indigo hover:bg-indigo-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors disabled:opacity-50"
                     >
-                      Interpretar y precargar filtros
+                      <IconSparkles className="w-4 h-4" />
+                      {nlpInterpreting ? 'Interpretando...' : 'Interpretar y precargar filtros'}
                     </button>
+                    {nlpExplanation && (
+                      <div className="text-indigo-dark dark:text-indigo-light text-sm bg-indigo-pale dark:bg-indigo-950 border border-indigo/20 rounded-lg p-3 flex gap-2">
+                        <IconSparkles className="w-4 h-4 shrink-0 mt-0.5" />
+                        <p>{nlpExplanation}</p>
+                      </div>
+                    )}
                     {nlpWarnings.length > 0 && (
                       <div className="text-amber-800 dark:text-amber-200 text-sm bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                        <p className="font-medium mb-1">Revisa la interpretacion:</p>
+                        <p className="font-medium mb-1">
+                          {nlpUsedAI ? 'Revisa la interpretacion:' : 'Revisa la interpretacion (analisis local, sin IA):'}
+                        </p>
                         <ul className="list-disc pl-4 space-y-0.5">
                           {nlpWarnings.map((w, i) => (
                             <li key={i}>{w}</li>
@@ -542,7 +593,7 @@ export default function HomePage() {
                       </div>
                     )}
                   </div>
-                </details>
+                </div>
 
                 <div>
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Origenes</p>

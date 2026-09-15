@@ -2,6 +2,30 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.9.2] - 2026-09-15 (FIX: la IA elegia grupos curados con timeouts sistematicos en Ignav)
+
+Probando el fix anterior (0.9.1) con la misma frase abierta, la IA ya respetaba el
+limite de combinaciones (3 destinos) pero eligio destinos de los GRUPOS CURADOS
+(Atenas, Belgrado, Dublin) en vez de destinos reales -- y las ~30 peticiones a Ignav
+para esas rutas fallaron con timeout al 100%.
+
+### Corregido
+- `lib/ai-parse.ts`: reforzado el prompt para que la IA use SIEMPRE `destinationIatas`
+  (destinos reales verificados por Aena) en peticiones sin tema explicito, reservando
+  `destinationGroupIds` solo para cuando el texto pide claramente un tema/evento/pais
+  concreto. **Es la SEGUNDA vez, en sesiones distintas e independientes, que se
+  confirma que los grupos curados fallan sistematicamente con Ignav** (la primera fue
+  con "Sorprendeme" hace unas sesiones). Ver `docs/STATUS.md` (nueva seccion de
+  handoff al principio del archivo) para el diagnostico completo y las 2 opciones de
+  fix definitivo a decidir con el usuario si vuelve a fallar.
+- **`docs/STATUS.md` reorganizado**: anadida una seccion "ESTADO ACTUAL / HANDOFF" al
+  principio del archivo (antes del historial cronologico de sesiones) que resume de un
+  vistazo: que esta en produccion, la cadena de PRs pendientes y en que orden
+  mergearlos, los bugs reales encontrados y sus fixes, la limitacion de red que se
+  repite en todas las sesiones, y un mapa rapido de la arquitectura -- pensado
+  explicitamente para que cualquier sesion nueva (de Claude o de otra IA) pueda
+  continuar sin releer todo el historial del chat.
+
 ## [0.9.1] - 2026-09-15 (FIX: la IA podia proponer mas destinos de los que caben en la cuota)
 
 El usuario probo "busco un viaje... al lugar mas atractivo para esas fechas" (sin

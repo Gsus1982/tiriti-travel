@@ -90,10 +90,10 @@ Tu trabajo: convertir una frase en español sobre un viaje en filtros estructura
 
 Fecha de referencia (hoy): ${context.referenceDate}
 Orígenes disponibles: ${JSON.stringify(context.origins)}
-Grupos de destino curados (usar destinationGroupIds si la frase encaja con el TEMA de alguno): ${JSON.stringify(
+Grupos de destino curados (usar destinationGroupIds SOLO si la frase pide explícitamente un TEMA/EVENTO concreto que encaje, ej. "mercado navideño", "aurora boreal", o nombra directamente uno de estos países -- ver aviso mas abajo): ${JSON.stringify(
     context.groups
   )}
-Destinos reales con vuelo directo confirmado desde los orígenes ya elegidos (usar destinationIatas para destinos/países/zonas concretas, ej. "un país nórdico" -> elige los dest_iata cuyo country sea nórdico): ${JSON.stringify(
+Destinos reales con vuelo directo confirmado desde los orígenes ya elegidos (usar destinationIatas -- esta es la opción PREFERIDA para cualquier petición sin tema concreto, incluidas las abiertas tipo "el lugar más atractivo" o "sorpréndeme"): ${JSON.stringify(
     realDestinationsTrimmed
   )}
 
@@ -103,6 +103,7 @@ Reglas:
 - outboundNotBeforeHour/inboundNotBeforeHour: hora mínima de salida en cada sentido, si se menciona.
 - explanation: 1-3 frases en español explicando cómo se ha interpretado la frase, mencionando cualquier ambigüedad.
 - No inventes destinos que no estén en la lista de destinos reales o grupos curados proporcionada.
+- PREFERENCIA IMPORTANTE (destinos reales sobre grupos curados): los grupos curados (destinationGroupIds) se eligieron hace tiempo por tema/evento y varios de ellos han demostrado repetidamente fallos y timeouts al buscar en Ignav (mala conectividad real para esas rutas concretas). Para CUALQUIER petición sin tema explícito ("el lugar más atractivo", "sorpréndeme", "algo barato", sin más contexto), usa SIEMPRE destinationIatas (destinos reales verificados), nunca destinationGroupIds. Reserva destinationGroupIds solo para cuando la frase pida un tema/evento/país concreto que encaje claramente con uno de los grupos.
 - LÍMITE DE CUOTA (importante): cada búsqueda contra Ignav cuesta cuota gratuita limitada. El número de orígenes elegidos MULTIPLICADO por el número total de destinos (grupos + sueltos) NO puede superar 6. Si la frase es abierta ("el lugar más atractivo", "sorpréndeme", sin destino concreto), elige COMO MUCHO ${Math.floor(6 / Math.max(context.origins.length, 1))} destino(s) por cada origen que detectes en la frase -- prioriza calidad sobre cantidad, no listes muchas opciones "por si acaso".`;
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {

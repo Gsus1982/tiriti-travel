@@ -18,6 +18,91 @@
 > hacerse demasiado largo para ser util, dimelo y lo resumimos/archivamos las entradas
 > mas antiguas -- de momento se mantienen todas.
 
+## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
+
+**En produccion (rama `main`) ahora mismo**: v0.7.1 -- panel lateral, tema claro/indigo,
+logo/tipografia propios, Sorprendeme sobre destinos reales, filtro de aerolineas
+(con su bug critico ya arreglado). **Todavia NO incluye nada de IA/OpenAI.**
+
+**Cadena de PRs abiertos, sin mergear a `main` todavia** (cada uno se apila sobre el
+anterior, en este orden -- mergear en ESTE orden si se aprueban):
+1. **PR #19** (`feat/openai-nlp-siri-ui` -> `main`): integracion real de OpenAI para
+   interpretar lenguaje natural (`lib/ai-parse.ts`, `/api/ai-parse`) + cuadro de NLP
+   destacado con marco neon animado. **Confirmado funcionando** por el usuario con una
+   captura real.
+2. **PR #20** (`feat/ai-search-and-recommendation` -> rama del #19): boton "Buscar con
+   esta interpretacion", Sorprendeme eligiendo destinos con criterio de IA
+   (`lib/ai-surprise.ts`, `/api/ai-surprise`), y recomendacion de la IA sobre resultados
+   (`lib/ai-recommend.ts`, `/api/ai-recommend`). Sin confirmar en vivo todavia si
+   Sorprendeme-con-IA y la recomendacion funcionan (solo la interpretacion del #19 esta
+   confirmada).
+3. **PR #21** (`fix/ai-parse-combo-limit` -> rama del #20): 2 fixes reales encontrados
+   probando el #19/#20 en vivo -- ver "Bugs reales encontrados" abajo.
+
+**`OPENAI_API_KEY` ya esta configurada en Vercel** por el usuario. El modelo usado es
+`gpt-4o-mini` (configurable via variable de entorno `OPENAI_MODEL`, sin tocar codigo).
+
+### Bugs reales encontrados probando la IA en vivo (los 2 ya arreglados en el PR #21)
+1. **La IA podia proponer mas destinos de los que caben en la cuota de Ignav** (ej. "el
+   lugar mas atractivo para esas fechas" -> 9 destinos x 2 origenes = 18 combinaciones,
+   maximo permitido 6). Fix: recorte DURO en codigo tras la respuesta de la IA, nunca
+   basta con pedirlo solo en el prompt (los modelos no garantizan obedecer un numero
+   exacto). Ver `lib/ai-parse.ts`.
+2. **Los grupos de destino CURADOS (`destination_groups` en BD: Polonia, Riga,
+   Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado) fallan sistematicamente con
+   timeout en Ignav** cuando se buscan sin verificacion previa de conectividad real.
+   Esto se ha confirmado DOS VECES en sesiones distintas de forma independiente:
+   - Sesion anterior: "Sorprendeme" eligiendo de estos grupos daba timeout en
+     Riga/Zagreb-Split/Dublin -- se arreglo cambiando Sorprendeme para usar
+     `destinationIatas` (destinos REALES verificados por Aena) en vez de
+     `destinationGroupIds`, y funciono.
+   - Esta sesion: la IA de `/api/ai-parse`, ante una peticion abierta sin tema, eligio
+     `destinationGroupIds` (Atenas/Belgrado/Dublin) en vez de destinos reales, y las
+     ~30 peticiones a Ignav para esas rutas dieron timeout al 100%.
+   **Fix aplicado en el PR #21**: reforzado el prompt de `lib/ai-parse.ts` para que la
+   IA use SIEMPRE `destinationIatas` (reales) salvo que el texto pida explicitamente un
+   tema/evento/pais que encaje con un grupo curado. Esto es una preferencia de prompt,
+   NO un bloqueo duro en codigo (a diferencia del bug #1) -- sigue siendo posible que la
+   IA elija un grupo curado si la frase realmente pide un tema. **No verificado en vivo
+   todavia** si esta correccion de prompt es suficiente.
+   **Recomendacion para el futuro**: los grupos curados como concepto tienen un
+   problema de fondo -- se crearon por tema/interes editorial, no por conectividad real
+   verificada, y ahora hay 2 casos independientes confirmando que fallan con Ignav. Si
+   vuelve a fallar, la solucion definitiva probablemente sea una de estas 2 (a decidir
+   con el usuario, no aplicar sin confirmar):
+   (a) verificar cada grupo curado contra Ignav una vez y quitar/marcar los que no
+   tengan conectividad real, o
+   (b) eliminar el concepto de grupos curados por completo y que el buscador en
+   lenguaje natural use SIEMPRE destinos reales (dejando que la propia IA aporte el
+   "criterio tematico" sobre esa lista real, como ya hace en `ai-surprise.ts`, en vez de
+   depender de una lista fija en BD).
+
+### Limitacion que se repite en todas las sesiones (importante para cualquier IA nueva)
+El entorno de trabajo de estas sesiones **no tiene acceso de red a APIs externas**
+(`api.openai.com`, `api.ignav.com`, `sky-scrapper.p.rapidapi.com`, etc. -- solo un
+puñado de dominios de paquetes npm/GitHub estan permitidos). Esto significa que NINGUNA
+integracion de API externa se puede probar en vivo desde el sandbox de la sesion -- todo
+se escribe con la mejor informacion disponible (documentacion oficial, busqueda web,
+scripts del usuario ya verificados) y se prueba de verdad solo cuando el USUARIO lo
+ejecuta en Vercel y reporta el resultado. Cuando el usuario reporta un error real (como
+los 2 de arriba), es la unica senal fiable de que algo no funciona como se penso.
+
+### Arquitectura rapida (para orientarse sin leer todo el codigo)
+- **3 fuentes de datos de vuelos**: Ignav (`lib/ignav.ts`, principal, cuota 1000 de por
+  vida), Sky Scrapper/RapidAPI (`lib/skyscanner.ts` + `lib/skyscanner-adapter.ts`,
+  opcional via checkbox, cuota ~100/mes, sin verificar en vivo), y el motor que las
+  combina es `lib/live-engine.ts`.
+- **2 listas de destinos, NO intercambiables**: `destination_groups` en BD (curados por
+  tema, sin verificar conectividad -- ver bug #2 arriba) vs destinos reales en
+  `aena_destinations` (verificados a diario contra datos publicos de Aena, los que
+  cuenta el selector "Destinos" del formulario).
+- **3 endpoints de IA**, todos con el mismo patron (OpenAI `gpt-4o-mini`,
+  `response_format: json_schema`, fallback si falla): `/api/ai-parse` (interpretar
+  lenguaje natural), `/api/ai-surprise` (elegir destinos para Sorprendeme),
+  `/api/ai-recommend` (recomendar un resultado tras la busqueda).
+- **`app/page.tsx`** es el componente principal (unico, grande) que orquesta todo el
+  estado del formulario y las llamadas.
+
 ## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: FIX real de la IA superando la cuota de combinaciones
 
 ### Contexto

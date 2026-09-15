@@ -1,6 +1,80 @@
 # Changelog
 
-Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+
+## [0.7.0] - 2026-09-15 (produccion, identidad propia, reorganizacion)
+
+**Version en produccion.** Primera version desplegada a `main` desde el rediseno claro
+completo. Ver `docs/STATUS.md` para el detalle de la revision de otros hilos del
+proyecto, la investigacion de APIs alternativas, y la decision sobre edad de ninos.
+
+### Corregido
+- Tema oscuro se activaba solo segun la preferencia del sistema, sin que el usuario lo
+  pidiera -- ahora solo por eleccion explicita (boton sol/luna).
+- Cajas de fecha solapadas en iOS (`input type="date"` sin `min-width: 0`).
+- Filtro de aerolineas parecia no existir -- estaba plegado por defecto dentro de
+  "Extras"; ahora viene abierto.
+- La tira "Origen / Destino" no tenia ninguna accion asociada -- ahora es un boton que
+  baja al formulario de busqueda.
+
+### Cambiado
+- **Logo e identidad propios**: golondrina estilizada en vez del icono de avion
+  generico reutilizado; tipografia "Pacifico" (script retro de viajes) solo para el
+  logotipo "Tiriti Travel".
+- **Boton "Sorprendeme"** con mucho mas protagonismo: tarjeta propia de ancho completo
+  con degradado, justo debajo de la tira de ruta, en vez de un boton pequeno al final
+  del formulario.
+- **Insignias de aerolinea** (iniciales en circulo de color) en cada resultado, en vez
+  de logos de terceros que requeririan otra API con su propia clave.
+- Cuadro de busqueda en lenguaje natural movido dentro de la tarjeta principal de
+  busqueda como desplegable plegado, en vez de su propia tarjeta grande separada --
+  menos tarjetas apiladas, agrupacion mas logica.
+
+## [0.6.1] - 2026-09-14 (logo e identidad propios + fixes de UI reportados en iOS)
+
+El usuario probo en iPhone y reporto varios problemas reales de UI, mas la peticion de
+un logo/tipografia con caracter propio.
+
+### Corregido
+- **Cajas de fecha solapadas (bug real de iOS)**: los `input type="date"` dentro de un
+  grid de 2 columnas no tenian `min-width: 0`, asi que el ancho intrinseco del control
+  nativo de fecha de iOS forzaba la celda de grid mas alla de su espacio asignado,
+  solapando con la caja de al lado. Corregido con `min-w-0` en todos los campos del
+  bloque de fechas/pax, y las parejas de fecha pasan a apilarse en 1 columna en las
+  pantallas mas estrechas (2 columnas desde `sm:`).
+- **Filtro de aerolineas "invisible" en iOS**: no era un bug de renderizado, estaba
+  dentro del panel "Extras" del lateral, PLEGADO por defecto. Ahora "Extras" viene
+  abierto de inicio.
+- **La tira "Origen ---- Destino" no hacia nada al tocarla** (confuso: parecia
+  interactiva pero era pura decoracion). Ahora es un boton real: al tocarla, baja
+  directo al formulario de busqueda para editar la seleccion. Anadido un icono de
+  flecha sutil para que se note que se puede tocar.
+
+### Cambiado (identidad visual, a peticion explicita)
+- **Logo propio**: sustituido el icono de avion generico (ya reutilizado en el resto de
+  la interfaz) por una golondrina estilizada -- motivo clasico de viajero/bohemio, no
+  un avion mas. Aplicado tambien a los iconos de "Anadir a inicio" en iPhone
+  (`app/icon.tsx`, `app/apple-icon.tsx`) para consistencia de marca.
+- **Tipografia del logotipo**: anadida la fuente "Pacifico" (script retro, tipica de
+  branding de surf/viajes de los 60-70, caracter desenfadado y bohemio) SOLO para el
+  texto "Tiriti Travel" del nav -- nunca en el resto de la UI, para que no desentone
+  con el diseno limpio del resto de la app. Instalada via `@fontsource/pacifico` (npm,
+  autoalojada) en vez de Google Fonts, porque esta sesion no tiene forma de verificar
+  que el build de Next.js funcione con fuentes servidas por `fonts.googleapis.com` (sin
+  acceso de red a ese dominio desde este entorno) -- ver nota tecnica de la sesion del
+  rediseno oscuro sobre el mismo problema.
+
+### Pendiente (explicado al usuario, no resuelto en esta sesion)
+- **"Sigue sin parecerse a la referencia"**: la referencia tiene un modelo de busqueda
+  mucho mas simple (1 origen, 1 destino, 1 fecha) que cabe en una sola fila; esta app
+  hace mas cosas de verdad (multi-origen, destinos reales verificados, lenguaje
+  natural, Sky Scrapper, filtro de aerolineas) que no caben sin perder funcionalidad.
+  Propuesto (no implementado): plegar el cuadro de "busqueda en lenguaje natural" por
+  defecto para que el formulario de origen/destino/fechas sea lo primero visible.
+- Integracion de IA con OpenAI: pendiente de que el usuario anada `OPENAI_API_KEY` en
+  las variables de entorno de Vercel (nunca en el chat ni en el codigo -- explicado al
+  usuario que esta sesion tampoco podria probarla, sin acceso de red a
+  `api.openai.com` desde este entorno).
 
 ## [0.6.0] - 2026-09-14 (filtro de aerolineas + perfil de viaje guardado)
 

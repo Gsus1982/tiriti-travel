@@ -1,5 +1,196 @@
 # Estado del proyecto TiritiTravel
 
+> **Que es este archivo (y en que se diferencia de `CHANGELOG.md`)**
+>
+> - **`CHANGELOG.md`** es la version corta, de cara al usuario: que cambio, en que
+>   version, listado por categorias (Anadido/Corregido/Cambiado). Es lo que miras tu
+>   para saber "que hizo Claude en la ultima sesion" de un vistazo.
+> - **`docs/STATUS.md`** (este archivo) es el diario de sesion, mucho mas detallado y
+>   tecnico -- pensado para que la PROXIMA sesion de Claude (que no tiene memoria de
+>   esta conversacion) pueda retomar el trabajo sin tener que releer todo el chat.
+>   Incluye: el contexto de por que se pidio algo, decisiones tomadas y por que,
+>   diagnosticos de bugs con la causa raiz, cosas probadas y descartadas, avisos
+>   pendientes de verificar, y tareas explicitamente aparcadas. Cada sesion nueva anade
+>   su entrada AL PRINCIPIO (orden cronologico inverso), sin borrar las anteriores.
+>
+> En resumen: `CHANGELOG.md` para ti, `docs/STATUS.md` para que Claude no tenga que
+> adivinar el historial cada vez que abres una sesion nueva. Si este archivo llega a
+> hacerse demasiado largo para ser util, dimelo y lo resumimos/archivamos las entradas
+> mas antiguas -- de momento se mantienen todas.
+
+## Estado al 15 de septiembre de 2026 (hora exacta no disponible -- ver nota) — Sesion: produccion + revision de otros hilos + reorganizacion + identidad
+
+> Nota sobre la hora: el usuario pidio incluir la hora ademas de la fecha en estas
+> entradas. Esta sesion no tiene una herramienta fiable para consultar la hora actual
+> (fallo al intentarlo), asi que esta entrada solo lleva fecha para no inventarsela. A
+> partir de que haya una forma fiable de consultarla, se incluira.
+
+### Puesta en produccion
+Mergeado a `main` el PR #17 (rama `design/luxury-theme-fix`), con todo lo acumulado
+desde el tema claro/indigo hasta esta sesion. La `OPENAI_API_KEY` que el usuario anadio
+a Vercel queda guardada y lista, pero **todavia no hay ningun codigo que la use** -- la
+integracion de IA (parseo NLP real, recomendaciones) se pidio pero se aparco en la
+sesion anterior por alcance, y no se ha construido en esta tampoco por el volumen de
+otras peticiones. Sigue pendiente, sin ningun coste mientras tanto (una key guardada en
+Vercel sin usar no genera gasto).
+
+### Revision de otros hilos del proyecto (peticion explicita: "es util y exportable?")
+Leido `/areas/travel-search-app.md` (el hilo de `buscador_viajes.py`) y buscado en el
+historial de conversaciones del proyecto. Hallazgos:
+- Las decisiones de API de ese hilo ya estan reflejadas en Tiriti Travel: Sky Scrapper
+  (RapidAPI) para vuelos ya integrado; Amadeus Self-Service (cerrado 17 jul 2026), Kiwi
+  Tequila (ahora solo por invitacion) y Skyscanner oficial (sin tier gratuito) ya
+  estaban descartados alli y se confirma que siguen sin ser opciones viables.
+  Reconfirmado por busqueda web en esta sesion.
+- Las partes de HOTELES de ese hilo (Hotelbeds, Makcorps, DirectBooker) no aplican --
+  el usuario confirmo que Tiriti Travel es solo de vuelos.
+- No se encontro ningun hilo de "vigilancias" especifico; se interpreta como el propio
+  sistema de alertas de precio que ya tiene Tiriti Travel (`ToolsPanel` + cron
+  `check-alerts`).
+- Ningun otro proyecto del usuario (CostaMed, RentManager, etc.) tiene codigo
+  directamente reutilizable para un buscador de vuelos -- son dominios distintos
+  (inmobiliario, no viajes).
+
+### Otras APIs gratuitas de vuelos (peticion explicita) -- busqueda web en esta sesion
+Sin alternativa gratuita mejor que Ignav+Sky Scrapper para busqueda de vuelos en vivo.
+Duffel cobra por reserva creada (no es gratis para simple busqueda). Amadeus Enterprise
+requiere acreditacion IATA/ARC. Travelpayouts (datos de Aviasales) tiene una API de
+datos agregados gratuita que podria valer especificamente para una futura funcion de
+"mejor mes para viajar" (no para busqueda en vivo) -- anotado como posible pista futura,
+no implementado.
+
+### Edad de los ninos en el formulario (pregunta del usuario, no implementado)
+Comprobado en `lib/ignav.ts`: la API de Ignav solo acepta un NUMERO de ninos, no fecha
+de nacimiento ni edad -- anadir el campo no cambiaria ningun resultado. Ademas, en las
+aerolineas low-cost que cubren las rutas de origen del usuario (Ryanair, Vueling,
+EasyJet...) el descuento infantil real solo aplica a bebes en brazos (<2 anos, gestion
+distinta en estos buscadores); a partir de 2 anos pagan como adulto. Decision: no
+anadir el campo.
+
+### Cambios de codigo de esta sesion
+1. **FIX real: tema oscuro se activaba solo automatico segun el sistema.** Si el
+   telefono/navegador del usuario tenia el modo oscuro del sistema activado y nunca
+   habia tocado el interruptor de la app, la app arrancaba oscura sin que el usuario lo
+   pidiera -- por eso "no veo el fondo de nubes" en la ultima rama. Corregido: el tema
+   oscuro ahora es SOLO por eleccion explicita guardada (el boton sol/luna del nav),
+   nunca automatico por preferencia del sistema. El claro/nubes es el por defecto real
+   de la identidad de la app.
+2. **Boton "Sorprendeme" con mucho mas protagonismo**: sacado de dentro del formulario
+   (donde estaba al final, pequeno) a su propia tarjeta destacada de ancho completo,
+   justo debajo de la tira de ruta -- degradado indigo-violeta-fucsia, texto mas
+   grande, la primera accion que se ve tras el titulo.
+3. **Logo e identidad propios** (peticion: "hippie, bohemio, disfrutón, que no
+   desentone"): golondrina estilizada (2 paths SVG, verificada visualmente con
+   `cairosvg` antes de aplicarla -- el primer intento salio irreconocible) sustituyendo
+   al icono de avion generico reutilizado. Tipografia "Pacifico" (script retro de
+   branding de surf/viajes) SOLO para el logotipo "Tiriti Travel", instalada via
+   `@fontsource/pacifico` (npm, autoalojada, sin depender de Google Fonts que no se
+   puede verificar desde este entorno). Aplicado tambien a los iconos de "Anadir a
+   inicio" en iPhone.
+4. **Insignias de aerolinea** (peticion: "busca los iconos de las aerolineas"): en vez
+   de logos reales (serian marca registrada de terceros, y las APIs de logos que
+   existen piden todas su propia clave), insignias con iniciales en un circulo de color
+   propio de cada aerolinea (`lib/airline-badge.ts`, ~18 aerolineas conocidas + fallback
+   con color estable por hash para cualquier otra).
+5. **Reorganizacion**: el cuadro de "busqueda en lenguaje natural" (antes su propia
+   tarjeta grande, separada) se movio DENTRO de la tarjeta principal de busqueda, como
+   un desplegable plegado por defecto ("O describelo con tus palabras") -- agrupacion
+   mas logica (interpretar la frase rellena los mismos campos que estan justo debajo) y
+   menos tarjetas grandes apiladas, mas cerca en espiritu de como se ve la referencia.
+6. **FIX real: cajas de fecha solapadas en iOS**: `input type="date"` sin
+   `min-width: 0` dentro de un grid de 2 columnas -- corregido con `min-w-0` +
+   apilamiento en 1 columna en las pantallas mas estrechas.
+7. **FIX real: filtro de aerolineas "invisible"**: no era un bug, estaba dentro del
+   acordeon "Extras" plegado por defecto. Ahora viene abierto.
+8. **La tira "Origen ---- Destino" sin funcion**: ahora es un boton real que baja hasta
+   el formulario de busqueda.
+
+### Pendiente / aparcado (explicado al usuario)
+- Integracion de IA con OpenAI (parseo NLP real + recomendaciones razonadas). Key ya en
+  Vercel, sin codigo todavia -- siguiente sesion.
+- "La app apesta a IA, mas organico" -- se abordo parcialmente con el logo/tipografia y
+  la tarjeta de Sorprendeme, pero es un ajuste de sensibilidad que probablemente
+  necesite iteracion continua, no un cambio unico.
+- Archivar/resumir las entradas mas antiguas de este archivo si llega a ser demasiado
+  largo (705+ lineas a fecha de esta sesion) -- pendiente de que el usuario lo pida.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP 200
+y presencia de los textos/clases nuevos. Insignias de aerolinea y logo verificados
+visualmente (renderizados a PNG con `cairosvg`/`fonttools` y revisados con el visor de
+imagenes) antes de darlos por buenos, no solo supuestos correctos a ciegas.
+
+---
+
+## Estado al 14 de septiembre de 2026 — Sesion: fixes de UI reportados en iOS + logo/tipografia propios
+
+### Contexto
+El usuario probo en su iPhone y mando 2 capturas: una de la propia app (mostrando la
+tira de ruta "Origen/Destino") y otra volviendo a mandar la referencia "aeroluxe" para
+insistir en que el parecido sigue sin ser suficiente. Reporto 3 problemas concretos de
+UI + peticion de logo/tipografia con caracter propio + pregunta de como pasar la key de
+OpenAI de forma segura.
+
+### Aclarado: como dar una API key de forma segura (pregunta directa del usuario)
+Explicado que NO debe pegarla en el chat ni en ningun sitio del codigo. La forma
+correcta: anadirla directamente como variable de entorno en Vercel (Settings ->
+Environment Variables), nunca dandosela a Claude. Motivo adicional dado: esta sesion de
+sandbox tampoco podria probarla aunque se le diera, porque `api.openai.com` no esta en
+la lista de dominios con acceso de red desde este entorno (mismo tipo de limitacion ya
+documentada para Ignav y Sky Scrapper).
+
+### Bugs reales corregidos
+1. **Cajas de fecha solapadas en iOS**: `input type="date"` sin `min-width: 0` dentro
+   de un grid de 2 columnas -- el ancho intrinseco del control nativo de iOS forzaba la
+   celda mas alla de su espacio, solapando con la de al lado. Fix: `min-w-0` en todos
+   los campos del bloque + las parejas de fecha se apilan en 1 columna en las pantallas
+   mas estrechas.
+2. **Filtro de aerolineas "no se ve"**: no era un bug de renderizado -- estaba dentro
+   del acordeon "Extras" del panel lateral, plegado por defecto. El usuario nunca lo
+   habia desplegado. Fix: "Extras" abierto por defecto.
+3. **Tira "Origen ---- Destino" sin ninguna funcion**: el usuario no entendia para que
+   servia si no se podia tocar nada. Fix: ahora es un boton real que baja hasta el
+   formulario de busqueda (`document.getElementById('search-form').scrollIntoView`),
+   con un icono de flecha para que se note que es tocable.
+
+### Identidad visual (a peticion explicita: "hippie, bohemio, disfrutón, que no
+desentone")
+- **Logo nuevo**: golondrina estilizada (2 paths SVG simples: alas en forma de M +
+  cola en horquilla), dibujada y verificada visualmente en esta sesion con `cairosvg`
+  (renderizado a PNG y revisado con el visor de imagenes antes de dar el diseño por
+  bueno -- el primer intento de path a mano salio irreconocible, parecia una flor).
+  Sustituye al icono de avion generico que ya se reutilizaba en el resto de la interfaz
+  como icono de tabla de resultados. Aplicado tambien en `app/icon.tsx` y
+  `app/apple-icon.tsx` para consistencia entre el nav y el icono de "Anadir a inicio".
+- **Tipografia del logotipo**: "Pacifico" (script retro de branding de surf/viajes),
+  SOLO para el texto "Tiriti Travel", nunca en el resto de la UI. Instalada via
+  `@fontsource/pacifico` (paquete npm con los archivos de fuente empaquetados) en vez
+  de `next/font/google`, porque esta sesion no tiene acceso de red a
+  `fonts.googleapis.com` para verificar que ese build funcione (mismo problema ya
+  documentado en la sesion del primer rediseno oscuro). Verificado en esta sesion: la
+  fuente SI se sirve correctamente (`Pacifico` aparece en el CSS del build de
+  produccion) y se renderizo una prueba con la fuente real convertida de woff2 a ttf
+  (`fonttools` + `brotli`) para confirmar visualmente el resultado antes de darlo por
+  bueno.
+
+### Pendiente, explicado al usuario (no resuelto en esta sesion)
+- El parecido con la referencia visual sigue sin ser suficiente para el usuario. Causa
+  de fondo explicada: la referencia tiene un modelo de busqueda mucho mas simple (1
+  origen, 1 destino, 1 fecha) que cabe en una sola fila; esta app hace mas cosas de
+  verdad (multi-origen, destinos reales, lenguaje natural, Sky Scrapper, aerolineas)
+  que no caben sin perder funcionalidad. Propuesta pendiente de aprobacion: plegar el
+  cuadro de "busqueda en lenguaje natural" por defecto para que el formulario de
+  origen/destino/fechas sea lo primero visible tras el hero.
+- Integracion de IA con OpenAI: pendiente de que el usuario anada `OPENAI_API_KEY` a
+  Vercel.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP
+200. Icono nuevo verificado visualmente como PNG real generado por la app (no solo
+supuesto).
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: vision estrategica ("por que esto y no Skyscanner") + filtro de aerolineas + perfil de viaje
 
 ### Contexto: la pregunta importante de esta sesion

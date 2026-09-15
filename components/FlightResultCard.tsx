@@ -1,11 +1,25 @@
 import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
+import { getAirlineBadge } from '@/lib/airline-badge';
 import { IconPlaneTakeoff, IconPlaneLanding } from './Icons';
 
 type BookingLink = { provider_name: string; url: string; price?: { amount: number; currency: string } };
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+}
+
+function AirlineBadge({ name }: { name: string }) {
+  const badge = getAirlineBadge(name);
+  return (
+    <span
+      className="inline-flex items-center justify-center w-4 h-4 rounded-full text-[8px] font-bold shrink-0"
+      style={{ backgroundColor: badge.bg, color: badge.fg }}
+      title={name}
+    >
+      {badge.initials}
+    </span>
+  );
 }
 
 export default function FlightResultCard({
@@ -64,6 +78,7 @@ export default function FlightResultCard({
                 <span>{formatDateTime(result.outbound.departure_at)}</span>
                 <span className="text-slate-300 dark:text-slate-500">→</span>
                 <span className="font-medium text-slate-700 dark:text-slate-300">{result.outbound.destination_iata}</span>
+                <AirlineBadge name={result.outbound.airline} />
                 <span className="text-slate-400 dark:text-slate-500">{result.outbound.airline}</span>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
@@ -72,6 +87,7 @@ export default function FlightResultCard({
                 <span>{formatDateTime(result.inbound.departure_at)}</span>
                 <span className="text-slate-300 dark:text-slate-500">→</span>
                 <span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.destination_iata}</span>
+                <AirlineBadge name={result.inbound.airline} />
                 <span className="text-slate-400 dark:text-slate-500">{result.inbound.airline}</span>
               </div>
             </div>

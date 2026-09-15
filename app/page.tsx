@@ -12,7 +12,7 @@ import ToolsPanel from '@/components/ToolsPanel';
 import FlightResultCard from '@/components/FlightResultCard';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
-import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles, IconChevronDown } from '@/components/Icons';
 
 type Meta = {
   groups: { id: string; name: string; country: string }[];
@@ -481,44 +481,68 @@ export default function HomePage() {
 
           <FlightPathStrip originLabels={originLabels} destinationLabels={destinationLabels} combos={combos} />
 
-          <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 md:p-6 space-y-3">
-            <h2 className="text-base font-semibold text-ink dark:text-slate-100">Busqueda en lenguaje natural</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
-              Ej.: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h,
-              regreso no antes de las 12h". Revisa siempre como se ha interpretado antes de buscar.
-            </p>
-            <textarea
-              className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo/40 focus:border-indigo/60"
-              rows={2}
-              value={nlpText}
-              onChange={(e) => setNlpText(e.target.value)}
-              placeholder="Describe tu busqueda en una frase..."
-            />
-            <button
-              onClick={handleInterpret}
-              className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-ink dark:text-slate-100 text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
-            >
-              Interpretar y precargar filtros
-            </button>
-            {nlpWarnings.length > 0 && (
-              <div className="text-amber-800 dark:text-amber-200 text-sm bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                <p className="font-medium mb-1">Revisa la interpretacion:</p>
-                <ul className="list-disc pl-4 space-y-0.5">
-                  {nlpWarnings.map((w, i) => (
-                    <li key={i}>{w}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </section>
+          <button
+            type="button"
+            onClick={handleSurpriseMe}
+            disabled={loading || originIatas.length === 0}
+            className="w-full flex items-center justify-between gap-4 bg-gradient-to-r from-indigo via-violet-500 to-fuchsia-500 hover:brightness-110 text-white rounded-2xl shadow-lg shadow-indigo-500/20 px-5 py-4 md:px-8 md:py-5 transition-all disabled:opacity-40"
+          >
+            <div className="text-left min-w-0">
+              <p className="font-display text-lg md:text-xl">¿No sabes a donde ir?</p>
+              <p className="text-xs md:text-sm text-white/80 truncate">
+                Destinos reales al azar, con vuelo directo confirmado, ordenados por precio.
+              </p>
+            </div>
+            <span className="flex items-center gap-2 bg-white/15 rounded-full pl-4 pr-5 py-3 font-semibold shrink-0 whitespace-nowrap">
+              <IconSparkles className="w-5 h-5" />
+              {loading ? 'Buscando...' : 'Sorprendeme'}
+            </span>
+          </button>
+
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
             <div className="space-y-6 min-w-0">
-              <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 md:p-6 space-y-6">
+              <section id="search-form" className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5 md:p-6 space-y-6 scroll-mt-4">
                 <div className="flex items-center gap-2">
                   <IconSliders className="w-5 h-5 text-indigo" />
                   <h2 className="text-base font-semibold text-ink dark:text-slate-100">Quien, cuando y a donde</h2>
                 </div>
+
+                <details className="group bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 px-4 py-3">
+                  <summary className="flex items-center justify-between cursor-pointer list-none text-sm font-medium text-ink dark:text-slate-100">
+                    O describelo con tus palabras
+                    <IconChevronDown className="w-4 h-4 text-slate-400 transition-transform group-open:rotate-180" />
+                  </summary>
+                  <div className="mt-3 space-y-3">
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      Ej.: "vuelo a Polonia desde Alicante o Valencia, salida el 4 despues de las 18h o si no el 5 a partir de las 8h,
+                      regreso no antes de las 12h". Revisa siempre como se ha interpretado antes de buscar.
+                    </p>
+                    <textarea
+                      className="w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-3 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo/40 focus:border-indigo/60"
+                      rows={2}
+                      value={nlpText}
+                      onChange={(e) => setNlpText(e.target.value)}
+                      placeholder="Describe tu busqueda en una frase..."
+                    />
+                    <button
+                      onClick={handleInterpret}
+                      className="bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-700 text-ink dark:text-slate-100 text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-slate-200 dark:border-slate-700"
+                    >
+                      Interpretar y precargar filtros
+                    </button>
+                    {nlpWarnings.length > 0 && (
+                      <div className="text-amber-800 dark:text-amber-200 text-sm bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
+                        <p className="font-medium mb-1">Revisa la interpretacion:</p>
+                        <ul className="list-disc pl-4 space-y-0.5">
+                          {nlpWarnings.map((w, i) => (
+                            <li key={i}>{w}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                </details>
 
                 <div>
                   <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Origenes</p>
@@ -628,62 +652,62 @@ export default function HomePage() {
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <div className="col-span-2 grid grid-cols-2 gap-3">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
                       Ida desde
                       <input
                         type="date"
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
                         value={outboundDateFrom}
                         onChange={(e) => setOutboundDateFrom(e.target.value)}
                       />
                     </label>
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
                       Ida hasta
                       <input
                         type="date"
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
                         value={outboundDateTo}
                         onChange={(e) => setOutboundDateTo(e.target.value)}
                       />
                     </label>
                   </div>
-                  <div className="col-span-2 grid grid-cols-2 gap-3">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <div className="col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
                       Vuelta desde
                       <input
                         type="date"
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
                         value={inboundDateFrom}
                         onChange={(e) => setInboundDateFrom(e.target.value)}
                       />
                     </label>
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
                       Vuelta hasta
                       <input
                         type="date"
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
                         value={inboundDateTo}
                         onChange={(e) => setInboundDateTo(e.target.value)}
                       />
                     </label>
                   </div>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
                     Adultos
                     <input
                       type="number"
                       min={1}
-                      className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                      className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
                       value={adults}
                       onChange={(e) => setAdults(Number(e.target.value))}
                     />
                   </label>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
                     Ninos
                     <input
                       type="number"
                       min={0}
-                      className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                      className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
                       value={children}
                       onChange={(e) => setChildren(Number(e.target.value))}
                     />
@@ -714,23 +738,6 @@ export default function HomePage() {
                     Compartir esta busqueda
                   </button>
                   {shareMessage && <span className="text-xs text-emerald-600 dark:text-emerald-400">{shareMessage}</span>}
-                </div>
-
-                <div className="border-t border-slate-100 dark:border-slate-800 pt-4 flex items-center justify-between flex-wrap gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-ink dark:text-slate-100">¿No sabes a donde ir?</p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      No hace falta elegir destino: prueba con destinos reales al azar (con vuelo directo confirmado desde tu origen), ordenados por precio.
-                    </p>
-                  </div>
-                  <button
-                    onClick={handleSurpriseMe}
-                    disabled={loading || originIatas.length === 0}
-                    className="flex items-center gap-2 bg-gradient-to-r from-indigo to-fuchsia-500 hover:from-indigo-dark hover:to-fuchsia-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-40 shrink-0"
-                  >
-                    <IconSparkles className="w-4 h-4" />
-                    {loading ? 'Buscando...' : 'Sorprendeme'}
-                  </button>
                 </div>
 
                 {/* Linea de progreso separada de los botones (a proposito): antes el
@@ -836,7 +843,7 @@ export default function HomePage() {
                   </label>
                 </FilterAccordion>
 
-                <FilterAccordion title="Extras">
+                <FilterAccordion title="Extras" defaultOpen>
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
                     <input type="checkbox" checked={requireCabinBaggage} onChange={(e) => setRequireCabinBaggage(e.target.checked)} />
                     Exigir equipaje de mano

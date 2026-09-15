@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { APP_VERSION } from '@/lib/version';
+import '@fontsource/pacifico';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -28,7 +29,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           // usuario ya habia elegido oscuro. No usa next/script porque necesita correr
           // sincronamente antes del primer render, no despues de hidratar.
           dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('tiriti_theme');if(t==='dark'||(!t&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.classList.add('dark');}}catch(e){}})();`
+            __html: `(function(){try{if(localStorage.getItem('tiriti_theme')==='dark'){document.documentElement.classList.add('dark');}}catch(e){}})();`
           }}
         />
       </head>

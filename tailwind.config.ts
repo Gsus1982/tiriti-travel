@@ -22,7 +22,11 @@ const config: Config = {
       },
       fontFamily: {
         sans: ['ui-sans-serif', '-apple-system', 'Segoe UI', 'system-ui', 'sans-serif'],
-        display: ['Iowan Old Style', 'Palatino Linotype', 'Georgia', 'ui-serif', 'serif']
+        display: ['Iowan Old Style', 'Palatino Linotype', 'Georgia', 'ui-serif', 'serif'],
+        // Fuente solo para el logotipo "Tiriti Travel" en el nav -- caracter
+        // desenfadado/bohemio a proposito, usada UNICAMENTE ahi, nunca en el resto de
+        // la UI, para que no desentone con el resto del diseno (limpio y funcional).
+        logo: ['Pacifico', 'cursive']
       }
     }
   },

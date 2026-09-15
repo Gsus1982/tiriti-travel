@@ -2,6 +2,34 @@
 
 Todas las fechas en hora local de España (CEST/CET). Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.5.2] - 2026-09-14 (Sorprendeme sobre destinos reales + boton estable + menos reintentos)
+
+El usuario probo "Sorprendeme" en el movil: los botones cambiaban de tamano sin parar
+durante la busqueda, y la busqueda en si devolvia solo avisos de timeout / "Ignav no
+devolvio vuelos directos" para los 6 destinos probados, sin ningun resultado.
+
+### Corregido
+- **Boton inestable (bug real)**: el mensaje de progreso cambiante ("Buscando vuelos de
+  ida...", "Calculando traslados...") vivia DENTRO del texto del boton; al tener
+  longitudes muy distintas, el boton crecia y encogia con cada cambio de mensaje. Ahora
+  el boton mantiene un texto corto y fijo ("Buscando...") mientras carga, y el mensaje
+  de progreso se muestra en una linea aparte con altura minima fija y `truncate`, para
+  que no mueva nada de su alrededor ni desborde el ancho de la pantalla.
+- **"Sorprendeme" sobre destinos sin conectividad real (bug real)**: elegia al azar
+  entre los destinos CURADOS por tema (Polonia, Riga, Zagreb/Split, Dublin, Belgrado...)
+  sin comprobar si tenian vuelo directo real desde el origen elegido. Con Alicante como
+  origen, ninguno de los 6 destinos sorteados tenia conexion directa real, de ahi que
+  saliera una lista entera de avisos y ningun resultado. Ahora elige de los destinos
+  REALES verificados por Aena (los mismos que ya usa el selector "Destinos"), filtrados
+  por el origen actual, que si tienen conectividad directa confirmada. Los destinos
+  curados se siguen usando para el buscador en lenguaje natural (donde el tema importa
+  mas que la certeza de conectividad), no para un "sorprendeme" a ciegas.
+- `lib/ignav.ts`: `MAX_RETRIES` bajado de 2 a 1. Con timeout de 8s por intento, 2
+  reintentos podian hacer que una sola ruta lenta tardara hasta ~25s en total,
+  arriesgando que Vercel matara la funcion entera (limite de 10s en el plan Hobby) antes
+  de que el resto de rutas, mas rapidas, pudieran devolver su resultado. No elimina del
+  todo el riesgo si Ignav esta especialmente lento, pero lo reduce.
+
 ## [0.5.1] - 2026-09-14 ("Sorprendeme": fix de bug real + rediseno)
 
 El usuario probo "Quiero viajar, propon ideas por precio" con Alicante como unico

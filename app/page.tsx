@@ -299,27 +299,33 @@ export default function HomePage() {
   }
 
   async function handleSurpriseMe() {
-    const allGroupIds = (meta?.groups ?? []).map((g) => g.id);
     if (originIatas.length === 0) {
       setError('Elige al menos un origen antes de pulsar "Sorprendeme".');
       return;
     }
-    if (allGroupIds.length === 0) {
-      setError('No hay destinos curados disponibles todavia.');
+    // FIX (bug real reportado): antes se elegia de los destinos CURADOS (por tema, ej.
+    // "mercados navidenos": Polonia, Riga, Zagreb/Split, Dublin, Belgrado...) sin
+    // comprobar si tenian vuelo directo real desde el origen elegido -- de ahi que casi
+    // siempre saliera una lista de avisos "Ignav no devolvio vuelos directos" y ningun
+    // resultado. Los destinos curados estan pensados para el buscador en lenguaje
+    // natural (cuando SI importa el tema, aunque la conectividad sea incierta), no para
+    // un "sorprendeme" a ciegas. Ahora se elige de los destinos REALES verificados por
+    // Aena (los mismos que cuenta el selector "Destinos" de abajo), que si tienen
+    // conectividad directa confirmada desde el origen -- reduce mucho el riesgo de que
+    // la busqueda vuelva vacia solo por falta de ruta.
+    const pool = filteredRealDestinations.length > 0 ? filteredRealDestinations : realDestinations;
+    if (pool.length === 0) {
+      setError(
+        'Todavia no hay destinos reales cargados para tus origenes (o la cache de Aena esta vacia para ellos). Prueba con otro origen o espera un momento.'
+      );
       return;
     }
-    // FIX (bug real reportado): antes esto multiplicaba origenes x TODOS los grupos
-    // curados sin comprobar si cabian en el limite de 6 combinaciones de Ignav -- con
-    // 8 grupos curados, fallaba SIEMPRE incluso con un solo origen (1x8=8>6). Ahora se
-    // coge solo el numero de grupos que quepan dentro del limite para los origenes
-    // elegidos, mezclados al azar para que salgan destinos distintos cada vez que se
-    // pulsa (asi "Sorprendeme" sorprende de verdad, no siempre lo mismo).
-    const maxGroups = Math.max(1, Math.floor(6 / originIatas.length));
-    const groupIds = [...allGroupIds].sort(() => Math.random() - 0.5).slice(0, maxGroups);
-    setDestinationGroupIds(groupIds);
-    setSelectedDestIatas([]);
+    const maxDestinations = Math.max(1, Math.floor(6 / originIatas.length));
+    const iatas = [...pool].sort(() => Math.random() - 0.5).slice(0, maxDestinations).map((d) => d.dest_iata);
+    setDestinationGroupIds([]);
+    setSelectedDestIatas(iatas);
     setSortBy('price');
-    await runSearch(groupIds, [], 'price');
+    await runSearch([], iatas, 'price');
   }
 
   function handleReSort(newSortBy: 'checkout_time' | 'price' | 'duration') {
@@ -666,7 +672,7 @@ export default function HomePage() {
                     disabled={loading || originIatas.length === 0 || (destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
                     className="bg-indigo hover:bg-indigo-dark text-white font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-40"
                   >
-                    {loading ? progressMessage : 'Buscar vuelos'}
+                    {loading ? 'Buscando...' : 'Buscar vuelos'}
                   </button>
                   <button
                     onClick={handleShare}
@@ -682,7 +688,7 @@ export default function HomePage() {
                   <div>
                     <p className="text-sm font-medium text-ink dark:text-slate-100">¿No sabes a donde ir?</p>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      No hace falta elegir destino: prueba con algunos de tus destinos curados al azar, ordenados por precio.
+                      No hace falta elegir destino: prueba con destinos reales al azar (con vuelo directo confirmado desde tu origen), ordenados por precio.
                     </p>
                   </div>
                   <button
@@ -691,9 +697,17 @@ export default function HomePage() {
                     className="flex items-center gap-2 bg-gradient-to-r from-indigo to-fuchsia-500 hover:from-indigo-dark hover:to-fuchsia-600 text-white font-semibold px-5 py-2.5 rounded-lg transition-colors disabled:opacity-40 shrink-0"
                   >
                     <IconSparkles className="w-4 h-4" />
-                    {loading ? progressMessage : 'Sorprendeme'}
+                    {loading ? 'Buscando...' : 'Sorprendeme'}
                   </button>
                 </div>
+
+                {/* Linea de progreso separada de los botones (a proposito): antes el
+                    mensaje cambiante vivia DENTRO del boton y su longitud variable hacia
+                    que el boton creciera y encogiera sin parar durante la busqueda. Con
+                    min-h fijo y truncate, esta linea no mueve nada de su alrededor. */}
+                <p className="min-h-[1rem] text-xs text-slate-500 dark:text-slate-400 truncate">
+                  {loading ? progressMessage : ''}
+                </p>
 
                 {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
                 {warnings.length > 0 && (

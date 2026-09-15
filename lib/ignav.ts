@@ -85,7 +85,15 @@ function sleep(ms: number): Promise<void> {
 }
 
 const RETRYABLE_STATUSES = new Set([424, 429, 502, 503, 504]);
-const MAX_RETRIES = 2;
+// FIX (bug reportado: busquedas con muchos timeouts de Ignav en paralelo): con 2
+// reintentos y un timeout de 8s por intento, UNA sola ruta lenta podia tardar hasta
+// ~25s en agotar sus reintentos (8s + 400ms + 8s + 800ms + 8s), muy por encima del
+// limite de funcion de Vercel (10s en el plan Hobby). Con varias peticiones en paralelo
+// (hasta 60 por busqueda), bastaba con que una fuera lenta para arriesgar que Vercel
+// matara la funcion entera antes de que el resto de rutas, mas rapidas, pudieran
+// devolver su resultado. Bajado a 1 reintento (peor caso ~16.4s por ruta) para reducir
+// ese riesgo, aunque no lo elimina del todo -- ver docs/STATUS.md.
+const MAX_RETRIES = 1;
 
 async function ignavPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
   let lastError: Error | null = null;

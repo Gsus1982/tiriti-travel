@@ -1,5 +1,61 @@
 # Estado del proyecto TiritiTravel
 
+## Estado al 14 de septiembre de 2026 — Sesion: Sorprendeme sobre destinos reales + boton estable
+
+### Contexto: el usuario probo y reporto 2 problemas + 2 preguntas
+Probando "Sorprendeme" con Alicante como origen: los botones "crecian y encogian" sin
+control durante la busqueda, y la busqueda en si devolvio una lista larga de avisos
+(timeouts de Ignav + "no devolvio vuelos directos") para los 6 destinos sorteados, sin
+ningun resultado. Ademas pregunto que significa el aviso de limites de Ignav y que son
+los "destinos curados" -- quedan explicados aqui para que cualquier sesion futura sepa
+que ya se le explico esto al usuario y como esta resuelto.
+
+### Que es el aviso "Maximo 5 dias por tramo y 6 combinaciones origen x destino"
+Ignav (el proveedor de datos de vuelos en vivo) da una cuota gratuita de 1000
+peticiones **de por vida** (no al mes). Cada dia del rango de fechas y cada combinacion
+origen-destino que se busca consume peticiones reales contra esa cuota. Estos 2 limites
+existen solo para que una busqueda de un usuario no se coma un porcentaje grande de esa
+cuota de golpe -- no es un limite de Ignav en si, es una proteccion propia de la app.
+
+### Que son los "destinos curados" (y por que NO son lo mismo que "destinos reales")
+Hay 2 listas de destinos completamente distintas en la app:
+- **Destinos curados** (`destination_groups` en la BD): una lista fija elegida a mano
+  por tema/evento (Polonia, Riga, Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado --
+  pensados originalmente para cosas como mercados navidenos). **No estan verificados
+  contra ningun origen concreto** -- pueden no tener ningun vuelo directo real desde
+  Alicante, por ejemplo, aunque si lo tengan desde Madrid.
+- **Destinos reales** (tabla `aena_destinations`, sincronizada a diario desde datos
+  publicos de Aena): estos SI estan verificados por origen -- son exactamente los que
+  aparecen en el selector "Destinos" del formulario, con conteo real de vuelos directos
+  desde los origenes que tengas elegidos.
+
+Esta distincion es la causa raiz del bug de esta sesion (ver abajo).
+
+### Fixes de esta sesion
+1. **"Sorprendeme" elegia de los destinos CURADOS**, no de los reales -- con Alicante
+   como origen, ninguno de los 6 sorteados tenia conectividad real, de ahi la lista de
+   avisos sin ningun resultado. Corregido para elegir de `filteredRealDestinations` (los
+   destinos reales ya filtrados por origen, la misma lista que ve el usuario en el
+   selector), que si tienen vuelo directo confirmado. Los destinos curados se dejan tal
+   cual para el buscador en lenguaje natural, donde el tema SI importa mas que la
+   certeza de conectividad (ej. "mercado navideno en un pais nordico").
+2. **Boton inestable (crecia/encogia)**: el mensaje de progreso cambiante vivia dentro
+   del texto del boton; longitudes muy distintas ("Buscando..." vs "Calculando
+   traslados y horas de salida del hotel...") hacian que el boton cambiara de tamano
+   con cada ciclo. Separado en una linea aparte con altura minima fija y `truncate`.
+3. **`lib/ignav.ts` MAX_RETRIES bajado de 2 a 1**: con 8s de timeout por intento, 2
+   reintentos podian hacer que una sola ruta lenta tardara ~25s en total -- arriesgando
+   que Vercel matara la funcion entera (10s en Hobby) antes de que el resto de rutas,
+   mas rapidas, devolvieran su resultado. Mitiga el riesgo, no lo elimina del todo: si
+   Ignav esta genuinamente lento para muchas rutas a la vez (no se puede verificar sin
+   una key real y acceso de red, que esta sesion no tiene), seguira habiendo timeouts.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP 200
+y presencia del nuevo texto/clases en el HTML.
+
+---
+
 ## Estado al 14 de septiembre de 2026 — Sesion: fix real de "Sorprendeme" (antes "ideas por precio")
 
 El usuario probo la funcion en el movil con Alicante como unico origen y siempre daba

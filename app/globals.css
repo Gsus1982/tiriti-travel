@@ -3,6 +3,30 @@
 @tailwind utilities;
 
 body {
-  background-color: #f8fafc;
-  color: #0f172a;
+  background:
+    radial-gradient(ellipse 70% 45% at 12% -5%, rgba(255, 255, 255, 0.65), transparent 60%),
+    radial-gradient(ellipse 55% 35% at 92% 12%, rgba(255, 255, 255, 0.55), transparent 55%),
+    linear-gradient(180deg, #c7d0fb 0%, #aab6f5 55%, #99a8f2 100%);
+  background-attachment: fixed;
+  color: #14161b;
+  min-height: 100vh;
+  /* Con viewport-fit=cover (necesario para que la web-app en iPhone use toda la
+     pantalla al anadirla a inicio), el contenido llega hasta los bordes fisicos.
+     Estos paddings evitan que el nav superior quede debajo del notch/isla dinamica
+     y que el contenido final quede debajo de la barra de home. */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.dark body {
+  background:
+    radial-gradient(ellipse 70% 45% at 12% -5%, rgba(255, 255, 255, 0.04), transparent 60%),
+    radial-gradient(ellipse 55% 35% at 92% 12%, rgba(255, 255, 255, 0.03), transparent 55%),
+    linear-gradient(180deg, #05060a 0%, #0a0c12 55%, #0e1018 100%);
+  color: #e5e7eb;
+}
+
+::selection {
+  background-color: #6366f1;
+  color: #ffffff;
 }

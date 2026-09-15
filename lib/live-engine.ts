@@ -1,5 +1,6 @@
 import { sql } from './db';
 import { searchOneWay, type IgnavItinerary, type IgnavOneWayResponse } from './ignav';
+import { searchSkyRoundTrip } from './skyscanner-adapter';
 import type { Pax } from './types';
 import { datesBetween } from './types';
 
@@ -11,6 +12,12 @@ const MAX_ORIGIN_GROUP_COMBOS = 6;
 // que una sola busqueda con destinos multi-aeropuerto y rango de fechas amplio se lleve
 // una parte desproporcionada de la cuota de golpe.
 const MAX_IGNAV_REQUESTS_PER_SEARCH = 60;
+// Sky Scrapper (RapidAPI) tiene una cuota MUCHO mas ajustada que Ignav: ~100 peticiones
+// AL MES (no de por vida). Por eso, a diferencia de Ignav, solo se consulta 1 vez por
+// combinacion origen x aeropuerto de destino (usando la PRIMERA fecha de cada rango, no
+// el rango completo) y con un tope mucho mas bajo. Es opcional (checkbox) y silencioso
+// si RAPIDAPI_SKY_SCRAPPER_KEY no esta configurada.
+const MAX_SKYSCANNER_CALLS_PER_SEARCH = 6;
 
 export type LiveFilters = {
   originIatas: string[];
@@ -29,6 +36,7 @@ export type LiveFilters = {
   airlinesInclude?: string[];
   airlinesExclude?: string[];
   sortBy: 'checkout_time' | 'price' | 'duration';
+  includeSkyScanner?: boolean;
 };
 
 export type LiveLeg = {
@@ -62,6 +70,7 @@ export type LiveItinerary = {
   hotelCheckoutAt: string;
   airportTransferMinutes: number;
   notes: string[];
+  source: 'ignav' | 'skyscanner';
 };
 
 export type LiveSearchResult = {
@@ -102,6 +111,24 @@ function addMinutes(iso: string, minutes: number): string {
   const d = new Date(iso);
   d.setMinutes(d.getMinutes() - minutes);
   return d.toISOString();
+}
+
+/**
+ * Comprueba si un tramo coincide con alguna entrada de una lista de aerolineas, por
+ * nombre (substring, sin distinguir mayusculas) o por codigo de 2-3 letras al inicio
+ * del numero de vuelo (ej. "FR" en "FR1234"). Red de seguridad ademas de mandar el
+ * filtro a Ignav (airlines_include/airlines_exclude): no se ha podido verificar contra
+ * la API real si Ignav lo aplica exactamente como se espera, asi que se re-comprueba
+ * aqui sobre el resultado final, igual que ya se hace con "solo directos".
+ */
+function legMatchesAirlineList(list: string[], leg: LiveLeg): boolean {
+  const code = (leg.flight_number.match(/^[A-Z0-9]{2,3}/)?.[0] ?? '').toUpperCase();
+  const name = leg.airline.toLowerCase();
+  return list.some((entry) => {
+    const e = entry.trim();
+    if (!e) return false;
+    return name.includes(e.toLowerCase()) || code === e.toUpperCase();
+  });
 }
 
 async function safeSearchOneWay(
@@ -279,10 +306,17 @@ async function searchLiveForTarget(
 
   for (const outbound of outboundLegs) {
     for (const inbound of inboundLegs) {
-      if (new Date(inbound.departure_at) <= new Date(outbound.departure_at)) continue;
+      if (new Date(inbound.departure_at) <= new Date(outbound.arrival_at)) continue;
 
       const isOpenJaw = outbound.destination_iata !== inbound.origin_iata;
       if (isOpenJaw && !allowOpenJaw) continue;
+
+      if (airlinesInclude?.length && !(legMatchesAirlineList(airlinesInclude, outbound) || legMatchesAirlineList(airlinesInclude, inbound))) {
+        continue;
+      }
+      if (airlinesExclude?.length && (legMatchesAirlineList(airlinesExclude, outbound) || legMatchesAirlineList(airlinesExclude, inbound))) {
+        continue;
+      }
 
       let interCityTransfer: LiveItinerary['interCityTransfer'] = null;
       if (isOpenJaw) {
@@ -336,7 +370,8 @@ async function searchLiveForTarget(
         currency: outbound.price_currency,
         hotelCheckoutAt,
         airportTransferMinutes,
-        notes
+        notes,
+        source: 'ignav'
       });
     }
   }
@@ -392,9 +427,46 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
 
   const merged = allResults.flat();
 
+  // Sky Scrapper (RapidAPI) como fuente ADICIONAL, opcional (checkbox), silenciosa si no
+  // hay key configurada. A diferencia de Ignav, aqui NO se recorre el rango de fechas
+  // completo -- solo la primera fecha de ida y la primera de vuelta -- porque su cuota es
+  // ~100/mes (no de por vida como Ignav) y una sola busqueda con rango de dias la
+  // agotaria en un instante. Los resultados se mezclan con los de Ignav y cada uno lleva
+  // su `source` para que la interfaz pueda distinguirlos, tal como se pidio.
+  if (filters.includeSkyScanner && process.env.RAPIDAPI_SKY_SCRAPPER_KEY) {
+    const skyPairs: { originIata: string; destIata: string; destName: string }[] = [];
+    for (const originIata of originIatas) {
+      for (const target of allTargets) {
+        for (const airport of target.airports) {
+          skyPairs.push({ originIata, destIata: airport.iata, destName: target.name });
+          if (skyPairs.length >= MAX_SKYSCANNER_CALLS_PER_SEARCH) break;
+        }
+        if (skyPairs.length >= MAX_SKYSCANNER_CALLS_PER_SEARCH) break;
+      }
+      if (skyPairs.length >= MAX_SKYSCANNER_CALLS_PER_SEARCH) break;
+    }
+
+    const skyResults = await Promise.all(
+      skyPairs.map((p) =>
+        searchSkyRoundTrip(p.originIata, p.destIata, outboundDates[0], inboundDates[0], filters.pax, p.originIata, p.destName, warnings)
+      )
+    );
+    merged.push(...skyResults.flat());
+
+    if (skyPairs.length > 0) {
+      warnings.push(
+        `Sky Scrapper consultado solo para ${outboundDates[0]} (ida) / ${inboundDates[0]} (vuelta) -- su cuota es mensual y mucho mas ajustada que la de Ignav, no se recorre el rango de fechas completo.`
+      );
+    }
+  }
+
   merged.sort((a, b) => {
     if (sortBy === 'price') return a.totalPrice - b.totalPrice;
-    if (sortBy === 'duration') return a.outbound.duration_min + a.inbound.duration_min - (b.outbound.duration_min + b.inbound.duration_min);
+    if (sortBy === 'duration') {
+      const da = new Date(a.inbound.arrival_at).getTime() - new Date(a.outbound.departure_at).getTime();
+      const db = new Date(b.inbound.arrival_at).getTime() - new Date(b.outbound.departure_at).getTime();
+      return da - db;
+    }
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 

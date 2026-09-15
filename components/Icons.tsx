@@ -53,3 +53,94 @@ export function IconSuitcase({ className = 'w-5 h-5' }: { className?: string }) 
     </svg>
   );
 }
+
+export function IconPlaneTakeoff({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 19h18" />
+      <path d="M6.5 15.5 15 8.2c1-.85 2.4-.9 3.2-.1.8.8.7 2.15-.2 3l-4.3 3.7-6.3 2.2-1.6-1.1 2.4-1.9Z" />
+      <path d="M9.5 6.5 12 5" />
+    </svg>
+  );
+}
+
+export function IconPlaneLanding({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M3 19h18" />
+      <path d="M6 12.5 14.5 15c1.2.35 2.5-.15 3-1.2.5-1.05-.05-2.25-1.25-2.6L11 9.6l-3.6-4-1.9.5 2 4.3-2.9 1.2Z" />
+    </svg>
+  );
+}
+
+export function IconCompass({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M14.6 9.4 13 13l-3.6 1.6L11 11l3.6-1.6Z" />
+    </svg>
+  );
+}
+
+export function IconShare({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v12" />
+      <path d="m7.5 7.5 4.5-4.5 4.5 4.5" />
+      <path d="M5 12v6.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V12" />
+    </svg>
+  );
+}
+
+export function IconSun({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round">
+      <circle cx="12" cy="12" r="4.2" />
+      <path d="M12 2.5v2.2M12 19.3v2.2M4.2 4.2l1.55 1.55M18.25 18.25l1.55 1.55M2.5 12h2.2M19.3 12h2.2M4.2 19.8l1.55-1.55M18.25 5.75l1.55-1.55" />
+    </svg>
+  );
+}
+
+export function IconMoon({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 14.5A8.5 8.5 0 1 1 9.5 4a6.8 6.8 0 0 0 10.5 10.5Z" />
+    </svg>
+  );
+}
+
+export function IconClock({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7.5V12l3 2" />
+    </svg>
+  );
+}
+
+export function IconChevronDown({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  );
+}
+
+export function IconSparkles({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M18 6l-2 2M8 16l-2 2" />
+      <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+export function IconTicket({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinejoin="round">
+      <path d="M3.5 9.5A2 2 0 0 0 3.5 14.5V16.5A1.5 1.5 0 0 0 5 18H19A1.5 1.5 0 0 0 20.5 16.5V14.5A2 2 0 0 0 20.5 9.5V7.5A1.5 1.5 0 0 0 19 6H5A1.5 1.5 0 0 0 3.5 7.5Z" />
+      <path d="M14.5 6V18" strokeDasharray="1.6 2.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+

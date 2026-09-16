@@ -116,8 +116,6 @@ export default function HomePage() {
       .catch(() => setError('No se pudo cargar la configuracion inicial.'));
   }, []);
 
-  // Restaurar filtros desde la URL si viene de un enlace compartido o de una entrada
-  // del historial de busquedas (mismo formato, ver lib/share-link.ts).
   useEffect(() => {
     if (typeof window === 'undefined' || !window.location.search) return;
     const parsed = parseShareParams(window.location.search);
@@ -141,20 +139,10 @@ export default function HomePage() {
     if (parsed.airlinesExcludeText !== undefined) setAirlinesExcludeText(parsed.airlinesExcludeText);
   }, []);
 
-  // Guarda el "perfil de viaje" (quien viaja, origenes habituales) cada vez que cambia,
-  // para que la proxima vez que abras la app ya este precargado. Nota: si abres un
-  // enlace compartido con otros origenes/pax, tambien se guardaria eso como tu nuevo
-  // perfil -- aceptable para un uso personal (no hay otros usuarios), pero si esto se
-  // usara entre varias personas convendria guardar solo en cambios manuales directos,
-  // no en restauraciones desde URL/historial.
   useEffect(() => {
     saveTravelProfile({ originIatas, adults, children, requireCabinBaggage, allowOpenJaw });
   }, [originIatas, adults, children, requireCabinBaggage, allowOpenJaw]);
 
-  // Mensajes de progreso mientras se busca. Con hasta varias decenas de peticiones a
-  // Ignav en paralelo, una busqueda puede tardar unos segundos sin ningun feedback --
-  // esto NO es progreso real medido (la API no lo expone), solo mensajes honestos que
-  // van cambiando para que no parezca colgado.
   useEffect(() => {
     if (!loading) {
       setProgressMessage('Buscando...');
@@ -269,8 +257,6 @@ export default function HomePage() {
       setNlpWarnings([]);
       setNlpUsedAI(true);
     } catch {
-      // Fallback: parser de regex local (lib/nlp-search.ts) -- nunca deja al usuario
-      // sin interpretacion, aunque la IA no este configurada o falle.
       const parsed = parseSearchQuery(nlpText, meta, { year: refDate.getFullYear(), month: refDate.getMonth() + 1 });
       if (parsed.originIatas.length) setOriginIatas(parsed.originIatas);
       if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
@@ -377,15 +363,13 @@ export default function HomePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ itineraries: summarized })
       });
-      if (!res.ok) return; // Sin IA configurada o fallo -- la app funciona igual sin recomendacion, no es un error visible.
+      if (!res.ok) return;
       const data = await res.json();
       const picked = results[data.recommendedIndex];
       if (!picked) return;
       const rowKey = `${picked.outbound.ignav_id}-${picked.inbound.ignav_id}`;
       setAiRecommendation({ rowKey, explanation: data.explanation });
     } catch {
-      // Silencioso a proposito: la recomendacion es un plus, no algo critico para poder
-      // ver y usar los resultados.
     } finally {
       setRecommending(false);
     }
@@ -400,8 +384,6 @@ export default function HomePage() {
       setError('Elige al menos un origen antes de pulsar "Sorprendeme".');
       return;
     }
-    // Los destinos REALES verificados por Aena (no los curados por tema) -- ver fix de
-    // sesion anterior, garantiza conectividad directa confirmada desde el origen.
     const pool = filteredRealDestinations.length > 0 ? filteredRealDestinations : realDestinations;
     if (pool.length === 0) {
       setError(
@@ -414,11 +396,6 @@ export default function HomePage() {
     setSurpriseExplanation(null);
     setSurprisePicking(true);
 
-    // Mejora (peticion explicita: "estudia las opciones mas economicas o favorables en
-    // una fecha", no al azar): se le pide a la IA que razone sobre popularidad de ruta,
-    // distancia y epoca del ano para elegir los destinos con mas papeletas de salir
-    // baratos/favorables, en vez de un sorteo puro. Si la IA falla o no esta
-    // configurada, cae a la seleccion aleatoria (mismo comportamiento que antes).
     let iatas: string[];
     try {
       const res = await fetch('/api/ai-surprise', {
@@ -506,7 +483,6 @@ export default function HomePage() {
         await navigator.share({ title: 'Tiriti Travel - busqueda', url });
         return;
       } catch {
-        // El usuario cancelo el share sheet o no esta soportado -- caer al portapapeles.
       }
     }
     try {
@@ -546,17 +522,20 @@ export default function HomePage() {
 
   const originsList = meta?.origins ?? [{ iata: 'ALC', city: 'Alicante' }];
 
-  const sortSelect = (
-    <select
-      className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-      value={sortBy}
-      onChange={(e) => handleReSort(e.target.value as any)}
-    >
-      <option value="checkout_time">Hora salida hotel</option>
-      <option value="price">Precio total</option>
-      <option value="duration">Duracion total</option>
-    </select>
-  );
+  function renderSortSelect(idSuffix: string) {
+    return (
+      <select
+        id={`sort-select-${idSuffix}`}
+        className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+        value={sortBy}
+        onChange={(e) => handleReSort(e.target.value as any)}
+      >
+        <option value="checkout_time">Hora salida hotel</option>
+        <option value="price">Precio total</option>
+        <option value="duration">Duracion total</option>
+      </select>
+    );
+  }
 
   return (
     <div className="min-h-screen md:p-6 lg:p-10">
@@ -599,7 +578,6 @@ export default function HomePage() {
               </p>
             )}
           </div>
-
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
             <div className="space-y-6 min-w-0">
@@ -860,25 +838,11 @@ export default function HomePage() {
                   {shareMessage && <span className="text-xs text-emerald-600 dark:text-emerald-400">{shareMessage}</span>}
                 </div>
 
-                {/* Linea de progreso separada de los botones (a proposito): antes el
-                    mensaje cambiante vivia DENTRO del boton y su longitud variable hacia
-                    que el boton creciera y encogiera sin parar durante la busqueda. Con
-                    min-h fijo y truncate, esta linea no mueve nada de su alrededor. */}
                 <p className="min-h-[1rem] text-xs text-slate-500 dark:text-slate-400 truncate">
                   {loading ? progressMessage : ''}
                 </p>
 
                 {error && <p className="text-red-500 dark:text-red-400 text-sm">{error}</p>}
-                {warnings.length > 0 && (
-                  <div className="text-amber-800 dark:text-amber-200 text-sm bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3">
-                    <p className="font-medium mb-1">Avisos de la busqueda:</p>
-                    <ul className="list-disc pl-5 space-y-0.5">
-                      {warnings.map((w, i) => (
-                        <li key={i}>{w}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
               </section>
 
               {liveResults && (
@@ -891,12 +855,12 @@ export default function HomePage() {
                         <p className="text-xs text-slate-500 dark:text-slate-400">{liveResults.length} resultados</p>
                       </div>
                     </div>
-                    <div className="w-44">{sortSelect}</div>
+                    <div className="w-44">{renderSortSelect('results')}</div>
                   </div>
 
                   {liveResults.length === 0 && (
                     <p className="text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 text-center">
-                      Sin itinerarios directos que cumplan los filtros. Revisa los avisos de arriba.
+                      Sin itinerarios directos que cumplan los filtros. Revisa los avisos de abajo.
                     </p>
                   )}
 
@@ -931,6 +895,19 @@ export default function HomePage() {
                       );
                     })}
                   </div>
+
+                  {warnings.length > 0 && (
+                    <details className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
+                      <summary className="font-medium cursor-pointer select-none">
+                        Avisos de la busqueda ({warnings.length}) -- toca para ver
+                      </summary>
+                      <ul className="list-disc pl-5 space-y-0.5 mt-2">
+                        {warnings.map((w, i) => (
+                          <li key={i}>{w}</li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
                 </section>
               )}
             </div>
@@ -976,7 +953,7 @@ export default function HomePage() {
                   </label>
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
                     Ordenar por
-                    {sortSelect}
+                    {renderSortSelect('sidebar')}
                   </label>
                 </FilterAccordion>
 

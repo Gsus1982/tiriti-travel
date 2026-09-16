@@ -18,6 +18,58 @@
 > hacerse demasiado largo para ser util, dimelo y lo resumimos/archivamos las entradas
 > mas antiguas -- de momento se mantienen todas.
 
+## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: buscar tras interpretar, Sorprendeme con criterio, recomendacion de la IA
+
+### Contexto
+El usuario probo la integracion de OpenAI en el preview del PR #19 (rama
+`feat/openai-nlp-siri-ui`) y confirmo con una captura que interpreta bien las frases
+complejas (una interpretacion de ida/vuelta con condiciones de hora, bien razonada).
+Pero senalo 3 cosas: (1) tras interpretar, no pasaba nada mas, habia que ir a buscar el
+boton de busqueda por su cuenta; (2) "Sorprendeme" seguia sin criterio real, solo un
+sorteo entre destinos reales; (3) sensacion general de que la app sigue "limitadisima,
+poco usable" y pidio usar mas el potencial de la IA.
+
+### Cambios (rama `feat/ai-search-and-recommendation`, sobre `feat/openai-nlp-siri-ui`)
+1. **Boton "Buscar con esta interpretacion"** justo bajo la explicacion de la IA, para
+   no obligar a bajar hasta el formulario.
+2. **"Sorprendeme" con criterio real** (`lib/ai-surprise.ts` + `/api/ai-surprise`): la
+   IA elige los destinos entre los reales disponibles razonando sobre popularidad de
+   ruta, distancia y epoca del ano, en vez de un sorteo. Explica el criterio. Si falla,
+   cae al sorteo aleatorio (mismo comportamiento de antes, nunca se rompe). Se anadio un
+   estado de carga separado ("Pensando..." mientras la IA elige, "Buscando..." mientras
+   se consulta Ignav) para que quede claro que son 2 fases distintas.
+3. **Recomendacion de la IA sobre resultados** (`lib/ai-recommend.ts` +
+   `/api/ai-recommend`): tras cada busqueda con resultados, se manda un resumen
+   compacto de los primeros 12 a la IA, que elige UNO considerando precio Y la hora de
+   salida del hotel (el criterio propio de la app), con una explicacion de 1-2 frases.
+   Se llama en segundo plano (no bloquea que se vean los resultados) y falla en
+   silencio si no hay IA configurada -- es un plus, no algo critico. El resultado
+   elegido se marca con una insignia "Recomendado por la IA" en `FlightResultCard`.
+   Esta es la pieza que responde directamente a "usa tu potencial para hacerlo mas
+   potente y util": convierte la app de listado a asesor que analiza y explica.
+
+### AVISO (se repite, importante)
+Las 3 funciones de IA (interpretar, Sorprendeme, recomendar) usan el mismo patron
+(`gpt-4o-mini`, `response_format: json_schema`) pero **solo la interpretacion se ha
+confirmado funcionando de verdad** (captura del usuario). Sorprendeme y la
+recomendacion usan la misma infraestructura pero con prompts/esquemas distintos --
+logicamente deberian funcionar igual, pero no se han visto en accion todavia. Probar
+ambas con datos reales antes de dar el PR por bueno.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Confirmado que `/api/ai-surprise` y
+`/api/ai-recommend` fallan con 503 controlado sin key configurada (mismo patron que
+`/api/ai-parse`), y que la app sigue funcionando (sorteo aleatorio / sin recomendacion)
+en ese caso.
+
+### Pendiente
+- Confirmar con una busqueda real que Sorprendeme con criterio y la recomendacion de
+  resultados funcionan como se espera.
+- Sigue sin mergearse a produccion: este PR se apila sobre el PR #19 (interpretacion de
+  lenguaje natural), que tampoco esta mergeado todavia.
+
+---
+
 ## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: HOTFIX critico + integracion real de OpenAI
 
 ### Hotfix critico desplegado de inmediato (antes que el resto de esta sesion)

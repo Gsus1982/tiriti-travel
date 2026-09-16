@@ -254,7 +254,7 @@ export default function HomePage() {
       if (ai.inboundNotBeforeHour !== null && ai.inboundNotBeforeHour !== undefined) setInboundNotBeforeHour(ai.inboundNotBeforeHour);
       if (ai.maxPriceTotal !== null && ai.maxPriceTotal !== undefined) setMaxPriceTotal(ai.maxPriceTotal);
       setNlpExplanation(typeof ai.explanation === 'string' ? ai.explanation : null);
-      setNlpWarnings([]);
+      setNlpWarnings(Array.isArray(ai.warnings) ? ai.warnings : []);
       setNlpUsedAI(true);
     } catch {
       const parsed = parseSearchQuery(nlpText, meta, { year: refDate.getFullYear(), month: refDate.getMonth() + 1 });

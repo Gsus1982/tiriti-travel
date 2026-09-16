@@ -34,6 +34,7 @@ export default function ToolsPanel({
   const [calendarDest, setCalendarDest] = useState('');
 
   const [alertLabel, setAlertLabel] = useState('');
+  const [alertEmail, setAlertEmail] = useState('');
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
@@ -68,8 +69,19 @@ export default function ToolsPanel({
   }
 
   async function saveAlert() {
+    // FIX: el backend (app/api/alerts) ya no acepta destinationGroupId -- la tabla real
+    // en Neon nunca tuvo esa columna, solo admite un destino real concreto
+    // (destinationIata). Si el usuario solo tiene un grupo curado seleccionado y ningun
+    // destino real suelto, avisamos en vez de mandar una peticion que va a fallar.
+    const destinationIata = destinationIatas[0] ?? null;
     if (!maxPriceTotal) {
       setAlertMessage('Indica un precio maximo total para poder guardar la alerta.');
+      return;
+    }
+    if (!destinationIata) {
+      setAlertMessage(
+        'Elige al menos un destino real (no un grupo curado) en el buscador para poder guardar la alerta -- las alertas solo funcionan sobre destinos con vuelo directo verificado.'
+      );
       return;
     }
     setAlertSaving(true);
@@ -80,8 +92,7 @@ export default function ToolsPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           originIatas,
-          destinationGroupId: destinationGroupIds[0] ?? null,
-          destinationIata: destinationIatas[0] ?? null,
+          destinationIata,
           outboundDateFrom,
           outboundDateTo,
           inboundDateFrom,
@@ -89,12 +100,17 @@ export default function ToolsPanel({
           adults,
           children,
           maxPriceTotal,
-          label: alertLabel || null
+          label: alertLabel || null,
+          email: alertEmail || null
         })
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
-      setAlertMessage('Alerta guardada. Un cron diario comprobara el precio y lo veras aqui la proxima vez.');
+      setAlertMessage(
+        alertEmail
+          ? 'Alerta guardada. Un cron diario comprobara el precio y te avisara por email si baja de tu limite.'
+          : 'Alerta guardada. Un cron diario comprobara el precio (sin email, no lo has indicado, solo se guardara en el panel).'
+      );
     } catch (e: any) {
       setAlertMessage(`Error: ${e.message}`);
     } finally {
@@ -170,8 +186,9 @@ export default function ToolsPanel({
           <h2 className="text-base font-semibold text-ink dark:text-slate-100">Guardar alerta de precio</h2>
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-          Usa los filtros actuales del buscador (origenes, fechas, destino, precio maximo) y guarda una alerta. Un cron
-          diario comprobara si baja el precio; no hay notificacion por email todavia, revisa el panel en tu proxima visita.
+          Usa los filtros actuales del buscador (origenes, fechas, destino real, precio maximo) y guarda una alerta. Un
+          cron diario comprobara si baja el precio; si dejas tu email, te avisaremos ahi en cuanto encuentre uno por
+          debajo de tu limite (maximo un aviso cada 24h por alerta).
         </p>
         <div className="flex gap-2 items-end flex-wrap">
           <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
@@ -182,6 +199,16 @@ export default function ToolsPanel({
               className="mt-1 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-lg p-2 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
               value={alertLabel}
               onChange={(e) => setAlertLabel(e.target.value)}
+            />
+          </label>
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Email para avisos (opcional)
+            <input
+              type="email"
+              placeholder="tucorreo@ejemplo.com"
+              className="mt-1 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-lg p-2 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+              value={alertEmail}
+              onChange={(e) => setAlertEmail(e.target.value)}
             />
           </label>
           <button

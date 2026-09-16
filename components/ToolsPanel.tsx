@@ -1,9 +1,29 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IconCalendar, IconBell } from './Icons';
 
 type CalendarDay = { date: string; minPrice: number | null; currency: string | null; flightCount: number };
+
+type SavedAlert = {
+  id: number;
+  created_at: string;
+  origin_iatas: string[];
+  destination_iata: string | null;
+  outbound_date_from: string;
+  inbound_date_from: string;
+  max_price_total: string;
+  label: string | null;
+  last_checked_at: string | null;
+  last_min_price: string | null;
+  last_match_found: boolean;
+  active: boolean;
+  email: string | null;
+};
+
+function formatDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' });
+}
 
 export default function ToolsPanel({
   originIatas,
@@ -36,6 +56,30 @@ export default function ToolsPanel({
   const [alertMaxPrice, setAlertMaxPrice] = useState<number | ''>(maxPriceTotal);
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
+
+  const [savedAlerts, setSavedAlerts] = useState<SavedAlert[]>([]);
+  const [alertsLoading, setAlertsLoading] = useState(false);
+  const [alertsError, setAlertsError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+
+  async function loadAlerts() {
+    setAlertsLoading(true);
+    setAlertsError(null);
+    try {
+      const res = await fetch('/api/alerts');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
+      setSavedAlerts(data.alerts ?? []);
+    } catch (e: any) {
+      setAlertsError(e.message);
+    } finally {
+      setAlertsLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadAlerts();
+  }, []);
 
   async function runCalendar() {
     if (!originIatas[0] || !calendarDest) {
@@ -103,10 +147,25 @@ export default function ToolsPanel({
           ? `Alerta guardada (limite ${alertMaxPrice} EUR). Te avisaremos por email a ${alertEmail} si el precio baja de ese limite.`
           : `Alerta guardada (limite ${alertMaxPrice} EUR). Un cron diario comprobara el precio y lo veras aqui la proxima vez (sin email configurado).`
       );
+      loadAlerts();
     } catch (e: any) {
       setAlertMessage(`Error: ${e.message}`);
     } finally {
       setAlertSaving(false);
+    }
+  }
+
+  async function deleteAlert(id: number) {
+    setDeletingId(id);
+    try {
+      const res = await fetch(`/api/alerts?id=${id}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
+      setSavedAlerts((prev) => prev.filter((a) => a.id !== id));
+    } catch (e: any) {
+      setAlertsError(e.message);
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -225,6 +284,56 @@ export default function ToolsPanel({
           </button>
         </div>
         {alertMessage && <p className="text-xs mt-2 text-slate-500 dark:text-slate-400">{alertMessage}</p>}
+
+        <div className="mt-4 border-t border-slate-100 dark:border-slate-800 pt-3">
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+              Tus alertas guardadas {savedAlerts.length > 0 && `(${savedAlerts.length})`}
+            </p>
+            <button onClick={loadAlerts} className="text-[11px] text-indigo hover:text-indigo-dark underline">
+              Actualizar
+            </button>
+          </div>
+          {alertsLoading && <p className="text-xs text-slate-400 dark:text-slate-500">Cargando...</p>}
+          {alertsError && <p className="text-xs text-red-500 dark:text-red-400">{alertsError}</p>}
+          {!alertsLoading && savedAlerts.length === 0 && !alertsError && (
+            <p className="text-xs text-slate-400 dark:text-slate-500">Todavia no has guardado ninguna alerta.</p>
+          )}
+          <ul className="space-y-1.5">
+            {savedAlerts.map((a) => (
+              <li
+                key={a.id}
+                className="flex items-center justify-between gap-2 text-xs bg-slate-50 dark:bg-slate-800 rounded-lg px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-ink dark:text-slate-100 truncate">
+                    {a.origin_iatas.join('/')} → {a.destination_iata ?? '?'}
+                    {a.label ? ` · ${a.label}` : ''}
+                  </p>
+                  <p className="text-slate-400 dark:text-slate-500">
+                    {formatDate(a.outbound_date_from)} - {formatDate(a.inbound_date_from)} · limite {Number(a.max_price_total).toFixed(0)} EUR
+                    {a.last_min_price !== null && (
+                      <>
+                        {' '}
+                        · minimo visto: {Number(a.last_min_price).toFixed(0)} EUR
+                        {a.last_match_found && <span className="text-emerald-600 dark:text-emerald-400 font-semibold"> (match!)</span>}
+                      </>
+                    )}
+                    {a.email && <> · {a.email}</>}
+                  </p>
+                </div>
+                <button
+                  onClick={() => deleteAlert(a.id)}
+                  disabled={deletingId === a.id}
+                  className="text-red-500 hover:text-red-600 dark:text-red-400 shrink-0 disabled:opacity-50"
+                  title="Borrar esta alerta"
+                >
+                  {deletingId === a.id ? '...' : 'Borrar'}
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
       </div>
     </section>
   );

@@ -58,3 +58,16 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const id = new URL(request.url).searchParams.get('id');
+    if (!id || Number.isNaN(Number(id))) {
+      return NextResponse.json({ error: 'Parametro id invalido' }, { status: 400 });
+    }
+    await sql`DELETE FROM price_alerts WHERE id = ${Number(id)}`;
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    return NextResponse.json({ error: err instanceof Error ? err.message : String(err) }, { status: 400 });
+  }
+}

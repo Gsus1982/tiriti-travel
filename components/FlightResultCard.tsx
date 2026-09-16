@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
 import { getAirlineBadge } from '@/lib/airline-badge';
@@ -27,22 +28,75 @@ export default function FlightResultCard({
   bookingLinks,
   loadingLinks,
   onShowLinks,
-  isRecommended
+  isRecommended,
+  compact = false,
+  compareSelected = false,
+  onToggleCompare,
+  cheaperAlternativeNote
 }: {
   result: LiveItinerary;
   bookingLinks?: BookingLink[];
   loadingLinks: boolean;
   onShowLinks: () => void;
   isRecommended?: boolean;
+  compact?: boolean;
+  compareSelected?: boolean;
+  onToggleCompare?: () => void;
+  cheaperAlternativeNote?: string | null;
 }) {
   const destinationLabel = result.destinationGroupName;
   const imageUrl = getCityImageUrl(destinationLabel);
 
+  const [justRecommended, setJustRecommended] = useState(false);
+  useEffect(() => {
+    if (!isRecommended) return;
+    setJustRecommended(true);
+    const t = setTimeout(() => setJustRecommended(false), 1400);
+    return () => clearTimeout(t);
+  }, [isRecommended]);
+
+  if (compact) {
+    return (
+      <article
+        className={`flex items-center gap-3 bg-white dark:bg-slate-900 rounded-xl border px-3 py-2.5 transition-all ${
+          isRecommended ? 'border-2 border-indigo' : 'border-slate-100 dark:border-slate-800'
+        } ${justRecommended ? 'ring-4 ring-indigo/30 scale-[1.01]' : ''}`}
+      >
+        {onToggleCompare && (
+          <label className="flex items-center shrink-0" title="Comparar esta opcion">
+            <input type="checkbox" checked={compareSelected} onChange={onToggleCompare} className="accent-indigo" />
+          </label>
+        )}
+        <img src={imageUrl} alt={destinationLabel} className="w-10 h-10 rounded-lg object-cover shrink-0" loading="lazy" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-ink dark:text-slate-100 truncate">
+            {result.originIata} → {destinationLabel}
+            {isRecommended && <IconSparkles className="inline w-3.5 h-3.5 text-indigo ml-1 -mt-0.5" />}
+          </p>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+            {formatDateTime(result.outbound.departure_at)} · Salida hotel {formatDateTime(result.hotelCheckoutAt)}
+            {result.isOpenJaw ? ' · Open-jaw' : ''}
+          </p>
+        </div>
+        <p className="text-sm font-semibold text-ink dark:text-slate-100 shrink-0 whitespace-nowrap">
+          {result.totalPrice.toFixed(2)} {result.currency}
+        </p>
+        <button
+          onClick={onShowLinks}
+          disabled={loadingLinks}
+          className="text-xs font-medium bg-indigo hover:bg-indigo-dark text-white px-2.5 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+        >
+          {loadingLinks ? '...' : 'Enlaces'}
+        </button>
+      </article>
+    );
+  }
+
   return (
     <article
-      className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden ${
+      className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden ${
         isRecommended ? 'border-2 border-indigo' : 'border border-slate-100 dark:border-slate-800'
-      }`}
+      } ${justRecommended ? 'ring-4 ring-indigo/30 scale-[1.01]' : ''}`}
     >
       {isRecommended && (
         <div className="bg-indigo text-white text-[11px] font-semibold uppercase tracking-wide px-4 py-1.5 flex items-center gap-1.5">
@@ -51,8 +105,17 @@ export default function FlightResultCard({
         </div>
       )}
       <div className="flex flex-col sm:flex-row">
-        <div className="sm:w-40 h-36 sm:h-auto shrink-0">
+        <div className="relative sm:w-40 h-36 sm:h-auto shrink-0">
           <img src={imageUrl} alt={destinationLabel} className="w-full h-full object-cover" loading="lazy" />
+          {onToggleCompare && (
+            <label
+              className="absolute top-2 left-2 flex items-center gap-1 bg-white/90 dark:bg-slate-900/90 rounded-full px-2 py-1 text-[10px] font-medium text-ink dark:text-slate-100 cursor-pointer"
+              title="Seleccionar para comparar"
+            >
+              <input type="checkbox" checked={compareSelected} onChange={onToggleCompare} className="accent-indigo" />
+              Comparar
+            </label>
+          )}
         </div>
 
         <div className="flex-1 p-4 flex flex-col sm:flex-row gap-4">
@@ -104,6 +167,12 @@ export default function FlightResultCard({
               </div>
             </div>
             {result.notes.length > 0 && <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">{result.notes.join(' ')}</p>}
+            {cheaperAlternativeNote && (
+              <p className="mt-2 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-start gap-1">
+                <span aria-hidden>💡</span>
+                <span>{cheaperAlternativeNote}</span>
+              </p>
+            )}
           </div>
 
           <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-2 sm:w-36 shrink-0 text-right sm:border-l sm:border-slate-100 sm:pl-4">

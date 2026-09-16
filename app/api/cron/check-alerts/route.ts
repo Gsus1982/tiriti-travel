@@ -21,7 +21,6 @@ export async function GET(request: Request) {
     try {
       const { itineraries } = await searchLiveItineraries({
         originIatas: alert.origin_iatas,
-        destinationGroupIds: alert.destination_group_id ? [alert.destination_group_id] : [],
         destinationIatas: alert.destination_iata ? [alert.destination_iata] : [],
         outboundDateFrom: alert.outbound_date_from,
         outboundDateTo: alert.outbound_date_to,

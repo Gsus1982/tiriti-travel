@@ -21,87 +21,161 @@
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
 **En produccion (rama `main`) ahora mismo**: v0.7.1 -- panel lateral, tema claro/indigo,
-logo/tipografia propios, Sorprendeme sobre destinos reales, filtro de aerolineas
-(con su bug critico ya arreglado). **Todavia NO incluye nada de IA/OpenAI.**
+logo/tipografia propios, filtro de aerolineas (con su bug critico ya arreglado).
+**Todavia NO incluye nada de IA/OpenAI ni la eliminacion de destinos curados.**
 
 **Cadena de PRs abiertos, sin mergear a `main` todavia** (cada uno se apila sobre el
 anterior, en este orden -- mergear en ESTE orden si se aprueban):
 1. **PR #19** (`feat/openai-nlp-siri-ui` -> `main`): integracion real de OpenAI para
-   interpretar lenguaje natural (`lib/ai-parse.ts`, `/api/ai-parse`) + cuadro de NLP
-   destacado con marco neon animado. **Confirmado funcionando** por el usuario con una
-   captura real.
+   interpretar lenguaje natural + cuadro de NLP destacado con marco neon animado.
+   **Confirmado funcionando** por el usuario con una captura real.
 2. **PR #20** (`feat/ai-search-and-recommendation` -> rama del #19): boton "Buscar con
-   esta interpretacion", Sorprendeme eligiendo destinos con criterio de IA
-   (`lib/ai-surprise.ts`, `/api/ai-surprise`), y recomendacion de la IA sobre resultados
-   (`lib/ai-recommend.ts`, `/api/ai-recommend`). Sin confirmar en vivo todavia si
-   Sorprendeme-con-IA y la recomendacion funcionan (solo la interpretacion del #19 esta
-   confirmada).
+   esta interpretacion", Sorprendeme con criterio de IA, recomendacion de la IA sobre
+   resultados. Sin confirmar en vivo todavia si Sorprendeme-con-IA y la recomendacion
+   funcionan (solo la interpretacion del #19 esta confirmada).
 3. **PR #21** (`fix/ai-parse-combo-limit` -> rama del #20): 2 fixes reales encontrados
-   probando el #19/#20 en vivo -- ver "Bugs reales encontrados" abajo.
+   probando el #19/#20 en vivo (tope de combinaciones + preferir destinos reales).
+4. **Rama `feat/eliminar-destinos-curados`** (sobre la del #21, PR todavia sin abrir a
+   fecha de esta entrada -- abrirlo contra `fix/ai-parse-combo-limit` cuando se continue
+   esta sesion): **ELIMINADO POR COMPLETO** el concepto de destinos curados. Ver debajo.
 
 **`OPENAI_API_KEY` ya esta configurada en Vercel** por el usuario. El modelo usado es
 `gpt-4o-mini` (configurable via variable de entorno `OPENAI_MODEL`, sin tocar codigo).
 
-### Bugs reales encontrados probando la IA en vivo (los 2 ya arreglados en el PR #21)
-1. **La IA podia proponer mas destinos de los que caben en la cuota de Ignav** (ej. "el
-   lugar mas atractivo para esas fechas" -> 9 destinos x 2 origenes = 18 combinaciones,
-   maximo permitido 6). Fix: recorte DURO en codigo tras la respuesta de la IA, nunca
-   basta con pedirlo solo en el prompt (los modelos no garantizan obedecer un numero
-   exacto). Ver `lib/ai-parse.ts`.
-2. **Los grupos de destino CURADOS (`destination_groups` en BD: Polonia, Riga,
-   Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado) fallan sistematicamente con
-   timeout en Ignav** cuando se buscan sin verificacion previa de conectividad real.
-   Esto se ha confirmado DOS VECES en sesiones distintas de forma independiente:
-   - Sesion anterior: "Sorprendeme" eligiendo de estos grupos daba timeout en
-     Riga/Zagreb-Split/Dublin -- se arreglo cambiando Sorprendeme para usar
-     `destinationIatas` (destinos REALES verificados por Aena) en vez de
-     `destinationGroupIds`, y funciono.
-   - Esta sesion: la IA de `/api/ai-parse`, ante una peticion abierta sin tema, eligio
-     `destinationGroupIds` (Atenas/Belgrado/Dublin) en vez de destinos reales, y las
-     ~30 peticiones a Ignav para esas rutas dieron timeout al 100%.
-   **Fix aplicado en el PR #21**: reforzado el prompt de `lib/ai-parse.ts` para que la
-   IA use SIEMPRE `destinationIatas` (reales) salvo que el texto pida explicitamente un
-   tema/evento/pais que encaje con un grupo curado. Esto es una preferencia de prompt,
-   NO un bloqueo duro en codigo (a diferencia del bug #1) -- sigue siendo posible que la
-   IA elija un grupo curado si la frase realmente pide un tema. **No verificado en vivo
-   todavia** si esta correccion de prompt es suficiente.
-   **Recomendacion para el futuro**: los grupos curados como concepto tienen un
-   problema de fondo -- se crearon por tema/interes editorial, no por conectividad real
-   verificada, y ahora hay 2 casos independientes confirmando que fallan con Ignav. Si
-   vuelve a fallar, la solucion definitiva probablemente sea una de estas 2 (a decidir
-   con el usuario, no aplicar sin confirmar):
-   (a) verificar cada grupo curado contra Ignav una vez y quitar/marcar los que no
-   tengan conectividad real, o
-   (b) eliminar el concepto de grupos curados por completo y que el buscador en
-   lenguaje natural use SIEMPRE destinos reales (dejando que la propia IA aporte el
-   "criterio tematico" sobre esa lista real, como ya hace en `ai-surprise.ts`, en vez de
-   depender de una lista fija en BD).
+### Destinos curados: CERRADO -- eliminados por completo (ya no es un problema abierto)
+Las 2 entradas de abajo (sesion "FIX real de la IA superando la cuota...") documentan 2
+fallos sistematicos e independientes de los grupos curados (`destination_groups`:
+Polonia, Riga, Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado) dando timeout al 100%
+en Ignav. En la sesion siguiente, el usuario pidio explicitamente eliminarlos "de una vez
+por todas, sin dejar rastro" -- hecho. **Si estas leyendo las secciones de abajo y ves
+"pendiente de decidir si eliminar los grupos curados", esa decision YA SE TOMO y SE
+EJECUTO: los grupos ya no existen en el codigo.** No hace falta releer ese debate,
+solo saber que se resolvio eliminandolos.
+
+Lo unico pendiente de esa eliminacion: **`scripts/schema.sql` documenta el esquema
+deseado (ya sin `destination_groups` ni `group_id`), pero la base de datos REAL en Neon
+todavia tiene esas columnas/tabla** -- esta sesion no tiene credenciales de conexion
+para aplicar la migracion ella misma. El propio `scripts/schema.sql` trae al final el
+bloque de SQL exacto a ejecutar a mano en el SQL Editor de Neon:
+```sql
+ALTER TABLE airports DROP COLUMN IF EXISTS group_id;
+DROP TABLE IF EXISTS destination_groups;
+ALTER TABLE price_alerts DROP COLUMN IF EXISTS destination_group_id;
+```
+El codigo funciona igual aunque no se ejecute (son columnas/tabla huerfanas que ya no
+se leen ni escriben desde ningun sitio) -- es solo para tener la BD coherente.
+
+El open-jaw (unica funcionalidad real que dependia de los grupos) ahora se basa en
+agrupar por CIUDAD REAL los destinos elegidos de `aena_destinations` -- ver
+`resolveDestinationTargets` en `lib/live-engine.ts`.
 
 ### Limitacion que se repite en todas las sesiones (importante para cualquier IA nueva)
 El entorno de trabajo de estas sesiones **no tiene acceso de red a APIs externas**
 (`api.openai.com`, `api.ignav.com`, `sky-scrapper.p.rapidapi.com`, etc. -- solo un
-puñado de dominios de paquetes npm/GitHub estan permitidos). Esto significa que NINGUNA
-integracion de API externa se puede probar en vivo desde el sandbox de la sesion -- todo
-se escribe con la mejor informacion disponible (documentacion oficial, busqueda web,
-scripts del usuario ya verificados) y se prueba de verdad solo cuando el USUARIO lo
-ejecuta en Vercel y reporta el resultado. Cuando el usuario reporta un error real (como
-los 2 de arriba), es la unica senal fiable de que algo no funciona como se penso.
+puñado de dominios de paquetes npm/GitHub estan permitidos) **ni credenciales de
+conexion a la base de datos real de Neon del usuario**. Esto significa que NINGUNA
+integracion de API externa ni cambio de esquema de BD se puede probar/aplicar en vivo
+desde el sandbox de la sesion -- todo se escribe con la mejor informacion disponible y
+se prueba de verdad solo cuando el USUARIO lo ejecuta en Vercel/Neon y reporta el
+resultado. Cuando el usuario reporta un error real, es la unica senal fiable de que algo
+no funciona como se penso.
 
 ### Arquitectura rapida (para orientarse sin leer todo el codigo)
 - **3 fuentes de datos de vuelos**: Ignav (`lib/ignav.ts`, principal, cuota 1000 de por
   vida), Sky Scrapper/RapidAPI (`lib/skyscanner.ts` + `lib/skyscanner-adapter.ts`,
   opcional via checkbox, cuota ~100/mes, sin verificar en vivo), y el motor que las
   combina es `lib/live-engine.ts`.
-- **2 listas de destinos, NO intercambiables**: `destination_groups` en BD (curados por
-  tema, sin verificar conectividad -- ver bug #2 arriba) vs destinos reales en
-  `aena_destinations` (verificados a diario contra datos publicos de Aena, los que
-  cuenta el selector "Destinos" del formulario).
+- **Una unica lista de destinos**: `aena_destinations` en BD, verificada a diario
+  contra datos publicos de Aena (los que cuenta el selector "Destinos" del formulario).
+  Ya NO existen los grupos curados (ver seccion de arriba).
 - **3 endpoints de IA**, todos con el mismo patron (OpenAI `gpt-4o-mini`,
   `response_format: json_schema`, fallback si falla): `/api/ai-parse` (interpretar
   lenguaje natural), `/api/ai-surprise` (elegir destinos para Sorprendeme),
   `/api/ai-recommend` (recomendar un resultado tras la busqueda).
 - **`app/page.tsx`** es el componente principal (unico, grande) que orquesta todo el
   estado del formulario y las llamadas.
+
+## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: ELIMINADOS los destinos curados por completo
+
+### Contexto
+Tras el segundo fallo confirmado de los grupos curados (ver entrada siguiente: la IA
+eligiendo Atenas/Belgrado/Dublin con timeout al 100% en Ignav), el usuario pidio
+explicitamente: "Elimina los destinos curados de una vez por todas y no dejes rastro de
+ellos y actualiza la info en GitHub".
+
+### Que se hizo
+Busqueda exhaustiva de "destinationGroup", "destination_groups", "grupos curados",
+"isSingleIataTarget" en todo el repositorio (16 archivos encontrados) y limpieza
+completa, uno a uno:
+- `lib/live-engine.ts`: quitados `resolveGroupTargets`, el tipo `DestinationTarget`
+  simplificado (sin `isSingleIataTarget`), `LiveFilters`/`LiveItinerary` sin
+  `destinationGroupIds`. **Nueva funcion `resolveDestinationTargets`** que sustituye a
+  las 2 anteriores (`resolveGroupTargets` + `resolveIataTargets`): agrupa los destinos
+  reales elegidos por CIUDAD (mismo criterio que el selector "ciudad (todos)" de la
+  interfaz) para preservar el open-jaw entre aeropuertos de una misma ciudad SIN
+  depender de ninguna tabla curada -- era la unica funcionalidad real que dependia de
+  los grupos. Campos renombrados: `destinationGroupId`/`Name` -> `destinationId`/`Name`.
+- `lib/meta-queries.ts` / `app/api/meta/route.ts`: quitado `listDestinationGroups`, el
+  endpoint ya no devuelve `groups`.
+- `app/api/search-live/route.ts`: ya no acepta `destinationGroupIds`/`destinationGroupId`.
+- `lib/ai-parse.ts`: reescrito sin grupos -- la IA trabaja solo con `destinationIatas`
+  (destinos reales), prompt y esquema simplificados, la logica de recorte de cuota
+  tambien simplificada (ya no hay que repartir entre 2 arrays).
+- `lib/nlp-search.ts` (parser de respaldo sin IA): ya no intenta detectar destinos --
+  nunca fue razonable hacer fuzzy-matching por regex contra cientos de destinos reales
+  (a diferencia de la IA, que si puede razonar sobre nombres/paises). Avisa
+  honestamente al usuario para que elija en el selector.
+- `lib/share-link.ts`, `lib/skyscanner-adapter.ts`, `lib/types.ts`: limpiados.
+- `components/FlightResultCard.tsx`: usa el campo renombrado, quitado el badge "Destino
+  suelto" (ya no existe la distincion, todos los destinos son del mismo tipo ahora).
+- `components/ToolsPanel.tsx`, `app/api/alerts/route.ts`,
+  `app/api/cron/check-alerts/route.ts`: ya no leen/escriben `destination_group_id`.
+- `app/page.tsx`: quitado el estado `destinationGroupIds` y sus ~15 referencias
+  (calculo de combos, `destinationLabels`, payload de `runSearch`, ambas ramas de
+  `handleInterpret`, `currentShareFilters`, 2 botones `disabled`, prop de
+  `ToolsPanel`). `runSearch` simplificada de 3 a 2 parametros
+  (`iataOverride, sortOverride`, ya no hace falta `groupIdsOverride`).
+- `scripts/schema.sql`: quitada la tabla `destination_groups` y la columna `group_id`
+  de `airports` del esquema documentado. **Anadido un bloque de migracion SQL al final
+  del archivo** para que el usuario lo ejecute a mano en el SQL Editor de Neon (esta
+  sesion no tiene credenciales de conexion a su base de datos real):
+  ```sql
+  ALTER TABLE airports DROP COLUMN IF EXISTS group_id;
+  DROP TABLE IF EXISTS destination_groups;
+  ALTER TABLE price_alerts DROP COLUMN IF EXISTS destination_group_id;
+  ```
+  El codigo funciona igual sin ejecutar esto (son columnas/tabla huerfanas que ya no se
+  usan desde ningun sitio) -- es solo para tener la BD coherente con el codigo.
+- `README.md`: actualizado el modelo de datos y los pasos de instalacion.
+- **Esta seccion de HANDOFF** (arriba del todo en este archivo): reescrita para dejar
+  claro que el problema de los grupos curados esta CERRADO (eliminados), no pendiente
+  de decidir -- para que ninguna sesion futura pierda tiempo releyendo el debate de las
+  2 entradas siguientes pensando que sigue abierto.
+
+### Verificacion final (busqueda en todo el repo)
+Tras todos los cambios, unica referencia restante a "destination_groups" en todo el
+repositorio: las menciones EXPLICATIVAS en `README.md` y `scripts/schema.sql` (contando
+la historia de por que se elimino / la migracion a ejecutar) -- cero codigo funcional
+haciendo referencia al concepto eliminado.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios tras cada tanda de cambios (varias veces
+durante la sesion, no solo al final). `next start` + `curl` confirmando HTTP 200. El
+endpoint `/api/meta` probado localmente sin `DATABASE_URL` (falla con el error esperado
+y claro de "falta configurar", no un crash -- confirma que el codigo esta
+estructuralmente correcto, aunque el comportamiento real contra datos solo se pueda
+verificar cuando el usuario lo despliegue).
+
+### Pendiente
+- Abrir el PR de la rama `feat/eliminar-destinos-curados` contra `fix/ai-parse-combo-limit`
+  (PR #21) y esperar el build de Vercel.
+- El usuario tiene que ejecutar la migracion SQL de arriba en Neon cuando pueda (no
+  urgente, no bloquea nada).
+- Sigue pendiente confirmar en vivo si Sorprendeme-con-IA y la recomendacion de
+  resultados (PR #20) funcionan -- esta sesion no lo ha tocado, solo la eliminacion de
+  grupos curados.
+
+---
 
 ## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: FIX real de la IA superando la cuota de combinaciones
 

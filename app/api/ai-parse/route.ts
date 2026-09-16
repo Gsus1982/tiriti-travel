@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { text, referenceDate, origins, groups, realDestinations } = body;
+    const { text, referenceDate, origins, realDestinations } = body;
     if (!text || typeof text !== 'string') {
       return NextResponse.json({ error: 'Falta el texto a interpretar' }, { status: 400 });
     }
@@ -18,7 +18,6 @@ export async function POST(req: NextRequest) {
     const result = await parseSearchQueryWithAI(text, {
       referenceDate,
       origins: origins ?? [],
-      groups: groups ?? [],
       realDestinations: realDestinations ?? []
     });
 

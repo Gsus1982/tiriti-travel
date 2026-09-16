@@ -6,7 +6,7 @@ import { datesBetween } from './types';
 
 const AIRPORT_BUFFER_MIN = 120;
 const MAX_DATE_RANGE_DAYS = 5;
-const MAX_ORIGIN_GROUP_COMBOS = 6;
+const MAX_ORIGIN_DESTINATION_COMBOS = 6;
 // Limite conservador sobre el numero REAL de peticiones a Ignav por busqueda (no solo
 // combos origen x destino). Con una cuota de 1000 peticiones de por vida, este tope evita
 // que una sola busqueda con destinos multi-aeropuerto y rango de fechas amplio se lleve
@@ -21,7 +21,6 @@ const MAX_SKYSCANNER_CALLS_PER_SEARCH = 6;
 
 export type LiveFilters = {
   originIatas: string[];
-  destinationGroupIds: string[];
   destinationIatas?: string[];
   outboundDateFrom: string;
   outboundDateTo: string;
@@ -58,9 +57,8 @@ export type LiveLeg = {
 
 export type LiveItinerary = {
   originIata: string;
-  destinationGroupId: string;
-  destinationGroupName: string;
-  isSingleIataTarget?: boolean;
+  destinationId: string;
+  destinationName: string;
   outbound: LiveLeg;
   inbound: LiveLeg;
   isOpenJaw: boolean;
@@ -81,7 +79,6 @@ export type LiveSearchResult = {
 type DestinationTarget = {
   id: string;
   name: string;
-  isSingleIataTarget: boolean;
   airports: { iata: string; city: string }[];
 };
 
@@ -144,40 +141,31 @@ async function safeSearchOneWay(
   }
 }
 
-async function resolveGroupTargets(destinationGroupIds: string[]): Promise<DestinationTarget[]> {
-  const targets: DestinationTarget[] = [];
-  for (const groupId of destinationGroupIds) {
-    const groupRows = (await sql`
-      SELECT iata, city FROM airports WHERE group_id = ${groupId}
-    `) as { iata: string; city: string }[];
-    const groupNameRows = (await sql`SELECT name FROM destination_groups WHERE id = ${groupId} LIMIT 1`) as { name: string }[];
-    if (groupRows.length === 0) continue;
-    targets.push({
-      id: groupId,
-      name: groupNameRows[0]?.name ?? groupId,
-      isSingleIataTarget: false,
-      airports: groupRows
-    });
-  }
-  return targets;
-}
+async function resolveDestinationTargets(destinationIatas: string[]): Promise<DestinationTarget[]> {
+  if (destinationIatas.length === 0) return [];
+  const rows = (await sql`
+    SELECT dest_iata, dest_name, country FROM aena_destinations WHERE dest_iata = ANY(${destinationIatas}::text[])
+  `) as { dest_iata: string; dest_name: string; country: string }[];
+  const byIata = new Map(rows.map((r) => [r.dest_iata, r]));
 
-async function resolveIataTargets(destinationIatas: string[]): Promise<DestinationTarget[]> {
-  const targets: DestinationTarget[] = [];
+  // Agrupa por el nombre de ciudad antes de la barra (ej. "Londres/Gatwick" y
+  // "Londres/Stansted" -> "Londres"), igual que el selector "ciudad (todos)" del
+  // formulario -- si el usuario elige varios aeropuertos de la misma ciudad, cuentan
+  // como 1 sola combinacion y se permite open-jaw real entre ellos.
+  const groups = new Map<string, { name: string; airports: { iata: string; city: string }[] }>();
   for (const iata of destinationIatas) {
-    const rows = (await sql`
-      SELECT dest_name, country FROM aena_destinations WHERE dest_iata = ${iata} LIMIT 1
-    `) as { dest_name: string; country: string }[];
-    const cityName = rows[0]?.dest_name ?? iata;
-    const displayName = rows[0] ? `${rows[0].dest_name} (${rows[0].country})` : iata;
-    targets.push({
-      id: iata,
-      name: displayName,
-      isSingleIataTarget: true,
-      airports: [{ iata, city: cityName }]
-    });
+    const row = byIata.get(iata);
+    const fullName = row ? `${row.dest_name} (${row.country})` : iata;
+    const cityKey = row ? row.dest_name.split('/')[0].trim() : iata;
+    if (!groups.has(cityKey)) groups.set(cityKey, { name: fullName, airports: [] });
+    groups.get(cityKey)!.airports.push({ iata, city: cityKey });
   }
-  return targets;
+
+  return Array.from(groups.entries()).map(([cityKey, g]) => ({
+    id: g.airports.map((a) => a.iata).join('+'),
+    name: g.airports.length > 1 ? cityKey : g.name,
+    airports: g.airports
+  }));
 }
 
 async function searchLiveForTarget(
@@ -344,9 +332,6 @@ async function searchLiveForTarget(
           ? 'Precio verificado por Ignav en el momento de la busqueda.'
           : 'Precio ESTIMADO (no verificado) por Ignav; confirmar antes de reservar.'
       );
-      if (target.isSingleIataTarget) {
-        notes.push('Destino fuera de los grupos curados (tomado del listado real de Aena); verifica manualmente eventos/temporada en destino.');
-      }
       if (outbound.requires_self_transfer || inbound.requires_self_transfer) {
         notes.push('Aviso: un tramo puede requerir self-transfer (billetes separados); revisar antes de reservar.');
       }
@@ -366,9 +351,8 @@ async function searchLiveForTarget(
 
       results.push({
         originIata,
-        destinationGroupId: target.id,
-        destinationGroupName: groupName,
-        isSingleIataTarget: target.isSingleIataTarget,
+        destinationId: target.id,
+        destinationName: groupName,
         outbound,
         inbound,
         isOpenJaw,
@@ -387,7 +371,7 @@ async function searchLiveForTarget(
 }
 
 export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveSearchResult> {
-  const { originIatas, destinationGroupIds, destinationIatas } = filters;
+  const { originIatas, destinationIatas } = filters;
   const sortBy = filters.sortBy;
 
   const outboundDates = datesBetween(filters.outboundDateFrom, filters.outboundDateTo);
@@ -396,24 +380,21 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     throw new Error(`El rango de fechas maximo permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} dias por tramo.`);
   }
 
-  const [groupTargets, iataTargets] = await Promise.all([
-    resolveGroupTargets(destinationGroupIds ?? []),
-    resolveIataTargets(destinationIatas ?? [])
-  ]);
-  const allTargets = [...groupTargets, ...iataTargets];
+  const allTargets = await resolveDestinationTargets(destinationIatas ?? []);
 
   const combos = originIatas.length * allTargets.length;
-  if (combos > MAX_ORIGIN_GROUP_COMBOS) {
+  if (combos > MAX_ORIGIN_DESTINATION_COMBOS) {
     throw new Error(
-      `Has seleccionado ${originIatas.length} origen(es) x ${allTargets.length} destino(s) = ${combos} combinaciones. El maximo permitido en modo Ignav es ${MAX_ORIGIN_GROUP_COMBOS}, para proteger tu cuota gratuita. Reduce el numero de origenes o destinos seleccionados.`
+      `Has seleccionado ${originIatas.length} origen(es) x ${allTargets.length} destino(s) = ${combos} combinaciones. El maximo permitido en modo Ignav es ${MAX_ORIGIN_DESTINATION_COMBOS}, para proteger tu cuota gratuita. Reduce el numero de origenes o destinos seleccionados.`
     );
   }
   if (combos === 0) {
-    throw new Error('No hay destinos seleccionados (ni grupos curados ni destinos IATA sueltos).');
+    throw new Error('No hay destinos seleccionados.');
   }
 
-  // El cap de MAX_ORIGIN_GROUP_COMBOS de arriba NO limita el multiplicador real de
-  // peticiones a Ignav: un grupo de destino con varios aeropuertos (ej. Polonia: 4)
+  // El cap de MAX_ORIGIN_DESTINATION_COMBOS de arriba NO limita el multiplicador real de
+  // peticiones a Ignav: un destino con varios aeropuertos en la misma ciudad (ej.
+  // Londres: hasta 4)
   // dispara una peticion por aeropuerto x fecha x sentido. Con el maximo de 5 dias de
   // rango y 6 combos, un solo click podia llegar a 4 aeropuertos x 5 dias x 2 x 6 combos
   // = 240 peticiones de golpe contra una cuota de 1000 de por vida (no mensual). Se

@@ -3,21 +3,6 @@
 // cosas como "un pais nordico" (Suecia/Noruega/Finlandia/Dinamarca/Islandia) o
 // sinonimos que el regex nunca cubrira, y explica en lenguaje natural por que ha
 // interpretado algo de una forma.
-//
-// AVISO IMPORTANTE (sin verificar contra la API real): esta sesion no tiene acceso de
-// red a api.openai.com, asi que esta llamada no se ha podido probar en vivo. Escrita
-// con la mejor informacion disponible (verificada por busqueda web en esta sesion):
-// - Modelo: gpt-4o-mini por defecto (configurable via OPENAI_MODEL) -- es el nombre de
-//   modelo que se puede verificar con mas confianza que sigue siendo valido; la
-//   nomenclatura de modelos de OpenAI ha cambiado mucho y las fuentes sobre los mas
-//   recientes son contradictorias entre si. Si quieres el modelo mas barato disponible
-//   ahora mismo, revisa developers.openai.com/api/docs/pricing y cambia la variable de
-//   entorno OPENAI_MODEL en Vercel, sin tocar codigo.
-// - Formato: Chat Completions API con response_format json_schema (structured outputs),
-//   soportado por gpt-4o-mini segun la documentacion de OpenAI.
-// Prueba esto con una consulta real en cuanto puedas; si el formato de respuesta no
-// coincide con lo esperado, el error aparecera claramente (ver app/api/ai-parse) y cae
-// automaticamente al parser de regex local, nunca rompe la busqueda.
 
 export type AIParsedFilters = {
   originIatas: string[];
@@ -30,6 +15,7 @@ export type AIParsedFilters = {
   inboundNotBeforeHour: number | null;
   maxPriceTotal: number | null;
   explanation: string;
+  warnings: string[];
 };
 
 const RESPONSE_SCHEMA = {
@@ -63,6 +49,11 @@ const RESPONSE_SCHEMA = {
   ],
   additionalProperties: false
 };
+
+// La IA (respuesta JSON de OpenAI) nunca devuelve el campo `warnings` -- se anade
+// despues, en este archivo, tras el post-procesado. Este tipo representa exactamente
+// lo que sale del JSON.parse de la respuesta de OpenAI.
+type AIRawResponse = Omit<AIParsedFilters, 'warnings'>;
 
 export async function parseSearchQueryWithAI(
   text: string,
@@ -129,19 +120,29 @@ Reglas:
   const content = data?.choices?.[0]?.message?.content;
   if (!content) throw new Error('Respuesta de OpenAI sin contenido');
 
-  const parsed = JSON.parse(content) as AIParsedFilters;
+  const raw = JSON.parse(content) as AIRawResponse;
+  const parsed: AIParsedFilters = { ...raw, warnings: [] };
 
-  // FIX (bug real reportado): pedirle el limite a la IA en el prompt no basta -- los
-  // modelos no siempre obedecen un numero exacto, y con una frase abierta ("el lugar
-  // mas atractivo para esas fechas") podia devolver muchos destinos que, al
-  // multiplicarse por los origenes detectados, superaban con creces el limite de 6
-  // combinaciones de Ignav. Aqui se recorta de forma dura, independientemente de lo
-  // que haya respondido la IA, y se avisa en la explicacion.
+  // FIX (bug real reportado -- la misma frase exacta encontraba vuelos unas veces y
+  // otras no): pedirle el limite a la IA en el prompt no basta -- los modelos no
+  // siempre obedecen un numero exacto, y ademas con temperature > 0 el ORDEN en que la
+  // IA devuelve los destinos varia entre llamadas idénticas. El .slice() anterior
+  // recortaba SIEMPRE los ultimos de ESE orden variable, asi que la misma consulta
+  // podia descartar Wroclaw una vez y Katowice otra, cambiando que rutas se buscaban
+  // de verdad y por tanto si se encontraban vuelos reales (que en rutas low-cost a
+  // Polonia no operan a diario). Ahora el recorte ordena alfabeticamente por IATA
+  // ANTES de cortar, asi la misma frase descarta siempre el mismo destino.
   const originCount = Math.max(parsed.originIatas.length, 1);
   const maxDestinations = Math.max(1, Math.floor(6 / originCount));
   if (parsed.destinationIatas.length > maxDestinations) {
-    parsed.destinationIatas = parsed.destinationIatas.slice(0, maxDestinations);
-    parsed.explanation += ` (Se ha limitado a ${maxDestinations} destino(s) para no superar el maximo de 6 combinaciones origen x destino que protege tu cuota gratuita de Ignav.)`;
+    const sortedDestinations = [...parsed.destinationIatas].sort();
+    const kept = sortedDestinations.slice(0, maxDestinations);
+    const dropped = sortedDestinations.slice(maxDestinations);
+    parsed.destinationIatas = kept;
+    parsed.explanation += ` Se ha limitado a ${maxDestinations} destino(s) (${kept.join(', ')}) para no superar el maximo de 6 combinaciones origen x destino que protege tu cuota gratuita de Ignav; se ha descartado: ${dropped.join(', ')}.`;
+    parsed.warnings.push(
+      `Pediste ${sortedDestinations.length} destino(s) con ${originCount} origen(es) (${sortedDestinations.length * originCount} combinaciones), por encima del maximo de 6 permitido. Se ha buscado solo en ${kept.join(', ')} -- se ha descartado ${dropped.join(', ')}. Si quieres los ${sortedDestinations.length} destinos a la vez, reduce a ${Math.max(1, Math.floor(6 / sortedDestinations.length))} origen(es).`
+    );
   }
 
   return parsed;

@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.11.4] - 2026-09-17 (FIX: enlaces de reserva de ida y vuelta)
+
+### Corregido
+- **Los itinerarios con compañías distintas en cada tramo solo mostraban el enlace de reserva de ida**. La interfaz solicitaba `/api/booking-link` únicamente con `result.outbound.ignav_id`, por lo que el identificador de vuelta (`result.inbound.ignav_id`) nunca se consultaba. Ejemplo real reportado: Alicante (ALC) → Katowice (KTW) con Wizz Air en la ida y Ryanair en la vuelta; la interfaz enseñaba solo Wizz Air.
+- `components/FlightResultCard.tsx`: consulta ahora ambos identificadores de Ignav en paralelo mediante `Promise.allSettled` y agrupa los enlaces bajo **Ida** y **Vuelta**. De este modo se muestran los dos tramos aunque usen compañías diferentes, o incluso cuando la compañía sea la misma.
+- La recuperación es tolerante a fallos parciales: si falla la consulta de un tramo, se conservan los enlaces del otro y el aviso identifica expresamente si el problema corresponde a la ida o a la vuelta.
+- No se modifica el contrato de `POST /api/booking-link`: sigue recibiendo un único `{ ignavId }` y devolviendo la respuesta de Ignav. La corrección se hace en la tarjeta de resultados, que ejecuta una llamada por cada tramo.
+
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [0.11.3] - 2026-09-16 (fix real: la misma busqueda encontraba vuelos unas veces y otras no)
@@ -153,18 +161,17 @@ para esas rutas fallaron con timeout al 100%.
 - **`docs/STATUS.md` reorganizado**: anadida una seccion "ESTADO ACTUAL / HANDOFF" al
   principio del archivo (antes del historial cronologico de sesiones) que resume de un
   vistazo: que esta en produccion, la cadena de PRs pendientes y en que orden
-  mergearlos, los bugs reales encontrados y sus fixes, la limitacion de red que se
-  repite en todas las sesiones, y un mapa rapido de la arquitectura -- pensado
-  explicitamente para que cualquier sesion nueva (de Claude o de otra IA) pueda
-  continuar sin releer todo el historial del chat.
+  mergearlos, la limitacion de red que se repite en todas las sesiones, y un mapa rapido
+  de la arquitectura -- pensado explicitamente para que cualquier sesion nueva (de Claude
+  o de otra IA) pueda continuar sin releer todo el historial del chat.
 
 ## [0.9.1] - 2026-09-15 (FIX: la IA podia proponer mas destinos de los que caben en la cuota)
 
-El usuario probo "busco un viaje... al lugar mas atractivo para esas fechas" (sin
-destino concreto) y la IA selecciono 9 destinos sueltos que, con 2 origenes, daban 18
+El usuario probo "busco un viaje... al lugar mas atractivo para esas fechas" (sin destino
+concreto) y la IA selecciono 9 destinos sueltos que, con 2 origenes, daban 18
 combinaciones -- muy por encima del maximo de 6 que protege la cuota de Ignav. El boton
 "Buscar con esta interpretacion"/"Buscar vuelos" fallaba con el aviso de limite y no
-devolvia ningun resultado.
+  devolvia ningun resultado.
 
 ### Corregido
 - `lib/ai-parse.ts`: anadido un tope DURO tras la respuesta de la IA que recorta el
@@ -182,11 +189,11 @@ devolvia ningun resultado.
 El usuario probo la integracion de OpenAI en el preview y confirmo que interpreta bien
 las frases, pero senalo 3 cosas: no se podia buscar directamente tras interpretar,
 "Sorprendeme" seguia siendo un sorteo sin criterio real, y pidio usar mas el potencial
-de la IA para que la app sea mas util.
+ de la IA para que la app sea mas util.
 
 ### Anadido
 - **Boton "Buscar con esta interpretacion"** justo debajo de la explicacion de la IA --
-  antes habia que bajar hasta el formulario para encontrar el boton de busqueda.
+  antes habia que bajar hasta el formulario para encontrarlo.
 - **"Sorprendeme" con criterio real**: en vez de elegir destinos al azar, se le pide a
   la IA que razone sobre popularidad de la ruta, distancia y epoca del ano para elegir
   los destinos con mas papeletas de salir baratos/favorables para esas fechas
@@ -195,7 +202,7 @@ de la IA para que la app sea mas util.
 - **La IA recomienda un resultado y explica por que** (`lib/ai-recommend.ts` +
   `/api/ai-recommend`): tras cada busqueda con resultados, se le pide a la IA que
   revise los primeros y elija UNO considerando precio Y comodidad real (hora de salida
-  del hotel el dia de vuelta -- el criterio propio de esta app que ningun buscador
+  del hotel el dia de vuelta -- el criterio propio de la app que ningun buscador
   generico usa). El resultado elegido se marca con una insignia "Recomendado por la
   IA" y se muestra la explicacion encima de la lista. Transforma la app de "listado de
   vuelos" a "asesor que analiza y recomienda" -- el paso pedido explicitamente para que
@@ -217,8 +224,8 @@ natural. Probar con una busqueda real antes de dar por bueno.
   configurable via variable de entorno `OPENAI_MODEL` sin tocar codigo. **Si la IA
   falla o no esta configurada, cae automaticamente al parser de regex local -- la
   busqueda nunca se queda sin interpretacion.**
-  **AVISO: no se ha podido verificar contra la API real de OpenAI** (sin acceso de red
-  a `api.openai.com` desde el entorno de esta sesion) -- probar con una consulta real y
+  **AVISO: no se ha podido verificar contra la API real de OpenAI** (sin acceso de red a
+  `api.openai.com` desde el entorno de esta sesion) -- probar con una consulta real y
   revisar `docs/STATUS.md` si algo no encaja.
 - **Cuadro de busqueda en lenguaje natural destacado de nuevo** (ya no plegado), con un
   marco neon animado alrededor (degradado indigo-violeta-fucsia girando, estilo Siri)
@@ -265,7 +272,7 @@ proyecto, la investigacion de APIs alternativas, y la decision sobre edad de nin
 ## [0.6.1] - 2026-09-14 (logo e identidad propios + fixes de UI reportados en iOS)
 
 El usuario probo en iPhone y reporto varios problemas reales de UI, mas la peticion de
-un logo/tipografia con caracter propio.
+  un logo/tipografia con caracter propio.
 
 ### Corregido
 - **Cajas de fecha solapadas (bug real de iOS)**: los `input type="date"` dentro de un
@@ -303,8 +310,8 @@ un logo/tipografia con caracter propio.
   natural, Sky Scrapper, filtro de aerolineas) que no caben sin perder funcionalidad.
   Propuesto (no implementado): plegar el cuadro de "busqueda en lenguaje natural" por
   defecto para que el formulario de origen/destino/fechas sea lo primero visible.
-- Integracion de IA con OpenAI: pendiente de que el usuario anada `OPENAI_API_KEY` en
-  las variables de entorno de Vercel (nunca en el chat ni en el codigo -- explicado al
+- Integracion de IA con OpenAI: pendiente de que el usuario anada `OPENAI_API_KEY` en las
+  variables de entorno de Vercel (nunca en el chat ni en el codigo -- explicado al
   usuario que esta sesion tampoco podria probarla, sin acceso de red a
   `api.openai.com` desde este entorno).
 
@@ -334,8 +341,8 @@ viaja habitualmente).
 ## [0.5.2] - 2026-09-14 (Sorprendeme sobre destinos reales + boton estable + menos reintentos)
 
 El usuario probo "Sorprendeme" en el movil: los botones cambiaban de tamano sin parar
-durante la busqueda, y la busqueda en si devolvia solo avisos de timeout / "Ignav no
-devolvio vuelos directos" para los 6 destinos probados, sin ningun resultado.
+ durante la busqueda, y la busqueda en si devolvia solo avisos de timeout / "Ignav no
+ devolvio vuelos directos" para los 6 destinos probados, sin ningun resultado.
 
 ### Corregido
 - **Boton inestable (bug real)**: el mensaje de progreso cambiante ("Buscando vuelos de
@@ -347,17 +354,19 @@ devolvio vuelos directos" para los 6 destinos probados, sin ningun resultado.
 - **"Sorprendeme" sobre destinos sin conectividad real (bug real)**: elegia al azar
   entre los destinos CURADOS por tema (Polonia, Riga, Zagreb/Split, Dublin, Belgrado...)
   sin comprobar si tenian vuelo directo real desde el origen elegido. Con Alicante como
-  origen, ninguno de los 6 destinos sorteados tenia conexion directa real, de ahi que
+  origen, ninguno de los 6 destinos sorteados tenia conectividad directa real, de ahi que
   saliera una lista entera de avisos y ningun resultado. Ahora elige de los destinos
   REALES verificados por Aena (los mismos que ya usa el selector "Destinos"), filtrados
-  por el origen actual, que si tienen conectividad directa confirmada. Los destinos
-  curados se siguen usando para el buscador en lenguaje natural (donde el tema importa
-  mas que la certeza de conectividad), no para un "sorprendeme" a ciegas.
+  por el origen actual, que si tienen vuelo directo confirmado. Los destinos curados se
+  siguen usando para el buscador en lenguaje natural (donde el tema importa mas que la
+  certeza de conectividad), no para un "sorprendeme" a ciegas.
 - `lib/ignav.ts`: `MAX_RETRIES` bajado de 2 a 1. Con timeout de 8s por intento, 2
   reintentos podian hacer que una sola ruta lenta tardara hasta ~25s en total,
   arriesgando que Vercel matara la funcion entera (limite de 10s en el plan Hobby) antes
   de que el resto de rutas, mas rapidas, pudieran devolver su resultado. No elimina del
-  todo el riesgo si Ignav esta especialmente lento, pero lo reduce.
+  todo el riesgo si Ignav esta especialmente lento para muchas rutas a la vez, no se
+  puede verificar sin una key real y acceso de red, que esta sesion no tiene, seguira
+  habiendo timeouts.
 
 ## [0.5.1] - 2026-09-14 ("Sorprendeme": fix de bug real + rediseno)
 
@@ -370,8 +379,8 @@ era un bug real preexistente (de antes de esta sesion).
   (8) sin comprobar si cabian en el limite de 6 combinaciones de Ignav. Con un solo
   origen ya fallaba siempre (1x8=8>6) -- la funcion era, en la practica, inutilizable
   para cualquier seleccion de origenes. Ahora (`handleSurpriseMe`) calcula cuantos
-  grupos caben para los origenes elegidos y coge solo esos, **mezclados al azar** en
-  cada pulsacion (asi salen destinos distintos cada vez, en vez de siempre los mismos).
+  grupos caben para los origenes elegidos y coge solo esos, mezclados al azar en cada
+  pulsacion (asi salen destinos distintos cada vez, en vez de siempre los mismos).
 
 ### Cambiado (a peticion del usuario: "cambiale el nombre y dale mayor protagonismo")
 - Renombrado de "Quiero viajar, propon ideas por precio" (checkbox escondido dentro de
@@ -409,119 +418,51 @@ anterior salvo las que requerian la API de Anthropic (pospuestas).
   `scripts/schema.sql`): las resoluciones IATA -> skyId/entityId ya no se repiten en cada
   busqueda -- relevante dado que su cuota es ~100/mes. **Requiere aplicar el schema.sql
   actualizado contra tu Neon DB manualmente.**
-- **Icono propio y pantalla completa al añadir a inicio en iPhone**: `app/icon.tsx` y
+- **Icono propio y pantalla completa al anadir a inicio en iPhone**: `app/icon.tsx` y
   `app/apple-icon.tsx` (generados con `next/og`, sin archivos binarios) + `app/manifest.ts`.
 
 ### Nota tecnica (para futuras sesiones)
 Al aplicar las variantes `dark:` se probo primero con `sed` encadenado, lo que produjo
-clases duplicadas en pares reciprocos de color (ej. `text-slate-400 dark:text-slate-500
-dark:text-slate-400`), porque el limite de palabra de `sed` no distingue una clase
-original de una ya insertada por una regla anterior. Se corrigio con un script Python
-(`apply_dark.py`, no versionado) que procesa cada `className` una sola vez comparando
-solo contra el conjunto original de clases. Si en el futuro hace falta re-aplicar o
-extender las variantes de tema, usar ese mismo enfoque (o anadirlas a mano), nunca `sed`
-encadenado sobre pares de colores reciprocos.
+clases duplicadas en pares reciprocos de color (ej. `text-slate-400 dark:text-slate-500 dark:text-slate-400`), porque el limite de palabra de `sed` no distingue una clase original de una ya insertada por una regla anterior. Se corrigio con un script Python (`apply_dark.py`, no versionado) que procesa cada `className` una sola vez comparando solo contra el conjunto original de clases. Si en el futuro hace falta re-aplicar o extender las variantes de tema, usar ese mismo enfoque (o anadirlas a mano), nunca `sed` encadenado sobre pares reciprocos de colores.
 
 ## [0.4.0] - 2026-09-14 (panel lateral, marco con fondo de nubes, version visible, web-app iPhone)
 
 ### Anadido
-- **Numero de version visible en la app** (`lib/version.ts`, junto al logo en `TopNav`).
-  Mantener sincronizada a mano con `package.json` y la entrada mas reciente de este
-  changelog -- no hay build step que las una automaticamente.
-- **Metadatos de web-app para iPhone** (`app/layout.tsx`): `appleWebApp` (pantalla
-  completa al anadir a inicio, sin barra de Safari), `viewport-fit: cover` +
-  `env(safe-area-inset-*)` en `globals.css` para que el nav superior no quede debajo del
-  notch/isla dinamica ni el contenido final debajo de la barra de home.
+- **Numero de version visible en la app** (`lib/version.ts`, junto al logo en `TopNav`). Mantener sincronizada a mano con `package.json` y la entrada mas reciente de este changelog -- no hay build step que las una automaticamente.
+- **Metadatos de web-app para iPhone** (`app/layout.tsx`): `appleWebApp` (pantalla completa al anadir a inicio, sin barra de Safari), `viewport-fit: cover` + `env(safe-area-inset-*)` en `globals.css` para que el nav superior no quede debajo del notch/isla dinamica ni el contenido final debajo de la barra de home.
 
 ### Cambiado (diseno)
-- **Fondo de nubes con el contenido enmarcado en el medio**, como en la captura de
-  referencia: en pantallas medianas/grandes, la app entera es una tarjeta redondeada con
-  sombra que flota sobre un fondo azul/indigo mas oscuro (visible alrededor). En movil
-  (uso principal: "web-app de iPhone"), la tarjeta ocupa toda la pantalla sin marco ni
-  esquinas redondeadas -- no tiene sentido gastar espacio en decoracion en una pantalla
-  pequeña, y asi se siente como una app nativa al anadirla a inicio.
-- **Filtros en panel lateral**, como en la referencia: la tarjeta principal ("Quien,
-  cuando y a donde") con origenes/destinos/fechas/pax y el boton de busqueda se queda a
-  ancho completo; los filtros de refinamiento (horarios, precio, orden, equipaje,
-  open-jaw, Sky Scrapper, ciudades a descartar) pasan a un panel lateral fijo
-  (`components/FilterAccordion.tsx`, acordeones nativos `<details>`, sin estado extra) a
-  la derecha de los resultados, con el panel de calendario/alertas debajo.
-- **Renombrada la seccion "Filtros de busqueda" a "Quien, cuando y a donde"** y el
-  checkbox "Permitir open-jaw en destino" a "Permitir llegar y salir por aeropuertos
-  distintos (open-jaw)" -- ver revision de nombres en docs/STATUS.md.
+- **Fondo de nubes con el contenido enmarcado en el medio**, como en la captura de referencia: en pantallas medianas/grandes, la app entera es una tarjeta redondeada con sombra que flota sobre un fondo azul/indigo mas oscuro (visible alrededor). En movil (uso principal: "web-app de iPhone"), la tarjeta ocupa toda la pantalla sin marco ni esquinas redondeadas -- no tiene sentido gastar espacio en decoracion en una pantalla pequena, y asi se siente como una app nativa al anadirla a inicio.
+- **Filtros en panel lateral**, como en la referencia: la tarjeta principal ("Quien, cuando y a donde") con origenes/destinos/fechas/pax y el boton de busqueda se queda a ancho completo; los filtros de refinamiento (horarios, precio, orden, equipaje, open-jaw, Sky Scrapper, ciudades a descartar) pasan a un panel lateral fijo (`components/FilterAccordion.tsx`, acordeones nativos `<details>`, sin estado extra) a la derecha de los resultados, con el panel de calendario/alertas debajo.
+- **Renombrada la seccion "Filtros de busqueda" a "Quien, cuando y a donde"** y el checkbox "Permitir open-jaw en destino" a "Permitir llegar y salir por aeropuertos distintos (open-jaw)" -- ver revision de nombres en docs/STATUS.md.
 
 ## [0.3.4] - 2026-09-14 (integracion Sky Scrapper)
 
-A peticion explicita del usuario: mezclar resultados de Ignav y Sky Scrapper (RapidAPI) en
-la misma lista, marcando de que fuente viene cada uno.
+A peticion explicita del usuario: mezclar resultados de Ignav y Sky Scrapper (RapidAPI) en la misma lista, marcando de que fuente viene cada uno.
 
 ### Anadido
-- `lib/skyscanner-adapter.ts` nuevo: adapta las respuestas de Sky Scrapper (ida+vuelta en
-  una sola llamada, a diferencia de Ignav que necesita 2 busquedas de solo ida) al formato
-  interno `LiveItinerary`. Solo admite tramos directos (`stopCount === 0`), igual que Ignav.
-- Nuevo campo `source: 'ignav' | 'skyscanner'` en `LiveItinerary`. `FlightResultCard.tsx`
-  muestra una etiqueta con la fuente de cada resultado.
-- Nueva casilla "Incluir Sky Scrapper" en el formulario (desactivada por defecto). Sin
-  marcar, el comportamiento no cambia nada respecto a antes.
-- `lib/live-engine.ts`: si la casilla esta marcada Y `RAPIDAPI_SKY_SCRAPPER_KEY` esta
-  configurada, se consulta Sky Scrapper para cada combinacion origen x aeropuerto de
-  destino (tope propio de 6 llamadas) y se mezcla con los resultados de Ignav antes de
-  ordenar. Sin la variable de entorno configurada, la casilla no tiene efecto (silencioso,
-  no rompe nada).
+- `lib/skyscanner-adapter.ts` nuevo: adapta las respuestas de Sky Scrapper (ida+vuelta en una sola llamada, a diferencia de Ignav que necesita 2 busquedas de solo ida) al formato interno `LiveItinerary`. Solo admite tramos directos (`stopCount === 0`), igual que Ignav.
+- Nuevo campo `source: 'ignav' | 'skyscanner'` en `LiveItinerary`. `FlightResultCard.tsx` muestra una etiqueta con la fuente de cada resultado.
+- Nueva casilla "Incluir Sky Scrapper" en el formulario (desactivada por defecto). Sin marcar, el comportamiento no cambia nada respecto a antes.
+- `lib/live-engine.ts`: si la casilla esta marcada Y `RAPIDAPI_SKY_SCRAPPER_KEY` esta configurada, se consulta Sky Scrapper para cada combinacion origen x aeropuerto de destino (tope propio de 6 llamadas) y se mezcla con los resultados de Ignav antes de ordenar. Sin la variable de entorno configurada, la casilla no tiene efecto (silencioso, no rompe nada).
 
 ### Importante -- cuota y verificacion
-- **Cuota de Sky Scrapper: ~100 peticiones AL MES** (no de por vida como Ignav). Por eso
-  solo se consulta 1 vez por combinacion (la primera fecha de cada rango, no el rango
-  completo) y con un tope mucho mas bajo que el de Ignav. Si usas la MISMA key de RapidAPI
-  que en tu script personal `buscador_viajes.py`, ambos consumen de la misma bolsa de
-  cuota -- ver aviso en docs/STATUS.md.
-- **El parseo de la respuesta de ida+vuelta de Sky Scrapper NO se ha podido verificar
-  contra la API real** (sin key configurada ni acceso de red a
-  sky-scrapper.p.rapidapi.com desde el entorno de esta sesion). Esta escrito con la mejor
-  informacion disponible (verificada contra tu script `buscador_viajes.py`, que solo usa
-  busquedas de solo ida) mas la convencion habitual de esta familia de APIs para
-  ida+vuelta. Probado con datos simulados (ver docs/STATUS.md), no con una respuesta real.
-  Corrige tambien un bug latente en `lib/skyscanner.ts`: `searchAirport` no extraia
-  `skyId`/`entityId` cuando venian anidados bajo `navigation.relevantFlightParams` (la
-  misma API a veces devuelve el campo asi, como ya maneja tu script con un fallback).
+- **Cuota de Sky Scrapper: ~100 peticiones AL MES** (no de por vida como Ignav). Por eso solo se consulta 1 vez por combinacion (la primera fecha de cada rango, no el rango completo) y con un tope mucho mas bajo que el de Ignav. Si usas la MISMA key de RapidAPI que en tu script personal `buscador_viajes.py`, ambos consumen de la misma bolsa de cuota -- ver aviso en docs/STATUS.md.
+- **El parseo de la respuesta de ida+vuelta de Sky Scrapper NO se ha podido verificar contra la API real** (sin key configurada ni acceso de red a `sky-scrapper.p.rapidapi.com` desde el entorno de esta sesion). Esta escrito con la mejor informacion disponible (verificada contra tu script `buscador_viajes.py`, que solo usa busquedas de solo ida) mas la convencion habitual de esta familia de APIs para ida+vuelta. Probado con datos simulados (ver docs/STATUS.md), no con una respuesta real. Corrige tambien un bug latente en `lib/skyscanner.ts`: `searchAirport` no extraia `skyId`/`entityId` cuando venian anidados bajo `navigation.relevantFlightParams` (la misma API a veces devuelve el campo asi, como ya maneja tu script con un fallback).
 
 ## [0.3.3] - 2026-09-14 (tema claro real + fotos de ciudad + fixes de logica)
 
-El usuario mando una captura de la referencia real (tema CLARO con acento indigo, tarjetas
-con foto de avion, filtros en lateral) -- el rediseno de la sesion anterior se habia ido a
-un tema oscuro/dorado que no se parecia a la referencia real. Este pase corrige el rumbo.
-
 ### Cambiado (diseno)
-- **Tema completo de oscuro/dorado a claro/indigo**, fiel a la captura real: fondo con
-  degradado suave tipo cielo, tarjetas blancas, nav superior oscuro, acento indigo
-  (`#6366f1`) en vez de dorado. `tailwind.config.ts` con tokens `ink`/`indigo` nuevos.
-- **`components/TopNav.tsx` nuevo**: barra de navegacion oscura con logo, como en la
-  referencia (sin inventar enlaces de navegacion falsos que no existen en la app).
-- **Resultados: de tabla a tarjetas con foto real de la ciudad de destino** (no icono de
-  avion): `components/FlightResultCard.tsx` nuevo + `lib/city-images.ts` nuevo con un
-  banco de 11 fotos de Pexels verificadas una a una (Paris, Londres, Roma, Amsterdam,
-  Lisboa, Praga, Viena, Atenas, Estocolmo, Cracovia, Budapest) y una foto generica de
-  reserva para cualquier otro destino real de Aena no cubierto por el banco.
-- `components/ToolsPanel.tsx` y `components/FlightPathStrip.tsx` retematizados a
-  claro/indigo (se habian quedado en dark/dorado de la sesion anterior).
-- Quitado el hero de foto grande de la sesion anterior: la referencia real no lo tiene,
-  usa el fondo con degradado + la barra de busqueda directamente.
+- **Tema completo de oscuro/dorado a claro/indigo**, fiel a la captura real: fondo con degradado suave tipo cielo, tarjetas blancas, nav superior oscuro, acento indigo (`#6366f1`) en vez de dorado. `tailwind.config.ts` con tokens `ink`/`indigo` nuevos.
+- **`components/TopNav.tsx` nuevo**: barra de navegacion oscura con logo, como en la referencia (sin inventar enlaces de navegacion falsos que no existen en la app).
+- **Resultados: de tabla a tarjetas con foto real de la ciudad de destino** (no icono de avion): `components/FlightResultCard.tsx` nuevo + `lib/city-images.ts` nuevo con un banco de 11 fotos de Pexels verificadas una a una (Paris, Londres, Roma, Amsterdam, Lisboa, Praga, Viena, Atenas, Estocolmo, Cracovia, Budapest) y una foto generica de reserva para cualquier otro destino real de Aena no cubierto por el banco.
+- `components/ToolsPanel.tsx` y `components/FlightPathStrip.tsx` retematizados a claro/indigo (se habian quedado en dark/dorado de la sesion anterior).
+- Quitado el hero de foto grande de la sesion anterior: la referencia real no lo tiene, usa el fondo con degradado + la barra de busqueda directamente.
 
 ### Corregido (logica, a peticion explicita de revision)
-- **Inconsistencia en "ordenar por duracion"**: el servidor (`lib/live-engine.ts`)
-  ordenaba por la SUMA de duracion de vuelo (ida+vuelta); el cliente (`app/page.tsx`) al
-  re-ordenar la misma lista usaba la duracion TOTAL del viaje (salida de ida a llegada de
-  vuelta). Mismo filtro, dos formulas -- el orden podia cambiar solo por re-ordenar sin
-  tocar los datos. Unificado a la duracion total del viaje en ambos sitios.
-- **Itinerarios fisicamente imposibles**: el filtro que descarta combinaciones invalidas
-  comparaba la salida de vuelta contra la SALIDA de ida en vez de la LLEGADA de ida --
-  permitia colar un vuelo de vuelta que sale antes de que el de ida haya aterrizado.
-  Corregido a comparar contra `outbound.arrival_at`.
-- **`ignavPost` sin timeout y sin reintento en errores de red**: si `fetch()` lanzaba una
-  excepcion (timeout, DNS, red caida) en vez de devolver un status HTTP, el error se
-  propagaba directo sin pasar por la logica de reintento -- una sola incidencia de red
-  abortaba toda la busqueda. Anadido timeout de 8s (mismo patron que `lib/skyscanner.ts`)
-  y los errores de red ahora se reintentan igual que los status HTTP reintentables.
+- **Inconsistencia en "ordenar por duracion"**: el servidor (`lib/live-engine.ts`) ordenaba por la SUMA de duracion de vuelo (ida+vuelta); el cliente (`app/page.tsx`) al re-ordenar la misma lista usaba la duracion TOTAL del viaje (salida de ida a llegada de vuelta). Mismo filtro, dos formulas -- el orden podia cambiar solo por re-ordenar sin tocar los datos. Unificado a la duracion total del viaje en ambos sitios.
+- **Itinerarios fisicamente imposibles**: el filtro que descarta combinaciones invalidas comparaba la salida de vuelta contra la SALIDA de ida en vez de la LLEGADA de ida -- permitia colar un vuelo de vuelta que sale antes de que el de ida haya aterrizado. Corregido a comparar contra `outbound.arrival_at`.
+- **`ignavPost` sin timeout y sin reintento en errores de red**: si `fetch()` lanzaba una excepcion (timeout, DNS, red caida) en vez de devolver un status HTTP, el error se propagaba directo sin pasar por la logica de reintento -- una sola incidencia de red abortaba toda la busqueda. Anadido timeout de 8s (mismo patron que `lib/skyscanner.ts`) y los errores de red ahora se reintentan igual que los status HTTP reintentables.
 
 ## [0.3.2] - 2026-09-14 (rediseno visual)
 
@@ -534,7 +475,7 @@ un tema oscuro/dorado que no se parecia a la referencia real. Este pase corrige 
 - **Mapa de rutas sustituido**: `components/RouteMap.tsx` (SVG de 420px de alto sobre un listado de "destinos curados" que el resto de la app ya no usa como fuente principal -- de ahi la queja de "mapa inservible que ocupa mucho sitio") se elimino junto a `app/api/route-map/route.ts`. En su lugar, `components/FlightPathStrip.tsx` nuevo: una tira compacta que muestra origen/destino REALMENTE seleccionados en el formulario (no un listado aparte desactualizado), con una linea de vuelo animada.
 - **Hero rediseñado**: menos padding vertical, avion en filigrana de gran formato en la esquina, y la tarjeta `FlightPathStrip` flotando sobre el borde inferior del hero (tecnica de "search bar sobre la foto" tipica del genero de apps de vuelos privados de lujo) en vez de dejar un hueco vacio entre el hero y el resto del contenido.
 - **Nuevos iconos SVG originales** en `components/Icons.tsx`: despegue, aterrizaje, compas, billete de embarque -- mas los `IconPlane`/`IconSuitcase` que ya existian pero no se usaban en ningun sitio. Aplicados en el hero, la tira de ruta, las cabeceras Ida/Vuelta de la tabla de resultados y `ToolsPanel`.
-- **Tipografia deliberada**: titulares en una pila serif editorial (Georgia y similares) en vez del sans por defecto del navegador, para diferenciar el titular del resto de la UI. Se probo primero con `next/font/google` (Fraunces + Inter) pero se descarto: no se pudo verificar el build en el entorno de la sesion (sin acceso a `fonts.googleapis.com`) y no se queria arriesgar el build de Vercel sin poder comprobarlo antes.
+- **Tipografia deliberada**: titulares en una pila serif editorial (Georgia y similares) en vez del sans por defecto del navegador, para diferenciar el titular del resto de la UI. Se probo primero con `next/font/google` (Fraunces + Inter) pero se descarto: no se pudo verificar el build en el entorno de la sesion (sin acceso de red a `fonts.googleapis.com`) y no se queria arriesgar el build de Vercel sin poder comprobarlo antes.
 
 ## [0.3.1] - 2026-09-14 (sesion de auditoria)
 
@@ -557,7 +498,7 @@ un tema oscuro/dorado que no se parecia a la referencia real. Este pase corrige 
 ### Anadido
 - **Buscador en lenguaje natural (beta)** (`lib/nlp-search.ts`, `parseSearchQuery`): cuadro de texto en la UI que interpreta frases en espanol (origenes, destino, dias, horas) y precarga el formulario de filtros. Basado en reglas (regex + diccionario), no en un LLM.
 - Deteccion de destinos mencionados que aun no estan en la base de datos (p. ej. "Londres"), con aviso explicito en vez de fallo silencioso.
-- Documentacion explicita de la limitacion de logica condicional compleja ("dia A si es despues de hora X, si no dia B a partir de hora Y"): se aproxima con rango de fechas + hora mas permisiva, avisando siempre al usuario.
+- Documentacion explicita de la limitacion de logica condicional compleja ("dia A si es despues de las 8h, si no dia B a partir de las 8h"): se aproxima con rango de fechas + hora mas permisiva, avisando siempre al usuario.
 
 ### Corregido
 - Bug de TypeScript (`sortBy` no incluido en `SharedParams`) que rompio 2 builds consecutivos en `lib/live-engine.ts` y `lib/search-engine.ts` tras el cambio a multibusqueda; solucionado pasando el objeto `filters` completo a las funciones internas en lugar de una copia parcial.

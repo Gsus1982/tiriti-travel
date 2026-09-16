@@ -1,5 +1,7 @@
 # Changelog
 
+Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
+
 ## [0.11.5] - 2026-09-17 (FIX: 424 persistente en enlaces de reserva + mensajes crudos de Ignav)
 
 El usuario probo el fix de la v0.11.4 (ida/vuelta en paralelo) con una captura real:
@@ -43,8 +45,6 @@ de la captura del usuario, no contra una respuesta 424 real.
 - `components/FlightResultCard.tsx`: consulta ahora ambos identificadores de Ignav en paralelo mediante `Promise.allSettled` y agrupa los enlaces bajo **Ida** y **Vuelta**. De este modo se muestran los dos tramos aunque usen compañías diferentes, o incluso cuando la compañía sea la misma.
 - La recuperación es tolerante a fallos parciales: si falla la consulta de un tramo, se conservan los enlaces del otro y el aviso identifica expresamente si el problema corresponde a la ida o a la vuelta.
 - No se modifica el contrato de `POST /api/booking-link`: sigue recibiendo un único `{ ignavId }` y devolviendo la respuesta de Ignav. La corrección se hace en la tarjeta de resultados, que ejecuta una llamada por cada tramo.
-
-Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
 ## [0.11.3] - 2026-09-16 (fix real: la misma busqueda encontraba vuelos unas veces y otras no)
 

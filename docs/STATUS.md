@@ -20,80 +20,196 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.7.1 -- panel lateral, tema claro/indigo,
-logo/tipografia propios, filtro de aerolineas (con su bug critico ya arreglado).
-**Todavia NO incluye nada de IA/OpenAI ni la eliminacion de destinos curados.**
+**En produccion (rama `main`) ahora mismo**: v0.11.5. Incluye TODO: IA real (OpenAI,
+las 3 funciones: interpretar/Sorprendeme/recomendar), destinos curados eliminados,
+comparador de vuelos, vista lista, alertas de precio por email real (Resend) con
+historial y borrado, el fix del recorte no-determinista de destinos en `ai-parse.ts`
+(v0.11.3), y 2 fixes mas pequenos del 17 sep (v0.11.4/0.11.5): los enlaces de reserva
+ahora se piden para ida Y vuelta por separado (antes solo pedia el de ida, perdiendo el
+de vuelta cuando cada tramo iba con una aerolinea distinta), y mas reintentos (3 en vez
+de 1) especificamente para esa llamada, ya que es una peticion suelta por tramo, no un
+fan-out masivo como `/one-way` -- ver entrada fechada del 17 sep mas abajo.
 
-**Cadena de PRs abiertos, sin mergear a `main` todavia** (cada uno se apila sobre el
-anterior, en este orden -- mergear en ESTE orden si se aprueban):
-1. **PR #19** (`feat/openai-nlp-siri-ui` -> `main`): integracion real de OpenAI para
-   interpretar lenguaje natural + cuadro de NLP destacado con marco neon animado.
-   **Confirmado funcionando** por el usuario con una captura real.
-2. **PR #20** (`feat/ai-search-and-recommendation` -> rama del #19): boton "Buscar con
-   esta interpretacion", Sorprendeme con criterio de IA, recomendacion de la IA sobre
-   resultados. Sin confirmar en vivo todavia si Sorprendeme-con-IA y la recomendacion
-   funcionan (solo la interpretacion del #19 esta confirmada).
-3. **PR #21** (`fix/ai-parse-combo-limit` -> rama del #20): 2 fixes reales encontrados
-   probando el #19/#20 en vivo (tope de combinaciones + preferir destinos reales).
-4. **Rama `feat/eliminar-destinos-curados`** (sobre la del #21, PR todavia sin abrir a
-   fecha de esta entrada -- abrirlo contra `fix/ai-parse-combo-limit` cuando se continue
-   esta sesion): **ELIMINADO POR COMPLETO** el concepto de destinos curados. Ver debajo.
+**No hay ningun PR abierto pendiente de mergear.** Toda esta sesion se trabajo con
+commits directos a `main` (sin pasar por rama intermedia), tras encontrar que la rama
+`revisar-por-claude` (creada para agrupar las mejoras) quedaba con conflictos reales
+cada vez que se intentaba mergear por encima del fix de origenes -- se opto por
+reconstruir el contenido directamente sobre `main` ya arreglado, verificando cada
+archivo contra el contenido real pegado por el usuario antes de sobrescribirlo (nunca
+a ciegas por fragmentos de busqueda). La rama `revisar-por-claude` quedo obsoleta y se
+borro manualmente por el usuario (esta sesion no tiene una herramienta para borrar
+ramas de GitHub, solo crear/actualizar/mergear).
 
-**`OPENAI_API_KEY` ya esta configurada en Vercel** por el usuario. El modelo usado es
-`gpt-4o-mini` (configurable via variable de entorno `OPENAI_MODEL`, sin tocar codigo).
+**`OPENAI_API_KEY` y las 3 variables de Resend (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
+ya estan configuradas en Vercel.**
 
-### Destinos curados: CERRADO -- eliminados por completo (ya no es un problema abierto)
-Las 2 entradas de abajo (sesion "FIX real de la IA superando la cuota...") documentan 2
-fallos sistematicos e independientes de los grupos curados (`destination_groups`:
-Polonia, Riga, Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado) dando timeout al 100%
-en Ignav. En la sesion siguiente, el usuario pidio explicitamente eliminarlos "de una vez
-por todas, sin dejar rastro" -- hecho. **Si estas leyendo las secciones de abajo y ves
-"pendiente de decidir si eliminar los grupos curados", esa decision YA SE TOMO y SE
-EJECUTO: los grupos ya no existen en el codigo.** No hace falta releer ese debate,
-solo saber que se resolvio eliminandolos.
+### Bug real encontrado y arreglado esta sesion: el recorte de destinos por cuota no era determinista
+`lib/ai-parse.ts` recorta los destinos que la IA propone si `origenes x destinos > 6`
+(proteccion de cuota de Ignav, existe desde la sesion "FIX real de la IA superando la
+cuota" mas abajo). El bug: el recorte usaba `.slice()` sobre el ORDEN que devolvia la
+IA, orden que cambia entre llamadas identicas porque `temperature: 0.2` no es 0. Con la
+misma frase exacta pidiendo mas destinos de los que caben, cada ejecucion podia
+descartar un destino distinto -- cambiando que rutas se buscaban de verdad, y por tanto
+si se encontraban vuelos reales (rutas low-cost no operan a diario). Fix: ordenar
+alfabeticamente por IATA antes de cortar (deterministico), y exponer un array
+`warnings` explicito en vez de solo una nota pegada a la `explanation` en prosa.
 
-Lo unico pendiente de esa eliminacion: **`scripts/schema.sql` documenta el esquema
-deseado (ya sin `destination_groups` ni `group_id`), pero la base de datos REAL en Neon
-todavia tiene esas columnas/tabla** -- esta sesion no tiene credenciales de conexion
-para aplicar la migracion ella misma. El propio `scripts/schema.sql` trae al final el
-bloque de SQL exacto a ejecutar a mano en el SQL Editor de Neon:
-```sql
-ALTER TABLE airports DROP COLUMN IF EXISTS group_id;
-DROP TABLE IF EXISTS destination_groups;
-ALTER TABLE price_alerts DROP COLUMN IF EXISTS destination_group_id;
-```
-El codigo funciona igual aunque no se ejecute (son columnas/tabla huerfanas que ya no
-se leen ni escriben desde ningun sitio) -- es solo para tener la BD coherente.
+### Bug real encontrado y arreglado esta sesion: el fix de destinos curados de otra sesion nunca se aplico en produccion
+Existia un PR (#22, rama `feat/eliminar-destinos-curados`) de una sesion anterior que
+ya eliminaba destinos curados de TODO el codigo, pero nunca se mergeo -- su base
+apuntaba a una rama intermedia ya fusionada, quedando invisible en el flujo normal de
+review. Mientras tanto, otra sesion habia borrado la tabla `destination_groups` de la
+BD real (Neon) sin actualizar el codigo que la consultaba, rompiendo `/api/meta` por
+completo (fallaba dentro de un `Promise.all`, sin aviso claro) y dejando el selector de
+origenes solo con el fallback de emergencia (Alicante). Se reapunto la base del PR #22
+a `main` y se mergeo; luego se ejecuto la migracion SQL pendiente en Neon (borrar
+`destination_groups`, `group_id`, `destination_group_id`) que llevaba documentada desde
+esa sesion sin que nadie la aplicara.
 
-El open-jaw (unica funcionalidad real que dependia de los grupos) ahora se basa en
-agrupar por CIUDAD REAL los destinos elegidos de `aena_destinations` -- ver
-`resolveDestinationTargets` en `lib/live-engine.ts`.
+### Arquitectura rapida (actualizada, reemplaza cualquier mapa anterior de este archivo)
+- **3 fuentes de datos de vuelos**: Ignav (principal), Sky Scrapper/RapidAPI (opcional),
+  combinadas en `lib/live-engine.ts`.
+- **Destinos**: solo `aena_destinations` (sincronizada a diario desde Aena). Los grupos
+  curados YA NO EXISTEN en codigo ni en BD -- si algo menciona `destination_groups` en
+  el futuro, es un resto sin limpiar, no una funcionalidad activa.
+- **3 endpoints de IA** (mismo patron: `gpt-4o-mini`, `response_format: json_schema`,
+  fallback si falla): `/api/ai-parse` (interpretar lenguaje natural, recorte de cuota
+  ahora deterministico), `/api/ai-surprise` (Sorprendeme), `/api/ai-recommend`
+  (recomendar un resultado).
+- **Alertas de precio** (`price_alerts` en Neon, columnas `email`/`notified_at`
+  anadidas esta sesion): `GET/POST/DELETE /api/alerts` + cron diario
+  `/api/cron/check-alerts` que envia email real via Resend (`lib/email.ts`) la primera
+  vez que detecta un match, sin repetir mientras el precio siga bajo.
+- **`app/page.tsx`** sigue siendo el orquestador principal, pero el bloque de
+  resultados se extrajo a `components/ResultsSection.tsx` (comparador, vista
+  lista/tarjetas, aviso de alternativa mas barata) para no seguir creciendo un unico
+  archivo gigante.
 
-### Limitacion que se repite en todas las sesiones (importante para cualquier IA nueva)
-El entorno de trabajo de estas sesiones **no tiene acceso de red a APIs externas**
-(`api.openai.com`, `api.ignav.com`, `sky-scrapper.p.rapidapi.com`, etc. -- solo un
-puñado de dominios de paquetes npm/GitHub estan permitidos) **ni credenciales de
-conexion a la base de datos real de Neon del usuario**. Esto significa que NINGUNA
-integracion de API externa ni cambio de esquema de BD se puede probar/aplicar en vivo
-desde el sandbox de la sesion -- todo se escribe con la mejor informacion disponible y
-se prueba de verdad solo cuando el USUARIO lo ejecuta en Vercel/Neon y reporta el
-resultado. Cuando el usuario reporta un error real, es la unica senal fiable de que algo
-no funciona como se penso.
+### Limitacion de red de estas sesiones (se mantiene, ver entradas anteriores para el detalle completo)
+Sigue sin haber acceso de red a APIs externas ni credenciales de BD real desde el
+sandbox de la sesion. Esta sesion en concreto SI tuvo, por primera vez, conectores
+directos (GitHub, Neon, Vercel) que permitieron leer/escribir la BD real y el
+repositorio real sin depender de que el usuario pegara cada archivo a mano -- aun asi,
+para archivos largos (como este) la lectura vino truncada a fragmentos de busqueda de
+codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
+usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
+suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
 
-### Arquitectura rapida (para orientarse sin leer todo el codigo)
-- **3 fuentes de datos de vuelos**: Ignav (`lib/ignav.ts`, principal, cuota 1000 de por
-  vida), Sky Scrapper/RapidAPI (`lib/skyscanner.ts` + `lib/skyscanner-adapter.ts`,
-  opcional via checkbox, cuota ~100/mes, sin verificar en vivo), y el motor que las
-  combina es `lib/live-engine.ts`.
-- **Una unica lista de destinos**: `aena_destinations` en BD, verificada a diario
-  contra datos publicos de Aena (los que cuenta el selector "Destinos" del formulario).
-  Ya NO existen los grupos curados (ver seccion de arriba).
-- **3 endpoints de IA**, todos con el mismo patron (OpenAI `gpt-4o-mini`,
-  `response_format: json_schema`, fallback si falla): `/api/ai-parse` (interpretar
-  lenguaje natural), `/api/ai-surprise` (elegir destinos para Sorprendeme),
-  `/api/ai-recommend` (recomendar un resultado tras la busqueda).
-- **`app/page.tsx`** es el componente principal (unico, grande) que orquesta todo el
-  estado del formulario y las llamadas.
+---
+
+## Estado al 16 de septiembre de 2026 — Sesion: fixes reales de produccion + reconstruccion de mejoras + fix de IA no-deterministica
+
+### Contexto
+El usuario reporto, en el orden en que ocurrieron: (1) solo aparecia Alicante en
+origenes, el aviso de busqueda mal ubicado, y el selector de orden roto; (2) probando
+el PR de mejoras (comparador, alertas por email, etc.) resulto que ese PR tenia
+conflictos de fusion reales contra el fix de (1), por tocar los mismos archivos; (3)
+tras reconstruir y desplegar las mejoras, el comparador resulto "muy pobre" (sin horas
+de llegada) y no habia campo de precio visible para guardar una alerta; (4) el mismo
+prompt de lenguaje natural encontraba vuelos unas veces y otras no.
+
+### Diagnostico y fix de (1): causa raiz real, no un sintoma superficial
+Ver seccion HANDOFF de arriba ("el fix de destinos curados de otra sesion nunca se
+aplico en produccion"). Se investigo con `search_code` en GitHub hasta encontrar el PR
+#22 abandonado, se reapunto su base y se mergeo, y se ejecuto la migracion SQL
+pendiente directamente en Neon via el conector.
+
+### Reconstruccion de (2): por que no se mergeo la rama existente
+La rama `revisar-por-claude` (PR #23) quedo con `mergeable_state: dirty` tras el merge
+del PR #22 (ambos PRs modificaban `app/page.tsx`, `ToolsPanel.tsx`,
+`FlightResultCard.tsx`, `alerts/route.ts`, `check-alerts/route.ts`). En vez de intentar
+una resolucion de conflictos a ciegas (arriesgado con logica de negocio real como el
+open-jaw o la cuota de Ignav de por medio), se reconstruyeron las 6 mejoras desde cero
+como archivos nuevos sobre el `main` ya arreglado, verificando primero el contenido
+REAL de cada archivo afectado (pedido al usuario cuando la lectura por fragmentos no
+era suficientemente fiable) antes de sobrescribirlo. El PR #23 se cerro sin mergear
+(contenido superado). Commits directos a `main`, sin rama intermedia para el resto de
+la sesion.
+
+### Fix de (3): mejoras basadas en feedback especifico, no genericas
+Campo de precio propio en el formulario de alertas (antes vivia en otro panel).
+Comparador ampliado de 5 a 12 columnas (horas de ida/vuelta, duracion, ambas
+aerolineas, fuente), con resaltado en verde del mejor valor por fila. Se anadieron
+tambien 3 mejoras no pedidas explicitamente pero identificadas como necesarias:
+historial de alertas guardadas con borrado (antes invisible en la UI aunque el
+endpoint ya existia), aviso al llegar al limite de 3 comparaciones, y version
+responsive del comparador para movil.
+
+### Fix de (4): la causa real de la inconsistencia con el mismo prompt
+Ver seccion HANDOFF de arriba ("el recorte de destinos por cuota no era
+determinista"). Diagnostico confirmado leyendo el codigo real de `lib/ai-parse.ts`
+(pedido al usuario, ya que reconstruirlo por fragmentos de busqueda era demasiado
+arriesgado para un archivo que llama a una API externa y parsea JSON): `temperature:
+0.2` en la llamada a OpenAI + `.slice()` sobre un array en orden variable = recorte no
+reproducible. Fix: ordenar alfabeticamente antes de cortar, y exponer los avisos de
+recorte en un campo `warnings` estructurado que ademas se propaga correctamente hasta
+la UI (se encontro de paso que `app/page.tsx` los descartaba con
+`setNlpWarnings([])` fijo en la rama de exito).
+
+### Leccion para futuras sesiones
+Cuando una respuesta de un LLM alimenta una decision que debe ser reproducible (aqui:
+que destino se descarta por cuota), el ORDEN de la respuesta del modelo no se puede
+asumir estable entre llamadas identicas si `temperature > 0` -- hay que imponer un
+orden propio (alfabetico, por ejemplo) antes de aplicar cualquier `.slice()`/`.filter()`
+que dependa de la posicion. Esto es distinto y complementario a la leccion ya
+documentada mas abajo ("el limite tiene que aplicarse en codigo, no solo pedirse en el
+prompt") -- aqui el limite SI se aplicaba en codigo, pero sobre datos en un orden no
+reproducible.
+
+### Verificado
+Cada archivo se subio verificando antes el SHA actual contra GitHub (para detectar si
+algo habia cambiado entre lectura y escritura) y comprobando, cuando fue posible via
+`search_code`, que campos nuevos usados (como `outbound.arrival_at` en el comparador
+ampliado) existian de verdad en el tipo real (`lib/live-engine.ts`) antes de escribir
+codigo que los asumiera. No se pudo ejecutar `npx tsc --noEmit` ni `npm run build` en
+esta sesion (sin acceso al proyecto completo localmente) -- revisar el build de Vercel
+tras cada push si aparece algun error de tipos.
+
+### Pendiente
+- Confirmar visualmente en movil que el comparador responsive se ve bien de verdad
+  (se escribio el CSS con Tailwind estandar `hidden sm:block` / `sm:hidden`, sin poder
+  verificarlo en un dispositivo real desde esta sesion).
+- El usuario menciono que con 3 origenes pedidos, la cuota de 6 solo permite 2 destinos
+  a la vez -- si quiere los 3 destinos de Polonia a la vez sin que se recorte nada,
+  tendria que reducir a 1 origen por busqueda. Esto es una limitacion de diseño
+  conocida, no un bug.
+
+---
+
+## Estado al 17 de septiembre de 2026 — Sesion: enlaces de reserva de ida y vuelta (v0.11.4, v0.11.5)
+
+### Contexto
+El usuario probo un itinerario real (Alicante -> Katowice, Wizz Air de ida + Ryanair de
+vuelta) y solo veia el enlace de reserva de la ida. Tras el primer fix, volvio a probar
+y el enlace de vuelta (Wizz Air) aparecia con el JSON de error crudo de Ignav sin
+traducir.
+
+### Fix (v0.11.4): faltaba pedir el enlace del tramo de vuelta
+`components/FlightResultCard.tsx` pedia `/api/booking-link` solo con
+`result.outbound.ignav_id`, nunca con `result.inbound.ignav_id` -- por eso itinerarios
+con aerolineas distintas en cada tramo (o incluso la misma) solo mostraban un enlace.
+Fix: pide ambos en paralelo con `Promise.allSettled`, agrupados bajo "Ida" y "Vuelta",
+tolerante a fallo parcial (si un tramo falla, se conserva el enlace del otro).
+
+### Fix (v0.11.5): el reintento de /booking-links compartia limite con /one-way
+Causa raiz real, no un parche: `lib/ignav.ts` ya trataba 424 como reintentable, pero
+`MAX_RETRIES = 1` esta pensado para `/one-way` (hasta 60 peticiones en paralelo por
+busqueda, necesita fallar rapido para no agotar el timeout de funcion de Vercel). Ese
+mismo limite se aplicaba tambien a `/booking-links`, que es UNA sola llamada por tramo,
+sin ninguna razon para compartir el limite agresivo. Fix: constante separada
+`BOOKING_LINKS_MAX_RETRIES = 3` solo para `getBookingLinksByIgnavId`; `MAX_RETRIES`
+para `/one-way` intacto. Ademas, cuando los reintentos se agotan de verdad,
+`FlightResultCard.tsx` ahora muestra un mensaje legible (`friendlyLegError()`) en vez
+del JSON crudo de Ignav, y los avisos de error se muestran uno por tramo en vez de un
+unico string concatenado.
+
+### Verificado
+Documentado en `CHANGELOG.md` por la sesion que lo hizo. Esta sesion (analisis +
+handoff) no ha tocado codigo, solo ha completado la actualizacion de este archivo que
+otra sesion dejo a medias (ver archivo `docs/STATUS_NEW_HEAD.md`, ahora eliminado tras
+fusionarlo aqui).
+
+---
 
 ## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: ELIMINADOS los destinos curados por completo
 

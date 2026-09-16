@@ -30,15 +30,28 @@ function AirlineBadge({ name }: { name: string }) {
   );
 }
 
+// FIX (v0.11.5, bug real reportado con captura): antes se mostraba el error tecnico
+// completo de Ignav (JSON crudo con "type":"upstream_error", etc.) directamente al
+// usuario en el tramo fallido. Ahora se traduce a un mensaje honesto y corto, sin jerga
+// de API, y se distingue explicitamente si el fallo es tras reintentar (persistente) o
+// solo informativo.
+function friendlyLegError(rawMessage: string, legLabel: string): string {
+  const looksLikeUpstreamOutage = /upstream_error|unable_to_complete_request|424/i.test(rawMessage);
+  if (looksLikeUpstreamOutage) {
+    return `Ignav no pudo recuperar los enlaces de ${legLabel.toLowerCase()} tras varios intentos. Puede ser un problema temporal del proveedor -- vuelve a pulsar "Ver enlaces" en unos segundos.`;
+  }
+  return `No se pudieron obtener enlaces de ${legLabel.toLowerCase()}: ${rawMessage}`;
+}
+
 function BookingLinks({ links }: { links: BookingLink[] | null }) {
   if (links === null) return null;
   if (links.length === 0) return <p className="text-xs text-slate-400 dark:text-slate-500">Sin enlaces disponibles para este itinerario.</p>;
 
   const outbound = links.filter((link) => link.leg === 'outbound');
   const inbound = links.filter((link) => link.leg === 'inbound');
-  const renderLinks = (items: BookingLink[], label: string, airline: string) => (
+  const renderLinks = (items: BookingLink[], label: string) => (
     <div className="space-y-1">
-      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{label} · {airline}</p>
+      <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{label}</p>
       {items.length === 0 ? (
         <p className="text-xs text-slate-400 dark:text-slate-500">No se devolvieron enlaces para este tramo.</p>
       ) : (
@@ -57,8 +70,8 @@ function BookingLinks({ links }: { links: BookingLink[] | null }) {
 
   return (
     <div className="space-y-3">
-      {renderLinks(outbound, 'Ida', '')}
-      {renderLinks(inbound, 'Vuelta', '')}
+      {renderLinks(outbound, 'Ida')}
+      {renderLinks(inbound, 'Vuelta')}
     </div>
   );
 }
@@ -88,7 +101,7 @@ export default function FlightResultCard({
   const imageUrl = getCityImageUrl(destinationLabel);
   const [localLinks, setLocalLinks] = useState<BookingLink[] | null>(null);
   const [linksLoading, setLinksLoading] = useState(false);
-  const [linksError, setLinksError] = useState<string | null>(null);
+  const [linksErrors, setLinksErrors] = useState<string[]>([]);
   const [justRecommended, setJustRecommended] = useState(false);
 
   useEffect(() => {
@@ -100,7 +113,7 @@ export default function FlightResultCard({
 
   async function loadBothBookingLinks() {
     setLinksLoading(true);
-    setLinksError(null);
+    setLinksErrors([]);
     const loadLeg = async (ignavId: string, leg: 'outbound' | 'inbound') => {
       const response = await fetch('/api/booking-link', {
         method: 'POST',
@@ -114,9 +127,8 @@ export default function FlightResultCard({
       ) as BookingLink[];
     };
 
-    // Bug corregido: antes la pagina solo consultaba result.outbound.ignav_id. En un
-    // itinerario mixto (ej. Wizz Air de ida y Ryanair de vuelta) la vuelta nunca se
-    // consultaba. Las dos consultas son independientes y se lanzan en paralelo.
+    // Bug corregido en v0.11.4: antes la pagina solo consultaba result.outbound.ignav_id.
+    // Las dos consultas son independientes y se lanzan en paralelo.
     const [outboundResult, inboundResult] = await Promise.allSettled([
       loadLeg(result.outbound.ignav_id, 'outbound'),
       loadLeg(result.inbound.ignav_id, 'inbound')
@@ -125,12 +137,12 @@ export default function FlightResultCard({
     const links: BookingLink[] = [];
     const errors: string[] = [];
     if (outboundResult.status === 'fulfilled') links.push(...outboundResult.value);
-    else errors.push(`Ida: ${outboundResult.reason instanceof Error ? outboundResult.reason.message : String(outboundResult.reason)}`);
+    else errors.push(friendlyLegError(outboundResult.reason instanceof Error ? outboundResult.reason.message : String(outboundResult.reason), 'Ida'));
     if (inboundResult.status === 'fulfilled') links.push(...inboundResult.value);
-    else errors.push(`Vuelta: ${inboundResult.reason instanceof Error ? inboundResult.reason.message : String(inboundResult.reason)}`);
+    else errors.push(friendlyLegError(inboundResult.reason instanceof Error ? inboundResult.reason.message : String(inboundResult.reason), 'Vuelta'));
 
     setLocalLinks(links);
-    setLinksError(errors.length ? errors.join(' · ') : null);
+    setLinksErrors(errors);
     setLinksLoading(false);
   }
 
@@ -153,7 +165,10 @@ export default function FlightResultCard({
           <p className="text-sm font-semibold text-ink dark:text-slate-100 shrink-0 whitespace-nowrap">{result.totalPrice.toFixed(2)} {result.currency}</p>
           <button onClick={loadBothBookingLinks} disabled={linksLoading} className="text-xs font-medium bg-indigo hover:bg-indigo-dark text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap shrink-0">{linksLoading ? '...' : 'Enlaces'}</button>
         </div>
-        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 bg-slate-50/60"><BookingLinks links={localLinks} />{linksError && <p className="text-xs text-amber-700 mt-2">{linksError}</p>}</div>
+        <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 bg-slate-50/60">
+          <BookingLinks links={localLinks} />
+          {linksErrors.map((msg, i) => <p key={i} className="text-xs text-amber-700 mt-2">{msg}</p>)}
+        </div>
       </article>
     );
   }
@@ -187,7 +202,12 @@ export default function FlightResultCard({
           </div>
         </div>
       </div>
-      {localLinks !== null && <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-3 bg-slate-50/60"><BookingLinks links={localLinks} />{linksError && <p className="text-xs text-amber-700 mt-2">{linksError}</p>}</div>}
+      {localLinks !== null && (
+        <div className="border-t border-slate-100 dark:border-slate-800 px-4 py-3 bg-slate-50/60">
+          <BookingLinks links={localLinks} />
+          {linksErrors.map((msg, i) => <p key={i} className="text-xs text-amber-700 mt-2">{msg}</p>)}
+        </div>
+      )}
     </article>
   );
 }

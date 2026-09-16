@@ -95,9 +95,19 @@ const RETRYABLE_STATUSES = new Set([424, 429, 502, 503, 504]);
 // ese riesgo, aunque no lo elimina del todo -- ver docs/STATUS.md.
 const MAX_RETRIES = 1;
 
-async function ignavPost<T>(path: string, body: Record<string, unknown>): Promise<T> {
+// FIX (v0.11.5, bug real reportado con captura): /booking-links es UNA sola llamada por
+// tramo (ida o vuelta), no un fan-out de hasta 60 peticiones en paralelo como /one-way --
+// el limite de 1 reintento de MAX_RETRIES se penso para proteger el timeout de funcion de
+// Vercel durante la busqueda masiva, pero aplicado a booking-links solo consigue que un
+// 424 "upstream_error" transitorio de Ignav (visto en produccion: ALC-KTW ida con Wizz Air)
+// se propague crudo hasta el usuario tras un unico reintento. Al ser 1 sola llamada (no 60
+// en paralelo), hay margen de sobra para reintentar mas veces sin arriesgar el limite de
+// 10s de Vercel. MAX_RETRIES (para /one-way) se deja intacto.
+const BOOKING_LINKS_MAX_RETRIES = 3;
+
+async function ignavPost<T>(path: string, body: Record<string, unknown>, maxRetries: number = MAX_RETRIES): Promise<T> {
   let lastError: Error | null = null;
-  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     let res: Response;
     try {
       res = await fetch(`${IGNAV_BASE_URL}${path}`, {
@@ -118,7 +128,7 @@ async function ignavPost<T>(path: string, body: Record<string, unknown>): Promis
       // incidencia de red abortaba toda la busqueda. Ahora se trata igual que un status
       // reintentable.
       lastError = err instanceof Error ? err : new Error('Error de red desconocido llamando a Ignav');
-      if (attempt === MAX_RETRIES) throw lastError;
+      if (attempt === maxRetries) throw lastError;
       await sleep(400 * (attempt + 1));
       continue;
     }
@@ -127,7 +137,7 @@ async function ignavPost<T>(path: string, body: Record<string, unknown>): Promis
     }
     const text = await res.text().catch(() => '');
     lastError = new Error(`Ignav API error ${res.status} en ${path}: ${text}`);
-    if (!RETRYABLE_STATUSES.has(res.status) || attempt === MAX_RETRIES) {
+    if (!RETRYABLE_STATUSES.has(res.status) || attempt === maxRetries) {
       throw lastError;
     }
     await sleep(400 * (attempt + 1));
@@ -155,5 +165,5 @@ export type BookingLinksResponse = {
 };
 
 export async function getBookingLinksByIgnavId(ignavId: string): Promise<BookingLinksResponse> {
-  return ignavPost<BookingLinksResponse>('/booking-links', { ignav_id: ignavId });
+  return ignavPost<BookingLinksResponse>('/booking-links', { ignav_id: ignavId }, BOOKING_LINKS_MAX_RETRIES);
 }

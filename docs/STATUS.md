@@ -18,6 +18,83 @@
 > hacerse demasiado largo para ser util, dimelo y lo resumimos/archivamos las entradas
 > mas antiguas -- de momento se mantienen todas.
 
+## Estado al 15 de septiembre de 2026 (hora exacta no disponible) — Sesion: HOTFIX critico + integracion real de OpenAI
+
+### Hotfix critico desplegado de inmediato (antes que el resto de esta sesion)
+El usuario reporto una busqueda de prueba real que devolvia solo errores 400 de Ignav
+(`empty_airline_filter`) y ningun resultado, en TODAS las combinaciones probadas.
+Diagnostico: desde que se desplego el filtro de aerolineas (sesion anterior, v0.6.0),
+`airlinesInclude`/`airlinesExclude` llegaban como array VACIO `[]` (no `undefined`)
+cuando el usuario no rellenaba esos campos -- y se mandaban igual a Ignav dentro del
+objeto de la peticion. Ignav rechaza un array vacio explicito con un error de
+validacion ("debe incluir al menos un codigo si se proporciona"), asi que **TODAS las
+busquedas fallaban desde entonces**, no solo las que usaban el filtro de aerolineas --
+un regresion grave que paso desapercibida porque no se probo una busqueda real de punta
+a punta tras desplegar ese cambio (solo se verifico con `tsc`/`build`, que no detectan
+esto porque es un problema de VALORES en tiempo de ejecucion, no de tipos).
+Corregido en `lib/live-engine.ts`: se omite el campo entero (`undefined`, que
+`JSON.stringify` elimina de la peticion) en vez de mandar `[]`. Verificado con una
+prueba aislada de `JSON.stringify` confirmando que la clave desaparece del JSON.
+Desplegado a produccion en su propio PR (#18), antes de continuar con el resto.
+
+**Leccion para futuras sesiones**: cuando se anade un filtro opcional que se manda a
+una API externa, probar explicitamente el caso "campo vacio/sin usar" contra la forma
+real de la peticion (no solo que compile), porque `tsc`/`build` no detectan que un
+array vacio se sirva donde deberia ir `undefined`.
+
+### Integracion real de OpenAI
+Implementado `lib/ai-parse.ts` + `app/api/ai-parse/route.ts`: llamada a la API de
+OpenAI (Chat Completions, `response_format: json_schema` para salida estructurada) que
+sustituye al parser de regex como primera opcion para interpretar la busqueda en
+lenguaje natural. Contexto que recibe la IA: fecha de referencia, origenes disponibles,
+grupos curados, y los destinos REALES con vuelo directo confirmado desde los origenes
+ya elegidos (recortado a 220 para controlar coste) -- asi puede razonar sobre pistas
+como "un pais nordico" eligiendo entre los paises nordicos realmente conectados, algo
+que el regex nunca podria hacer.
+
+**Modelo usado**: `gpt-4o-mini` por defecto, configurable via `OPENAI_MODEL` (variable
+de entorno en Vercel, sin tocar codigo). Se eligio deliberadamente NO usar un nombre de
+modelo mas nuevo (se investigaron gpt-5-mini, gpt-5-nano, gpt-5.4/5.6-*) porque las
+fuentes encontradas por busqueda web eran contradictorias entre si sobre el nombre y
+precio exacto vigente ahora mismo -- probablemente contenido de blogs de baja calidad
+desactualizado o inventado. `gpt-4o-mini` es el nombre que se puede verificar con mas
+confianza que sigue siendo valido (confirmado con salida estructurada soportada, $0.15/
+$0.60 por millon de tokens de entrada/salida). Si se quiere el modelo mas barato
+disponible ahora mismo, revisar la pagina oficial de precios de OpenAI y cambiar la
+variable de entorno.
+
+**AVISO IMPORTANTE**: esta sesion no tiene acceso de red a `api.openai.com`, asi que
+la integracion **no se ha podido probar contra la API real**. Escrita con la mejor
+informacion disponible (formato de peticion/respuesta verificado por busqueda web).
+Si al probarla con una consulta real algo no encaja (formato de respuesta distinto,
+error de autenticacion, etc.), el error aparecera en la consola del servidor
+(`console.error` en la ruta) y la busqueda cae automaticamente al parser de regex local
+-- nunca se rompe la funcion de interpretar, en el peor caso se pierde la mejora de la
+IA para esa consulta.
+
+### Cuadro de NLP destacado de nuevo, con marco neon animado
+A peticion del usuario ("dale mas protagonismo... marco neon coherente en colores que
+se enciende y circule, tipo Siri"): quitado el plegado por `<details>` de la sesion
+anterior (ahora que va a estar potenciado por IA de verdad, merece estar siempre
+visible), y anadido un marco animado (degradado conico rotando, recortado solo al
+borde via CSS `mask`, tecnica estandar) con los mismos 3 colores del boton
+"Sorprendeme" (indigo/violeta/fucsia) para que la paleta sea coherente. Respeta
+`prefers-reduced-motion`.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP
+200, y una llamada de prueba a `/api/ai-parse` SIN key configurada confirmando que
+devuelve un error 503 controlado (tal como esta disenado) en vez de romper.
+
+### Pendiente
+- Probar la integracion de OpenAI con una consulta real (la key ya esta en Vercel) y
+  confirmar que el formato de respuesta encaja.
+- El PR de esta sesion (rama `feat/openai-nlp-siri-ui`) **no se ha mergeado a
+  produccion todavia** -- a diferencia del hotfix critico, esto es funcionalidad nueva
+  sin verificar en vivo, mejor que el usuario la pruebe en el preview primero.
+
+---
+
 ## Estado al 15 de septiembre de 2026 (hora exacta no disponible -- ver nota) — Sesion: produccion + revision de otros hilos + reorganizacion + identidad
 
 > Nota sobre la hora: el usuario pidio incluir la hora ademas de la fecha en estas

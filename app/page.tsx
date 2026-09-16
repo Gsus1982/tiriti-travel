@@ -9,9 +9,9 @@ import { getTravelProfile, saveTravelProfile } from '@/lib/travel-profile';
 import TopNav from '@/components/TopNav';
 import FlightPathStrip from '@/components/FlightPathStrip';
 import ToolsPanel from '@/components/ToolsPanel';
-import FlightResultCard from '@/components/FlightResultCard';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
+import ResultsSection from '@/components/ResultsSection';
 import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles } from '@/components/Icons';
 
 type Meta = {
@@ -426,11 +426,6 @@ export default function HomePage() {
     setSurpriseExplanation(null);
     setSurprisePicking(true);
 
-    // Mejora (peticion explicita: "estudia las opciones mas economicas o favorables en
-    // una fecha", no al azar): se le pide a la IA que razone sobre popularidad de ruta,
-    // distancia y epoca del ano para elegir los destinos con mas papeletas de salir
-    // baratos/favorables, en vez de un sorteo puro. Si la IA falla o no esta
-    // configurada, cae a la seleccion aleatoria (mismo comportamiento que antes).
     let iatas: string[];
     try {
       const res = await fetch('/api/ai-surprise', {
@@ -614,7 +609,6 @@ export default function HomePage() {
               </p>
             )}
           </div>
-
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
             <div className="space-y-6 min-w-0">
@@ -875,10 +869,6 @@ export default function HomePage() {
                   {shareMessage && <span className="text-xs text-emerald-600 dark:text-emerald-400">{shareMessage}</span>}
                 </div>
 
-                {/* Linea de progreso separada de los botones (a proposito): antes el
-                    mensaje cambiante vivia DENTRO del boton y su longitud variable hacia
-                    que el boton creciera y encogiera sin parar durante la busqueda. Con
-                    min-h fijo y truncate, esta linea no mueve nada de su alrededor. */}
                 <p className="min-h-[1rem] text-xs text-slate-500 dark:text-slate-400 truncate">
                   {loading ? progressMessage : ''}
                 </p>
@@ -897,56 +887,15 @@ export default function HomePage() {
               </section>
 
               {liveResults && (
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-2">
-                      <IconTicket className="w-5 h-5 text-indigo" />
-                      <div>
-                        <h2 className="font-display text-lg text-ink dark:text-slate-100">Vuelos disponibles</h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{liveResults.length} resultados</p>
-                      </div>
-                    </div>
-                    <div className="w-44">{sortSelect}</div>
-                  </div>
-
-                  {liveResults.length === 0 && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 text-center">
-                      Sin itinerarios directos que cumplan los filtros. Revisa los avisos de arriba.
-                    </p>
-                  )}
-
-                  {recommending && (
-                    <p className="text-xs text-indigo flex items-center gap-1.5">
-                      <IconSparkles className="w-3.5 h-3.5 animate-pulse" />
-                      La IA esta analizando los resultados para recomendarte uno...
-                    </p>
-                  )}
-                  {aiRecommendation && (
-                    <div className="bg-indigo-pale dark:bg-indigo-950 border border-indigo/30 rounded-2xl p-4 flex gap-2.5">
-                      <IconSparkles className="w-5 h-5 text-indigo shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-indigo-dark dark:text-indigo-light">Recomendacion de la IA</p>
-                        <p className="text-sm text-ink dark:text-slate-200 mt-0.5">{aiRecommendation.explanation}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    {liveResults.map((r) => {
-                      const rowKey = `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
-                      return (
-                        <FlightResultCard
-                          key={rowKey}
-                          result={r}
-                          bookingLinks={bookingLinks[rowKey]}
-                          loadingLinks={loadingLinks === rowKey}
-                          onShowLinks={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
-                          isRecommended={aiRecommendation?.rowKey === rowKey}
-                        />
-                      );
-                    })}
-                  </div>
-                </section>
+                <ResultsSection
+                  liveResults={liveResults}
+                  aiRecommendation={aiRecommendation}
+                  recommending={recommending}
+                  sortSelect={sortSelect}
+                  bookingLinks={bookingLinks}
+                  loadingLinks={loadingLinks}
+                  onShowLinks={(rowKey, ignavId) => handleShowLinks(rowKey, ignavId)}
+                />
               )}
             </div>
 

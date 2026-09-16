@@ -33,6 +33,7 @@ export default function ToolsPanel({
 
   const [alertLabel, setAlertLabel] = useState('');
   const [alertEmail, setAlertEmail] = useState('');
+  const [alertMaxPrice, setAlertMaxPrice] = useState<number | ''>(maxPriceTotal);
   const [alertSaving, setAlertSaving] = useState(false);
   const [alertMessage, setAlertMessage] = useState<string | null>(null);
 
@@ -67,12 +68,12 @@ export default function ToolsPanel({
   }
 
   async function saveAlert() {
-    if (!maxPriceTotal) {
-      setAlertMessage('Indica un precio maximo total para poder guardar la alerta.');
+    if (!alertMaxPrice) {
+      setAlertMessage('Indica un precio maximo total para poder guardar la alerta (campo justo debajo).');
       return;
     }
     if (!destinationIatas[0]) {
-      setAlertMessage('Elige al menos un destino para poder guardar la alerta.');
+      setAlertMessage('Elige al menos un destino en el buscador de arriba para poder guardar la alerta.');
       return;
     }
     setAlertSaving(true);
@@ -90,7 +91,7 @@ export default function ToolsPanel({
           inboundDateTo,
           adults,
           children,
-          maxPriceTotal,
+          maxPriceTotal: alertMaxPrice,
           label: alertLabel || null,
           email: alertEmail || null
         })
@@ -99,8 +100,8 @@ export default function ToolsPanel({
       if (!res.ok) throw new Error(data.error ?? 'Error desconocido');
       setAlertMessage(
         alertEmail
-          ? `Alerta guardada. Te avisaremos por email a ${alertEmail} si el precio baja de tu limite.`
-          : 'Alerta guardada. Un cron diario comprobara el precio y lo veras aqui la proxima vez (sin email configurado).'
+          ? `Alerta guardada (limite ${alertMaxPrice} EUR). Te avisaremos por email a ${alertEmail} si el precio baja de ese limite.`
+          : `Alerta guardada (limite ${alertMaxPrice} EUR). Un cron diario comprobara el precio y lo veras aqui la proxima vez (sin email configurado).`
       );
     } catch (e: any) {
       setAlertMessage(`Error: ${e.message}`);
@@ -176,12 +177,25 @@ export default function ToolsPanel({
           <IconBell className="w-4 h-4 text-indigo" />
           <h2 className="text-base font-semibold text-ink dark:text-slate-100">Guardar alerta de precio</h2>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-          Usa los filtros actuales del buscador (origenes, fechas, destino, precio maximo) y guarda una alerta. Un cron
-          diario comprobara si baja el precio. Si indicas un email, te avisaremos ahi en cuanto encuentre un match; sin
-          email, solo se guarda el ultimo precio minimo visto para consultarlo en este panel.
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+          Usa los origenes, fechas y destino actuales del buscador de arriba (
+          <strong className="text-slate-600 dark:text-slate-300">
+            {destinationIatas[0] ?? 'sin destino elegido todavia'}
+          </strong>
+          ). Fija aqui el precio maximo para ESTA alerta -- puede ser distinto al filtro de precio del buscador.
         </p>
         <div className="flex gap-2 items-end flex-wrap">
+          <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
+            Precio maximo total (EUR)
+            <input
+              type="number"
+              min={0}
+              placeholder="Ej: 350"
+              className="mt-1 w-28 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-lg p-2 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
+              value={alertMaxPrice}
+              onChange={(e) => setAlertMaxPrice(e.target.value === '' ? '' : Number(e.target.value))}
+            />
+          </label>
           <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
             Etiqueta (opcional)
             <input

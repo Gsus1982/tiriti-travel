@@ -14,6 +14,19 @@ function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
+function formatDuration(fromIso: string, toIso: string): string {
+  const ms = new Date(toIso).getTime() - new Date(fromIso).getTime();
+  const totalMinutes = Math.round(ms / 60000);
+  const days = Math.floor(totalMinutes / (24 * 60));
+  const hours = Math.floor((totalMinutes % (24 * 60)) / 60);
+  const minutes = totalMinutes % 60;
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  return parts.join(' ');
+}
+
 function rowKeyOf(r: LiveItinerary): string {
   return `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
 }
@@ -66,6 +79,16 @@ export default function ResultsSection({
     () => liveResults.filter((r) => compareKeys.includes(rowKeyOf(r))),
     [liveResults, compareKeys]
   );
+
+  const bestCompare = useMemo(() => {
+    if (compareItems.length === 0) return null;
+    const durations = compareItems.map((r) => new Date(r.inbound.arrival_at).getTime() - new Date(r.outbound.departure_at).getTime());
+    return {
+      minPrice: Math.min(...compareItems.map((r) => r.totalPrice)),
+      minDuration: Math.min(...durations),
+      earliestCheckout: Math.min(...compareItems.map((r) => new Date(r.hotelCheckoutAt).getTime()))
+    };
+  }, [compareItems]);
 
   const cheaperAltByKey = useMemo(() => {
     const map = new Map<string, LiveItinerary | null>();
@@ -137,11 +160,12 @@ export default function ResultsSection({
         </div>
       )}
 
-      {compareItems.length >= 2 && (
+      {compareItems.length >= 2 && bestCompare && (
         <div className="bg-white dark:bg-slate-900 border border-indigo/30 rounded-2xl p-4 overflow-x-auto">
           <div className="flex items-center justify-between mb-3">
             <p className="text-sm font-semibold text-ink dark:text-slate-100">
               Comparando {compareItems.length} opcion{compareItems.length > 1 ? 'es' : ''}
+              <span className="ml-2 text-xs font-normal text-slate-400">(en verde, la mejor de cada fila)</span>
             </p>
             <button
               type="button"
@@ -151,30 +175,52 @@ export default function ResultsSection({
               Limpiar comparacion
             </button>
           </div>
-          <table className="w-full text-xs min-w-[480px]">
+          <table className="w-full text-xs min-w-[720px]">
             <thead>
               <tr className="text-left text-slate-400 dark:text-slate-500 border-b border-slate-100 dark:border-slate-800">
                 <th className="py-1.5 pr-3 font-medium">Ruta</th>
                 <th className="py-1.5 pr-3 font-medium">Precio total</th>
+                <th className="py-1.5 pr-3 font-medium">Salida ida</th>
+                <th className="py-1.5 pr-3 font-medium">Llegada ida</th>
+                <th className="py-1.5 pr-3 font-medium">Salida vuelta</th>
+                <th className="py-1.5 pr-3 font-medium">Llegada vuelta</th>
+                <th className="py-1.5 pr-3 font-medium">Duracion total</th>
                 <th className="py-1.5 pr-3 font-medium">Salida hotel</th>
                 <th className="py-1.5 pr-3 font-medium">Aerolinea ida</th>
+                <th className="py-1.5 pr-3 font-medium">Aerolinea vuelta</th>
                 <th className="py-1.5 pr-3 font-medium">Open-jaw</th>
+                <th className="py-1.5 pr-3 font-medium">Fuente</th>
               </tr>
             </thead>
             <tbody>
-              {compareItems.map((r) => (
-                <tr key={rowKeyOf(r)} className="border-b border-slate-50 dark:border-slate-800/60 text-slate-700 dark:text-slate-300">
-                  <td className="py-1.5 pr-3">
-                    {r.originIata} → {r.destinationName}
-                  </td>
-                  <td className="py-1.5 pr-3 font-semibold text-ink dark:text-slate-100">
-                    {r.totalPrice.toFixed(2)} {r.currency}
-                  </td>
-                  <td className="py-1.5 pr-3">{formatDateTime(r.hotelCheckoutAt)}</td>
-                  <td className="py-1.5 pr-3">{r.outbound.airline}</td>
-                  <td className="py-1.5 pr-3">{r.isOpenJaw ? 'Si' : 'No'}</td>
-                </tr>
-              ))}
+              {compareItems.map((r) => {
+                const duration = new Date(r.inbound.arrival_at).getTime() - new Date(r.outbound.departure_at).getTime();
+                const checkoutTime = new Date(r.hotelCheckoutAt).getTime();
+                return (
+                  <tr key={rowKeyOf(r)} className="border-b border-slate-50 dark:border-slate-800/60 text-slate-700 dark:text-slate-300">
+                    <td className="py-1.5 pr-3 font-medium text-ink dark:text-slate-100">
+                      {r.originIata} → {r.destinationName}
+                    </td>
+                    <td className={`py-1.5 pr-3 font-semibold ${r.totalPrice === bestCompare.minPrice ? 'text-emerald-600 dark:text-emerald-400' : 'text-ink dark:text-slate-100'}`}>
+                      {r.totalPrice.toFixed(2)} {r.currency}
+                    </td>
+                    <td className="py-1.5 pr-3">{formatDateTime(r.outbound.departure_at)}</td>
+                    <td className="py-1.5 pr-3">{formatDateTime(r.outbound.arrival_at)}</td>
+                    <td className="py-1.5 pr-3">{formatDateTime(r.inbound.departure_at)}</td>
+                    <td className="py-1.5 pr-3">{formatDateTime(r.inbound.arrival_at)}</td>
+                    <td className={`py-1.5 pr-3 ${duration === bestCompare.minDuration ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : ''}`}>
+                      {formatDuration(r.outbound.departure_at, r.inbound.arrival_at)}
+                    </td>
+                    <td className={`py-1.5 pr-3 ${checkoutTime === bestCompare.earliestCheckout ? 'text-emerald-600 dark:text-emerald-400 font-semibold' : ''}`}>
+                      {formatDateTime(r.hotelCheckoutAt)}
+                    </td>
+                    <td className="py-1.5 pr-3">{r.outbound.airline}</td>
+                    <td className="py-1.5 pr-3">{r.inbound.airline}</td>
+                    <td className="py-1.5 pr-3">{r.isOpenJaw ? 'Si' : 'No'}</td>
+                    <td className="py-1.5 pr-3">{r.source === 'skyscanner' ? 'Sky Scrapper' : 'Ignav'}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

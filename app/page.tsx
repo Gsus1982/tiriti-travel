@@ -9,10 +9,10 @@ import { getTravelProfile, saveTravelProfile } from '@/lib/travel-profile';
 import TopNav from '@/components/TopNav';
 import FlightPathStrip from '@/components/FlightPathStrip';
 import ToolsPanel from '@/components/ToolsPanel';
-import FlightResultCard from '@/components/FlightResultCard';
+import ResultsSection from '@/components/ResultsSection';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
-import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconShare, IconSparkles } from '@/components/Icons';
 
 type Meta = {
   origins: { iata: string; city: string }[];
@@ -846,69 +846,16 @@ export default function HomePage() {
               </section>
 
               {liveResults && (
-                <section className="space-y-4">
-                  <div className="flex items-center justify-between flex-wrap gap-3">
-                    <div className="flex items-center gap-2">
-                      <IconTicket className="w-5 h-5 text-indigo" />
-                      <div>
-                        <h2 className="font-display text-lg text-ink dark:text-slate-100">Vuelos disponibles</h2>
-                        <p className="text-xs text-slate-500 dark:text-slate-400">{liveResults.length} resultados</p>
-                      </div>
-                    </div>
-                    <div className="w-44">{renderSortSelect('results')}</div>
-                  </div>
-
-                  {liveResults.length === 0 && (
-                    <p className="text-sm text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 rounded-2xl p-6 text-center">
-                      Sin itinerarios directos que cumplan los filtros. Revisa los avisos de abajo.
-                    </p>
-                  )}
-
-                  {recommending && (
-                    <p className="text-xs text-indigo flex items-center gap-1.5">
-                      <IconSparkles className="w-3.5 h-3.5 animate-pulse" />
-                      La IA esta analizando los resultados para recomendarte uno...
-                    </p>
-                  )}
-                  {aiRecommendation && (
-                    <div className="bg-indigo-pale dark:bg-indigo-950 border border-indigo/30 rounded-2xl p-4 flex gap-2.5">
-                      <IconSparkles className="w-5 h-5 text-indigo shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-indigo-dark dark:text-indigo-light">Recomendacion de la IA</p>
-                        <p className="text-sm text-ink dark:text-slate-200 mt-0.5">{aiRecommendation.explanation}</p>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="space-y-3">
-                    {liveResults.map((r) => {
-                      const rowKey = `${r.outbound.ignav_id}-${r.inbound.ignav_id}`;
-                      return (
-                        <FlightResultCard
-                          key={rowKey}
-                          result={r}
-                          bookingLinks={bookingLinks[rowKey]}
-                          loadingLinks={loadingLinks === rowKey}
-                          onShowLinks={() => handleShowLinks(rowKey, r.outbound.ignav_id)}
-                          isRecommended={aiRecommendation?.rowKey === rowKey}
-                        />
-                      );
-                    })}
-                  </div>
-
-                  {warnings.length > 0 && (
-                    <details className="bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg p-3 text-sm text-amber-800 dark:text-amber-200">
-                      <summary className="font-medium cursor-pointer select-none">
-                        Avisos de la busqueda ({warnings.length}) -- toca para ver
-                      </summary>
-                      <ul className="list-disc pl-5 space-y-0.5 mt-2">
-                        {warnings.map((w, i) => (
-                          <li key={i}>{w}</li>
-                        ))}
-                      </ul>
-                    </details>
-                  )}
-                </section>
+                <ResultsSection
+                  liveResults={liveResults}
+                  bookingLinks={bookingLinks}
+                  loadingLinks={loadingLinks}
+                  onShowLinks={handleShowLinks}
+                  aiRecommendation={aiRecommendation}
+                  recommending={recommending}
+                  warnings={warnings}
+                  sortSelect={renderSortSelect('results')}
+                />
               )}
             </div>
 

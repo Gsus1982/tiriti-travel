@@ -2,6 +2,99 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.11.3] - 2026-09-16 (fix real: la misma busqueda encontraba vuelos unas veces y otras no)
+
+El usuario reporto que el mismo prompt exacto de lenguaje natural ("Vuelo a Polonia,
+preferiblemente Cracovia, Katowice, o Wroclaw desde Alicante, Valencia o Madrid...")
+encontraba resultados unas veces y otras no, sin ningun cambio de por medio. No era
+aleatoriedad de Ignav: con 3 origenes x 3 destinos pedidos (9 combinaciones, por encima
+del maximo de 6), el recorte de `lib/ai-parse.ts` cortaba la lista de destinos en el
+ORDEN en que la IA los devolvia -- orden que varia entre llamadas identicas por
+`temperature: 0.2` (no 0). Cada ejecucion podia descartar un destino distinto de los 3
+pedidos, cambiando que rutas se buscaban de verdad.
+
+### Corregido
+- `lib/ai-parse.ts`: el recorte por cuota ahora ordena los destinos alfabeticamente por
+  IATA ANTES de cortar, asi la misma frase descarta siempre el mismo destino en vez de
+  uno aleatorio. Anadido un campo `warnings: string[]` explicito (antes el aviso solo
+  se pegaba al final de la `explanation` en prosa) que indica exactamente que
+  destino(s) se descartaron y sugiere cuantos origenes reducir si se quieren todos.
+- `app/page.tsx`: `handleInterpret` ignoraba cualquier aviso de la IA en la rama de
+  exito (`setNlpWarnings([])` fijo) -- ahora propaga `ai.warnings` al cuadro amarillo.
+
+## [0.11.2] - 2026-09-16 (historial de alertas + comparador responsive)
+
+### Anadido
+- **Historial de alertas de precio visible** en `ToolsPanel` (antes `GET /api/alerts`
+  existia pero no se mostraba en ningun sitio de la UI): lista con ruta, fechas, limite
+  de precio, minimo visto, si hubo match y email asociado, con boton "Borrar" por
+  alerta (`DELETE /api/alerts?id=`, nuevo).
+- **Aviso al llegar al limite de 3 comparaciones**: antes marcar una 4a tarjeta no
+  hacia nada sin explicacion; ahora aparece un aviso ambar temporal.
+- **Comparador responsive**: en movil (pantalla estrecha) la tabla de 12 columnas pasa
+  a tarjetas apiladas con los mismos datos, en vez de forzar scroll horizontal.
+
+## [0.11.1] - 2026-09-16 (fix real: no habia campo de precio para la alerta + comparador pobre)
+
+El usuario reporto 2 problemas reales probando el PR anterior: al guardar una alerta,
+el mensaje pedia un precio maximo pero no habia ningun campo visible para introducirlo
+(vivia en otro panel, el de filtros de busqueda); y el comparador de vuelos era "muy
+pobre", sin horas de llegada/salida ni mas variables para comparar.
+
+### Corregido
+- `ToolsPanel.tsx`: nuevo campo propio "Precio maximo total (EUR)" dentro del propio
+  formulario de "Guardar alerta de precio" (antes solo existia en el panel lateral de
+  filtros de busqueda, lo que causaba la confusion). Se precarga con el filtro de
+  busqueda actual si hay uno, pero es independiente.
+
+### Cambiado
+- **Comparador ampliado de 5 a 12 columnas**: anadidas horas de salida/llegada de ida y
+  vuelta, duracion total, aerolinea de vuelta y fuente (Ignav/Sky Scrapper). Resalta en
+  verde el mejor valor de cada fila (precio, duracion, hora de salida del hotel) entre
+  las opciones comparadas.
+
+## [0.11.0] - 2026-09-16 (comparador, vista lista, alertas por email, y mas)
+
+Sesion de continuacion sobre el PR de mejoras (`revisar-por-claude`) que quedo con
+conflictos reales tras el merge del fix de origenes (ver 0.10.1 mas abajo, mismos
+archivos tocados por ambos). Reconstruido desde cero sobre el `main` ya arreglado, en
+vez de mergear la rama antigua.
+
+### Anadido
+- **Comparador de hasta 3 resultados lado a lado** (`components/ResultsSection.tsx`
+  nuevo): checkbox "Comparar" en cada tarjeta, tabla comparativa aparte.
+- **Vista Tarjetas / Lista**: toggle para busquedas con muchos resultados.
+- **Aviso de alternativa "casi igual pero mas barata"**: cada tarjeta calcula si hay
+  otra opcion >=15 EUR mas barata que sale del hotel <=3h antes.
+- **Estado vacio con personalidad**: mensaje con el mismo tono del resto de la app
+  cuando no hay resultados, en vez de un aviso tecnico plano.
+- **Animacion al recomendar**: anillo que se desvanece en 1.4s en la tarjeta que la IA
+  recomienda, para dirigir la vista.
+- **Alertas de precio por email real** (`lib/email.ts` nuevo, via Resend): campo de
+  email en `ToolsPanel`, envio real desde el cron diario `check-alerts` cuando el
+  precio baja del limite (sin repetir el aviso mientras siga bajo).
+
+## [0.10.1] - 2026-09-16 (fix real: origenes rotos + aviso de busqueda mal ubicado + selector de orden)
+
+El usuario reporto 3 problemas probando produccion: solo aparecia Alicante en el
+selector de origenes (Valencia/Madrid/Murcia habian desaparecido), el aviso amarillo de
+la busqueda aparecia antes de los resultados y siempre desplegado, y el selector de
+"Ordenar por" no parecia reordenar nada.
+
+### Corregido
+- **Causa raiz de "solo Alicante"**: `/api/meta` fallaba entero porque
+  `listDestinationGroups()` consultaba `destination_groups`, tabla que ya no existia en
+  la BD real (borrada por una sesion anterior sin actualizar el codigo -- ver PR #22,
+  mergeado en esta misma sesion tras encontrarlo abandonado). Al fallar esa consulta
+  dentro de un `Promise.all`, toda la respuesta fallaba y el frontend caia al fallback
+  de emergencia de un solo origen.
+- `app/page.tsx`: el aviso de la busqueda se movio de dentro del formulario a DESPUES
+  de los resultados, y ahora usa `<details>` (colapsado por defecto) en vez de estar
+  siempre desplegado.
+- El selector de "Ordenar por" se separo en 2 instancias de `<select>` totalmente
+  independientes (antes compartian el mismo elemento React en 2 sitios del arbol) para
+  eliminar cualquier ambiguedad de reconciliacion.
+
 ## [0.10.0] - 2026-09-15 (ELIMINADOS los destinos curados por completo)
 
 A peticion explicita del usuario ("elimina los destinos curados de una vez por todas y

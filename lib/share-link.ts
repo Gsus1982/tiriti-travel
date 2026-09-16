@@ -4,7 +4,6 @@
 
 export type ShareableFilters = {
   originIatas: string[];
-  destinationGroupIds: string[];
   selectedDestIatas: string[];
   outboundDateFrom: string;
   outboundDateTo: string;
@@ -29,7 +28,6 @@ export type ShareableFilters = {
 export function buildShareUrl(f: ShareableFilters): string {
   const params = new URLSearchParams();
   if (f.originIatas.length) params.set('o', f.originIatas.join(','));
-  if (f.destinationGroupIds.length) params.set('dg', f.destinationGroupIds.join(','));
   if (f.selectedDestIatas.length) params.set('di', f.selectedDestIatas.join(','));
   params.set('of', f.outboundDateFrom);
   params.set('ot', f.outboundDateTo);
@@ -67,8 +65,6 @@ export function parseShareParams(search: string): Partial<ShareableFilters> {
 
   const originIatas = csv('o');
   if (originIatas) result.originIatas = originIatas;
-  const destinationGroupIds = csv('dg');
-  if (destinationGroupIds) result.destinationGroupIds = destinationGroupIds;
   const selectedDestIatas = csv('di');
   if (selectedDestIatas) result.selectedDestIatas = selectedDestIatas;
 

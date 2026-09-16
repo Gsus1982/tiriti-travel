@@ -1,9 +1,7 @@
 export type MetaOrigin = { iata: string; city: string };
-export type MetaGroup = { id: string; name: string; country: string };
 
 export type ParsedQuery = {
   originIatas: string[];
-  destinationGroupIds: string[];
   outboundDateFrom?: string;
   outboundDateTo?: string;
   inboundDateFrom?: string;
@@ -17,29 +15,24 @@ function stripAccents(s: string): string {
   return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 }
 
-const UNSUPPORTED_DESTINATION_ALIASES: Record<string, string> = {
-  londres: 'Londres',
-  paris: 'Paris',
-  roma: 'Roma',
-  berlin: 'Berlin',
-  amsterdam: 'Amsterdam',
-  lisboa: 'Lisboa'
-};
-
 function pad2(n: number): string {
   return n.toString().padStart(2, '0');
 }
 
 /**
- * Parser basado en reglas (regex + diccionario), NO es un LLM. Interpreta un
- * subconjunto razonable de frases en espanol para precargar el formulario.
- * No soporta logica condicional compleja del tipo "dia A despues de hora X,
- * si no dia B despues de hora Y": en ese caso amplia el rango de fechas y usa
- * la hora mas permisiva, avisando al usuario para que revise manualmente.
+ * Parser basado en reglas (regex), NO es un LLM -- se usa solo como respaldo si la IA
+ * (lib/ai-parse.ts) no esta configurada o falla. Interpreta origenes, fechas y horas
+ * en espanol para precargar el formulario. NO intenta detectar destinos: hacer
+ * fuzzy-matching fiable por regex contra los cientos de destinos reales de Aena no es
+ * razonable (a diferencia de la IA, que si puede razonar sobre nombres/paises/temas) --
+ * se avisa al usuario para que elija el destino manualmente en el selector de abajo.
+ * Tampoco soporta logica condicional compleja del tipo "dia A despues de hora X, si no
+ * dia B despues de hora Y": en ese caso amplia el rango de fechas y usa la hora mas
+ * permisiva, avisando al usuario para que revise manualmente.
  */
 export function parseSearchQuery(
   rawText: string,
-  meta: { origins: MetaOrigin[]; groups: MetaGroup[] },
+  meta: { origins: MetaOrigin[] },
   referenceYearMonth: { year: number; month: number }
 ): ParsedQuery {
   const text = stripAccents(rawText);
@@ -50,24 +43,6 @@ export function parseSearchQuery(
     const cityNorm = stripAccents(o.city);
     if (text.includes(cityNorm) || text.includes(o.iata.toLowerCase())) {
       originIatas.push(o.iata);
-    }
-  }
-
-  const destinationGroupIds: string[] = [];
-  for (const g of meta.groups) {
-    const nameNorm = stripAccents(g.name);
-    const countryNorm = stripAccents(g.country);
-    if (text.includes(nameNorm) || text.includes(countryNorm)) {
-      destinationGroupIds.push(g.id);
-    }
-  }
-  if (destinationGroupIds.length === 0) {
-    for (const [alias, label] of Object.entries(UNSUPPORTED_DESTINATION_ALIASES)) {
-      if (text.includes(alias)) {
-        warnings.push(
-          `Destino "${label}" detectado en el texto pero no esta disponible todavia en la base de datos de TiritiTravel. Anadelo manualmente en Neon o elige otro destino.`
-        );
-      }
     }
   }
 
@@ -150,14 +125,11 @@ export function parseSearchQuery(
   }
 
   if (originIatas.length === 0) warnings.push('No se ha reconocido ningun aeropuerto de origen en el texto; selecciona manualmente.');
-  if (destinationGroupIds.length === 0 && !warnings.some((w) => w.includes('Destino'))) {
-    warnings.push('No se ha reconocido ningun destino disponible en el texto; selecciona manualmente.');
-  }
+  warnings.push('El destino no se detecta automaticamente con este analizador local (sin IA); elige uno o varios en el selector de destinos reales de abajo.');
   if (!outboundDateFrom) warnings.push('No se ha detectado ninguna fecha de ida; ajusta las fechas manualmente.');
 
   return {
     originIatas,
-    destinationGroupIds,
     outboundDateFrom,
     outboundDateTo,
     inboundDateFrom,

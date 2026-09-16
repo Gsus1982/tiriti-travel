@@ -5,7 +5,6 @@ export type Pax = {
 
 export type SearchFilters = {
   originIatas: string[];
-  destinationGroupIds: string[];
   outboundDateFrom: string;
   outboundDateTo: string;
   inboundDateFrom: string;

@@ -6,7 +6,7 @@ export const runtime = 'nodejs';
 
 export async function GET() {
   const rows = await sql`
-    SELECT id, created_at, origin_iatas, destination_group_id, destination_iata,
+    SELECT id, created_at, origin_iatas, destination_iata,
            outbound_date_from, outbound_date_to, inbound_date_from, inbound_date_to,
            adults, children, max_price_total, label, last_checked_at, last_min_price,
            last_match_found, active
@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
     const {
       originIatas,
-      destinationGroupId,
       destinationIata,
       outboundDateFrom,
       outboundDateTo,
@@ -33,20 +32,17 @@ export async function POST(request: NextRequest) {
       label
     } = body;
 
-    if (!originIatas?.length || (!destinationGroupId && !destinationIata) || !maxPriceTotal) {
-      return NextResponse.json(
-        { error: 'originIatas, destinationGroupId o destinationIata, y maxPriceTotal son obligatorios' },
-        { status: 400 }
-      );
+    if (!originIatas?.length || !destinationIata || !maxPriceTotal) {
+      return NextResponse.json({ error: 'originIatas, destinationIata y maxPriceTotal son obligatorios' }, { status: 400 });
     }
 
     const rows = await sql`
       INSERT INTO price_alerts (
-        origin_iatas, destination_group_id, destination_iata,
+        origin_iatas, destination_iata,
         outbound_date_from, outbound_date_to, inbound_date_from, inbound_date_to,
         adults, children, max_price_total, label
       ) VALUES (
-        ${originIatas}, ${destinationGroupId ?? null}, ${destinationIata ?? null},
+        ${originIatas}, ${destinationIata},
         ${outboundDateFrom}, ${outboundDateTo}, ${inboundDateFrom}, ${inboundDateTo},
         ${adults ?? 2}, ${children ?? 0}, ${maxPriceTotal}, ${label ?? null}
       )

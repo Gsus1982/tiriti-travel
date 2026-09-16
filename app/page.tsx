@@ -15,7 +15,6 @@ import SearchHistoryPanel from '@/components/SearchHistoryPanel';
 import { IconSliders, IconMapPin, IconTicket, IconShare, IconSparkles } from '@/components/Icons';
 
 type Meta = {
-  groups: { id: string; name: string; country: string }[];
   origins: { iata: string; city: string }[];
 };
 
@@ -69,7 +68,6 @@ function groupByCity(list: RealDestination[]) {
 export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [originIatas, setOriginIatas] = useState<string[]>(() => getTravelProfile()?.originIatas ?? ['ALC']);
-  const [destinationGroupIds, setDestinationGroupIds] = useState<string[]>([]);
   const [selectedDestIatas, setSelectedDestIatas] = useState<string[]>([]);
   const [excludeIatasText, setExcludeIatasText] = useState('');
   const [airlinesIncludeText, setAirlinesIncludeText] = useState('');
@@ -124,7 +122,6 @@ export default function HomePage() {
     if (typeof window === 'undefined' || !window.location.search) return;
     const parsed = parseShareParams(window.location.search);
     if (parsed.originIatas) setOriginIatas(parsed.originIatas);
-    if (parsed.destinationGroupIds) setDestinationGroupIds(parsed.destinationGroupIds);
     if (parsed.selectedDestIatas) setSelectedDestIatas(parsed.selectedDestIatas);
     if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
     if (parsed.outboundDateTo) setOutboundDateTo(parsed.outboundDateTo);
@@ -197,7 +194,7 @@ export default function HomePage() {
       });
   }, [originIatas]);
 
-  const combos = originIatas.length * (destinationGroupIds.length + selectedDestIatas.length);
+  const combos = originIatas.length * selectedDestIatas.length;
 
   const excludeIatas = useMemo(
     () =>
@@ -234,13 +231,10 @@ export default function HomePage() {
     () => originIatas.map((iata) => (meta?.origins ?? []).find((o) => o.iata === iata)?.city ?? iata),
     [originIatas, meta]
   );
-  const destinationLabels = useMemo(() => {
-    const groupNames = destinationGroupIds.map((id) => (meta?.groups ?? []).find((g) => g.id === id)?.name ?? id);
-    const iataNames = selectedDestIatas.map(
-      (iata) => realDestinations.find((d) => d.dest_iata === iata)?.dest_name ?? iata
-    );
-    return [...groupNames, ...iataNames];
-  }, [destinationGroupIds, selectedDestIatas, meta, realDestinations]);
+  const destinationLabels = useMemo(
+    () => selectedDestIatas.map((iata) => realDestinations.find((d) => d.dest_iata === iata)?.dest_name ?? iata),
+    [selectedDestIatas, realDestinations]
+  );
 
   async function handleInterpret() {
     if (!meta || !nlpText.trim()) return;
@@ -256,7 +250,6 @@ export default function HomePage() {
           text: nlpText,
           referenceDate: outboundDateFrom || new Date().toISOString().slice(0, 10),
           origins: meta.origins,
-          groups: meta.groups,
           realDestinations: realDestinations.map((d) => ({ dest_iata: d.dest_iata, dest_name: d.dest_name, country: d.country }))
         })
       });
@@ -264,7 +257,6 @@ export default function HomePage() {
       const ai = await res.json();
 
       if (ai.originIatas?.length) setOriginIatas(ai.originIatas);
-      if (ai.destinationGroupIds?.length) setDestinationGroupIds(ai.destinationGroupIds);
       if (ai.destinationIatas?.length) setSelectedDestIatas(ai.destinationIatas);
       if (ai.outboundDateFrom) setOutboundDateFrom(ai.outboundDateFrom);
       if (ai.outboundDateTo) setOutboundDateTo(ai.outboundDateTo);
@@ -281,7 +273,6 @@ export default function HomePage() {
       // sin interpretacion, aunque la IA no este configurada o falle.
       const parsed = parseSearchQuery(nlpText, meta, { year: refDate.getFullYear(), month: refDate.getMonth() + 1 });
       if (parsed.originIatas.length) setOriginIatas(parsed.originIatas);
-      if (parsed.destinationGroupIds.length) setDestinationGroupIds(parsed.destinationGroupIds);
       if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
       if (parsed.outboundDateTo) setOutboundDateTo(parsed.outboundDateTo);
       if (parsed.inboundDateFrom) setInboundDateFrom(parsed.inboundDateFrom);
@@ -296,17 +287,15 @@ export default function HomePage() {
     }
   }
 
-  async function runSearch(groupIdsOverride?: string[], iataOverride?: string[], sortOverride?: 'checkout_time' | 'price' | 'duration') {
+  async function runSearch(iataOverride?: string[], sortOverride?: 'checkout_time' | 'price' | 'duration') {
     setLoading(true);
     setError(null);
     setWarnings([]);
     setBookingLinks({});
-    const groupIds = groupIdsOverride ?? destinationGroupIds;
     const iatas = iataOverride ?? selectedDestIatas;
     const effectiveSortBy = sortOverride ?? sortBy;
     const payload = {
       originIatas,
-      destinationGroupIds: groupIds,
       destinationIatas: iatas,
       excludeIatas,
       airlinesInclude,
@@ -340,7 +329,6 @@ export default function HomePage() {
 
       const shareFilters = {
         originIatas,
-        destinationGroupIds: groupIds,
         selectedDestIatas: iatas,
         outboundDateFrom,
         outboundDateTo,
@@ -375,7 +363,7 @@ export default function HomePage() {
     try {
       const summarized = results.slice(0, 12).map((r) => ({
         originIata: r.originIata,
-        destinationName: r.destinationGroupName,
+        destinationName: r.destinationName,
         outboundDepartureAt: r.outbound.departure_at,
         inboundDepartureAt: r.inbound.departure_at,
         totalPrice: r.totalPrice,
@@ -458,10 +446,9 @@ export default function HomePage() {
       setSurprisePicking(false);
     }
 
-    setDestinationGroupIds([]);
     setSelectedDestIatas(iatas);
     setSortBy('price');
-    await runSearch([], iatas, 'price');
+    await runSearch(iatas, 'price');
   }
 
   function handleReSort(newSortBy: 'checkout_time' | 'price' | 'duration') {
@@ -492,7 +479,6 @@ export default function HomePage() {
   function currentShareFilters() {
     return {
       originIatas,
-      destinationGroupIds,
       selectedDestIatas,
       outboundDateFrom,
       outboundDateTo,
@@ -537,7 +523,6 @@ export default function HomePage() {
     if (!search) return;
     const parsed = parseShareParams(`?${search}`);
     if (parsed.originIatas) setOriginIatas(parsed.originIatas);
-    if (parsed.destinationGroupIds) setDestinationGroupIds(parsed.destinationGroupIds);
     if (parsed.selectedDestIatas) setSelectedDestIatas(parsed.selectedDestIatas);
     if (parsed.outboundDateFrom) setOutboundDateFrom(parsed.outboundDateFrom);
     if (parsed.outboundDateTo) setOutboundDateTo(parsed.outboundDateTo);
@@ -657,7 +642,7 @@ export default function HomePage() {
                         </div>
                         <button
                           onClick={handleSearch}
-                          disabled={loading || originIatas.length === 0 || (destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
+                          disabled={loading || originIatas.length === 0 || selectedDestIatas.length === 0}
                           className="bg-indigo hover:bg-indigo-dark text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors disabled:opacity-40"
                         >
                           {loading ? 'Buscando...' : 'Buscar con esta interpretacion'}
@@ -860,7 +845,7 @@ export default function HomePage() {
                 <div className="flex items-center gap-3 flex-wrap">
                   <button
                     onClick={handleSearch}
-                    disabled={loading || originIatas.length === 0 || (destinationGroupIds.length === 0 && selectedDestIatas.length === 0)}
+                    disabled={loading || originIatas.length === 0 || selectedDestIatas.length === 0}
                     className="bg-indigo hover:bg-indigo-dark text-white font-semibold px-6 py-2.5 rounded-lg transition-colors disabled:opacity-40"
                   >
                     {loading ? 'Buscando...' : 'Buscar vuelos'}
@@ -1055,7 +1040,6 @@ export default function HomePage() {
 
               <ToolsPanel
                 originIatas={originIatas}
-                destinationGroupIds={destinationGroupIds}
                 destinationIatas={selectedDestIatas}
                 outboundDateFrom={outboundDateFrom}
                 outboundDateTo={outboundDateTo}

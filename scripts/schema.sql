@@ -1,18 +1,9 @@
 -- Esquema aplicado en Neon (proyecto tiriti-travel). Documentado aquí para referencia y control de versiones.
 
-CREATE TABLE IF NOT EXISTS destination_groups (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  country TEXT NOT NULL,
-  excluded BOOLEAN NOT NULL DEFAULT FALSE,
-  notes TEXT
-);
-
 CREATE TABLE IF NOT EXISTS airports (
   iata CHAR(3) PRIMARY KEY,
   city TEXT NOT NULL,
   country TEXT NOT NULL,
-  group_id TEXT REFERENCES destination_groups(id),
   lat DOUBLE PRECISION,
   lon DOUBLE PRECISION,
   is_origin_candidate BOOLEAN NOT NULL DEFAULT FALSE
@@ -67,3 +58,29 @@ CREATE TABLE IF NOT EXISTS skyscanner_airport_cache (
   entity_id TEXT NOT NULL,
   resolved_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ============================================================================
+-- MIGRACION: eliminar destinos curados (sesion del 15 sep 2026)
+-- ============================================================================
+-- El esquema de arriba ya refleja el estado deseado (sin destination_groups ni
+-- group_id), pero esta sesion no tiene credenciales de conexion a tu base de
+-- datos real de Neon -- ejecuta esto TU MISMO en el SQL Editor de Neon para
+-- que la base de datos coincida con lo que ahora espera el codigo:
+--
+--   ALTER TABLE airports DROP COLUMN IF EXISTS group_id;
+--   DROP TABLE IF EXISTS destination_groups;
+--   ALTER TABLE price_alerts DROP COLUMN IF EXISTS destination_group_id;
+--
+-- Orden importante: la columna group_id de airports (que referencia
+-- destination_groups) hay que quitarla ANTES de borrar la tabla, o Postgres
+-- se quejara de la referencia. destination_group_id en price_alerts es una
+-- columna aparte sin relacion de bloqueo, se puede quitar en cualquier
+-- momento. Ninguna de las 3 sentencias falla si la columna/tabla ya no
+-- existe (los IF EXISTS son a proposito, para poder ejecutar esto sin miedo
+-- aunque ya se haya aplicado antes).
+--
+-- El codigo de la aplicacion YA NO escribe ni lee ninguna de estas 3 cosas
+-- desde este commit, asi que aunque no ejecutes esta migracion ahora mismo
+-- la app funciona igual -- son columnas/tabla huerfanas que simplemente
+-- dejan de usarse, no bloquean nada. Ejecutarla es solo para tener la base
+-- de datos limpia y coherente con el codigo.

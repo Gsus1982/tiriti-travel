@@ -4,10 +4,8 @@ import { searchLiveItineraries, type LiveFilters, type LiveItinerary } from '@/l
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
-type Body = Partial<Omit<LiveFilters, 'originIatas' | 'destinationGroupIds'>> & {
+type Body = Partial<Omit<LiveFilters, 'originIatas'>> & {
   originIatas?: string[];
-  destinationGroupIds?: string[];
-  destinationGroupId?: string;
   destinationIatas?: string[];
   destinationIata?: string;
   excludeIatas?: string[];
@@ -18,34 +16,19 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as Body;
 
     const originIatas = body.originIatas ?? [];
-    const destinationGroupIds = body.destinationGroupIds ?? (body.destinationGroupId ? [body.destinationGroupId] : []);
     const destinationIatas = body.destinationIatas ?? (body.destinationIata ? [body.destinationIata] : []);
     const excludeIatas = (body.excludeIatas ?? []).map((s) => s.toUpperCase());
     const { outboundDateFrom, outboundDateTo, inboundDateFrom, inboundDateTo } = body;
 
-    // FIX (14 sep 2026): antes se exigia `!destinationGroupIds?.length` a secas, lo que
-    // rechazaba cualquier busqueda que usara solo destinationIatas sueltos (sin grupos
-    // curados), aunque la peticion fuera perfectamente valida. Ese era el origen exacto
-    // del error "Faltan campos obligatorios" que salta al elegir destinos individuales
-    // (ej. Londres/Heathrow) en vez de un grupo curado con evento.
-    if (
-      !originIatas?.length ||
-      (!destinationGroupIds?.length && !destinationIatas?.length) ||
-      !outboundDateFrom ||
-      !inboundDateFrom
-    ) {
+    if (!originIatas?.length || !destinationIatas?.length || !outboundDateFrom || !inboundDateFrom) {
       return NextResponse.json(
-        {
-          error:
-            'Faltan campos obligatorios: originIatas, destinationGroupIds o destinationIatas, outboundDateFrom, inboundDateFrom'
-        },
+        { error: 'Faltan campos obligatorios: originIatas, destinationIatas, outboundDateFrom, inboundDateFrom' },
         { status: 400 }
       );
     }
 
     const filters: LiveFilters = {
       originIatas,
-      destinationGroupIds,
       destinationIatas,
       outboundDateFrom,
       outboundDateTo: outboundDateTo ?? outboundDateFrom,

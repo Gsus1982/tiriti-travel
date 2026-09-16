@@ -55,14 +55,20 @@ Metabuscador **personal** de vuelos directos (uso exclusivo de Jesús), pensado 
 Esquema aplicado en Neon (ver tambien [`scripts/schema.sql`](./scripts/schema.sql)):
 
 ```
-destination_groups   -- Agrupaciones de destino (por pais), permiten open-jaw entre sus aeropuertos
-airports              -- Aeropuertos de origen (Espana) y de destino, enlazados a un destination_group
+airports              -- Aeropuertos de origen (Espana)
+aena_destinations     -- Destinos reales con vuelo directo confirmado, sincronizados a diario desde datos publicos de Aena
 legs                  -- Tramos de vuelo mock (para el modo "datos de ejemplo")
-transfer_times        -- Tiempos/precios de traslado entre aeropuertos/ciudades del mismo grupo (open-jaw)
+transfer_times        -- Tiempos/precios de traslado entre aeropuertos/ciudades de un mismo destino (open-jaw)
 hotel_transfer        -- Tiempo estimado aeropuerto->centro por ciudad (calculo de hora de salida del hotel)
 ```
 
-Grupos de destino actuales: Polonia (KRK/WRO/WAW/WMI), Riga, Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado.
+El open-jaw (llegar a un aeropuerto de una ciudad y salir desde otro) se calcula agrupando
+por CIUDAD REAL los destinos que el usuario selecciona en `aena_destinations` (ej. varios
+aeropuertos de Londres), no mediante una lista curada aparte -- la app tuvo una tabla
+`destination_groups` con destinos elegidos a mano por tema/evento (mercados navidenos,
+etc.), pero se elimino por completo (sesion del 15 sep 2026): fallaba sistematicamente
+con timeout en Ignav en varias sesiones distintas, al no estar la conectividad real
+verificada como si lo esta `aena_destinations`. Ver `docs/STATUS.md` para el detalle.
 Origenes actuales: Alicante (ALC), Madrid (MAD), Valencia (VLC), Murcia (RMU).
 
 ---
@@ -131,7 +137,7 @@ gh repo create tiriti-travel --private --add-readme
 
 1. Crear cuenta/proyecto en [Neon](https://neon.tech) (plan gratuito).
 2. Ejecutar el esquema en [`scripts/schema.sql`](./scripts/schema.sql).
-3. Poblar `destination_groups`, `airports`, `hotel_transfer`, `transfer_times` (ver historial de commits para los inserts exactos usados).
+3. Poblar `airports`, `hotel_transfer`, `transfer_times` (ver historial de commits para los inserts exactos usados).
 4. Obtener la cadena de conexion desde el dashboard de Neon (boton **Connect**), NO copiarla de un chat o documento (riesgo de caracteres invisibles al copiar/pegar).
 
 ### 3. Crear cuenta en Ignav (opcional, para datos reales)

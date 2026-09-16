@@ -157,9 +157,8 @@ export async function searchSkyRoundTrip(
 
       results.push({
         originIata,
-        destinationGroupId: destinationIata,
-        destinationGroupName: destinationName,
-        isSingleIataTarget: true,
+        destinationId: destinationIata,
+        destinationName,
         outbound,
         inbound,
         isOpenJaw: false,

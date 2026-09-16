@@ -2,6 +2,45 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.10.0] - 2026-09-15 (ELIMINADOS los destinos curados por completo)
+
+A peticion explicita del usuario ("elimina los destinos curados de una vez por todas y
+no dejes rastro de ellos"), tras 2 fallos sistematicos confirmados en sesiones
+independientes (Sorprendeme y la interpretacion con IA eligiendo grupos con timeout al
+100% en Ignav).
+
+### Eliminado
+- Concepto completo de "destinos curados" (`destination_groups`, elegidos a mano por
+  tema/evento: Polonia, Riga, Estocolmo, Helsinki, Oslo, Atenas, Sofia, Belgrado) --
+  quitado de todo el codigo: `lib/live-engine.ts` (resolucion de destinos, tipos),
+  `lib/meta-queries.ts`, `app/api/meta/route.ts`, `app/api/search-live/route.ts`,
+  `lib/ai-parse.ts` (prompt e IA), `lib/nlp-search.ts` (parser de respaldo),
+  `lib/share-link.ts`, `lib/skyscanner-adapter.ts`, `lib/types.ts`,
+  `components/FlightResultCard.tsx` (quitado el badge "Destino suelto", ya sin sentido),
+  `components/ToolsPanel.tsx`, `app/api/alerts/route.ts`,
+  `app/api/cron/check-alerts/route.ts`.
+- Campos renombrados en `LiveItinerary` (`destinationGroupId`/`Name` ->
+  `destinationId`/`Name`) para que no quede ni el nombre del concepto eliminado.
+
+### Cambiado
+- **El open-jaw ahora se basa en agrupar destinos REALES por ciudad** (mismo criterio
+  que ya usaba el selector "ciudad (todos)" de la interfaz), no en una tabla curada
+  aparte -- unica funcionalidad que dependia de los grupos, ahora sobre datos
+  verificados por Aena. Nueva funcion unica `resolveDestinationTargets` en
+  `lib/live-engine.ts` sustituye a las 2 anteriores (`resolveGroupTargets` +
+  `resolveIataTargets`).
+- El parser de respaldo sin IA (`lib/nlp-search.ts`) ya no intenta detectar destinos
+  (nunca fue fiable por regex contra cientos de destinos reales) -- avisa honestamente
+  al usuario para que elija en el selector.
+- `scripts/schema.sql` actualizado al esquema deseado (sin `destination_groups` ni
+  `group_id`). **Incluye un bloque de migracion SQL para ejecutar manualmente en Neon**
+  (esta sesion no tiene credenciales de la base de datos real) -- ver el propio archivo
+  o `docs/STATUS.md`. El codigo funciona igual aunque no se ejecute la migracion (son
+  columnas/tabla huerfanas, no bloquean nada), es solo para dejar la BD coherente.
+- `README.md` actualizado (modelo de datos, pasos de instalacion).
+- `docs/STATUS.md`: seccion "ESTADO ACTUAL / HANDOFF" reescrita para reflejar que el
+  problema de los grupos curados esta CERRADO (eliminados), no pendiente de decidir.
+
 ## [0.9.2] - 2026-09-15 (FIX: la IA elegia grupos curados con timeouts sistematicos en Ignav)
 
 Probando el fix anterior (0.9.1) con la misma frase abierta, la IA ya respetaba el

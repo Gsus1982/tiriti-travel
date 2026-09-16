@@ -7,7 +7,6 @@ type CalendarDay = { date: string; minPrice: number | null; currency: string | n
 
 export default function ToolsPanel({
   originIatas,
-  destinationGroupIds,
   destinationIatas,
   outboundDateFrom,
   outboundDateTo,
@@ -18,7 +17,6 @@ export default function ToolsPanel({
   maxPriceTotal
 }: {
   originIatas: string[];
-  destinationGroupIds: string[];
   destinationIatas: string[];
   outboundDateFrom: string;
   outboundDateTo: string;
@@ -80,7 +78,6 @@ export default function ToolsPanel({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           originIatas,
-          destinationGroupId: destinationGroupIds[0] ?? null,
           destinationIata: destinationIatas[0] ?? null,
           outboundDateFrom,
           outboundDateTo,

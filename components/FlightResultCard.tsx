@@ -35,7 +35,7 @@ export default function FlightResultCard({
   onShowLinks: () => void;
   isRecommended?: boolean;
 }) {
-  const destinationLabel = result.destinationGroupName;
+  const destinationLabel = result.destinationName;
   const imageUrl = getCityImageUrl(destinationLabel);
 
   return (
@@ -71,11 +71,6 @@ export default function FlightResultCard({
               {result.isOpenJaw && (
                 <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
                   Open-jaw
-                </span>
-              )}
-              {result.isSingleIataTarget && (
-                <span className="text-[10px] font-medium uppercase tracking-wide bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 px-2 py-0.5 rounded-full">
-                  Destino suelto
                 </span>
               )}
             </div>

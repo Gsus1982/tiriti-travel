@@ -1,3 +1,6 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
 import { getAirlineBadge } from '@/lib/airline-badge';
@@ -27,22 +30,106 @@ export default function FlightResultCard({
   bookingLinks,
   loadingLinks,
   onShowLinks,
-  isRecommended
+  isRecommended,
+  compact,
+  isComparing,
+  onToggleCompare,
+  cheaperAlternative
 }: {
   result: LiveItinerary;
   bookingLinks?: BookingLink[];
   loadingLinks: boolean;
   onShowLinks: () => void;
   isRecommended?: boolean;
+  compact?: boolean;
+  isComparing?: boolean;
+  onToggleCompare?: () => void;
+  cheaperAlternative?: LiveItinerary | null;
 }) {
   const destinationLabel = result.destinationName;
   const imageUrl = getCityImageUrl(destinationLabel);
 
+  const [justRecommended, setJustRecommended] = useState(false);
+  useEffect(() => {
+    if (!isRecommended) return;
+    setJustRecommended(true);
+    const timeout = setTimeout(() => setJustRecommended(false), 1400);
+    return () => clearTimeout(timeout);
+  }, [isRecommended]);
+
+  const cardBorderClass = isRecommended
+    ? `border-2 border-indigo ${justRecommended ? 'ring-4 ring-indigo/40 scale-[1.01]' : ''}`
+    : 'border border-slate-100 dark:border-slate-800';
+
+  if (compact) {
+    return (
+      <article
+        className={`bg-white dark:bg-slate-900 rounded-xl shadow-sm hover:shadow-md transition-all overflow-hidden ${cardBorderClass}`}
+      >
+        <div className="flex items-center gap-3 px-3 py-2.5">
+          {onToggleCompare && (
+            <input
+              type="checkbox"
+              checked={!!isComparing}
+              onChange={onToggleCompare}
+              title="Comparar esta opcion"
+              className="shrink-0"
+            />
+          )}
+          <img src={imageUrl} alt={destinationLabel} className="w-10 h-10 rounded-lg object-cover shrink-0" loading="lazy" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-ink dark:text-slate-100 truncate">
+              {result.originIata} → {destinationLabel}
+              {isRecommended && <IconSparkles className="w-3.5 h-3.5 text-indigo inline ml-1.5 -mt-0.5" />}
+            </p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">
+              {formatDateTime(result.outbound.departure_at)} → {formatDateTime(result.inbound.departure_at)} · Salida hotel{' '}
+              {formatDateTime(result.hotelCheckoutAt)}
+            </p>
+          </div>
+          {cheaperAlternative && (
+            <span
+              title={`Hay una opcion ${(result.totalPrice - cheaperAlternative.totalPrice).toFixed(0)} EUR mas barata, saliendo del hotel poco antes`}
+              className="text-[10px] bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full shrink-0"
+            >
+              -{(result.totalPrice - cheaperAlternative.totalPrice).toFixed(0)}€ casi igual
+            </span>
+          )}
+          <p className="text-sm font-semibold text-ink dark:text-slate-100 shrink-0 whitespace-nowrap">
+            {result.totalPrice.toFixed(2)} {result.currency}
+          </p>
+          <button
+            onClick={onShowLinks}
+            disabled={loadingLinks}
+            className="text-xs font-medium bg-indigo hover:bg-indigo-dark text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap shrink-0"
+          >
+            {loadingLinks ? '...' : 'Enlaces'}
+          </button>
+        </div>
+        {bookingLinks && (
+          <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 bg-slate-50/60">
+            {bookingLinks.length === 0 ? (
+              <p className="text-xs text-slate-400 dark:text-slate-500">Sin enlaces disponibles.</p>
+            ) : (
+              <ul className="flex flex-wrap gap-x-3 gap-y-1">
+                {bookingLinks.map((link, j) => (
+                  <li key={j}>
+                    <a href={link.url} target="_blank" rel="noreferrer" className="text-xs text-indigo hover:text-indigo-dark underline font-medium">
+                      {link.provider_name} {link.price ? `(${link.price.amount} ${link.price.currency})` : ''}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </article>
+    );
+  }
+
   return (
     <article
-      className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm hover:shadow-md transition-shadow overflow-hidden ${
-        isRecommended ? 'border-2 border-indigo' : 'border border-slate-100 dark:border-slate-800'
-      }`}
+      className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden ${cardBorderClass}`}
     >
       {isRecommended && (
         <div className="bg-indigo text-white text-[11px] font-semibold uppercase tracking-wide px-4 py-1.5 flex items-center gap-1.5">
@@ -51,8 +138,14 @@ export default function FlightResultCard({
         </div>
       )}
       <div className="flex flex-col sm:flex-row">
-        <div className="sm:w-40 h-36 sm:h-auto shrink-0">
+        <div className="sm:w-40 h-36 sm:h-auto shrink-0 relative">
           <img src={imageUrl} alt={destinationLabel} className="w-full h-full object-cover" loading="lazy" />
+          {onToggleCompare && (
+            <label className="absolute top-2 left-2 bg-white/90 dark:bg-slate-900/90 rounded-full px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-ink dark:text-slate-100 cursor-pointer shadow-sm">
+              <input type="checkbox" checked={!!isComparing} onChange={onToggleCompare} />
+              Comparar
+            </label>
+          )}
         </div>
 
         <div className="flex-1 p-4 flex flex-col sm:flex-row gap-4">
@@ -71,6 +164,14 @@ export default function FlightResultCard({
               {result.isOpenJaw && (
                 <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">
                   Open-jaw
+                </span>
+              )}
+              {cheaperAlternative && (
+                <span
+                  title={`Hay otra opcion ${(result.totalPrice - cheaperAlternative.totalPrice).toFixed(0)} EUR mas barata, saliendo del hotel poco antes de esta`}
+                  className="text-[10px] font-medium uppercase tracking-wide bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full"
+                >
+                  -{(result.totalPrice - cheaperAlternative.totalPrice).toFixed(0)}€ casi igual
                 </span>
               )}
             </div>

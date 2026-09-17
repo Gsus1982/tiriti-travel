@@ -2,6 +2,51 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.15.0] - 2026-09-17 (sesion 5) - CO2, clima, tipo de cambio, festivos y "sale mas barato otro dia"
+
+A peticion del usuario ("implementa las 3 mejoras y las 3 api"): las 3 mejoras
+propuestas (dia mas barato, CO2, festivos) mas 3 APIs gratuitas (Open-Meteo, Frankfurter,
+Nager.Date) -- 5 piezas distintas en total, ya que festivos y Nager.Date eran la misma.
+
+### Anadido
+- **"Sale mas barato otro dia"**: no gasta ninguna peticion nueva -- la propia busqueda
+  ya prueba varias fechas dentro del rango elegido, asi que se comparan los resultados
+  YA obtenidos entre si para la misma ruta. Solo avisa si el ahorro es de 10€ o mas.
+- **CO2 estimado** (`lib/co2.ts`): sin ninguna API -- distancia real (formula de
+  Haversine) entre coordenadas de aeropuertos x un factor de emision estandar (100 g/km/
+  pasajero, cifra intermedia entre las que usan calculadoras publicas conocidas).
+  Etiquetado siempre como estimacion, no medicion certificada.
+- **Clima habitual en destino** (`lib/weather.ts`, Open-Meteo, gratis sin clave):
+  promedio de los ultimos 3 anos para las MISMAS fechas de calendario -- se uso el
+  archivo historico en vez del pronostico normal porque los viajes de esta app se
+  planean con semanas/meses de antelacion (un pronostico solo cubre ~16 dias vista).
+  Atribucion visible (CC BY 4.0, exigida por la licencia de los datos).
+- **Tipo de cambio** (`lib/exchange-rate.ts`, Frankfurter.app, gratis sin clave, datos
+  del BCE): solo se muestra para destinos fuera de la zona euro.
+- **Aviso de festivos** (`lib/holidays.ts`, Nager.Date, gratis sin clave): si las fechas
+  de ida/vuelta coinciden con un festivo publico en España o en el destino.
+- **`lib/data/airports-geo.json`** (nuevo, ~7900 aeropuertos): dataset abierto
+  (github.com/mwgg/Airports) descargado y filtrado en esta sesion, con coordenadas y
+  pais ISO-2 -- Aena no da esa informacion, asi que hacia falta para CO2, clima y tipo
+  de cambio. Solo se usa en el servidor (no aumenta el peso del bundle del cliente,
+  verificado: First Load JS igual que antes).
+- Los 3 topics nuevos anadidos a la ayuda dentro de la app (boton "?").
+
+### Corregido (proactivo, antes de desplegar)
+- El enriquecimiento nuevo se ejecuta DESPUES de la busqueda real a Ignav, sumando
+  tiempo -- con el limite de funcion de Vercel (10s en el plan Hobby) esto podia hacer
+  fallar busquedas que hoy funcionan bien, solo por datos que son un plus. Se redujeron
+  los timeouts individuales de las 3 APIs nuevas (8s/6s -> 4s/3s) y se anadio un tope
+  duro global de 4.5s sobre todo el bloque de enriquecimiento: si no da tiempo, las
+  parejas origen-destino que no hayan terminado se quedan sin esos campos (todos
+  opcionales), pero la busqueda en si nunca se ve afectada.
+
+### Aviso
+Open-Meteo, Frankfurter.app y Nager.Date no se han podido verificar contra sus APIs
+reales en esta sesion (sin acceso de red desde este entorno) -- escritas contra su
+documentacion oficial. Probar con una busqueda real y revisar si el formato de
+respuesta encaja.
+
 ## [0.14.0] - 2026-09-17 (sesion 4) - secciones colapsables + quitada tira decorativa
 
 El usuario senalo que en movil la app se hace larga de desplazar, y que la tira

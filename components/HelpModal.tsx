@@ -62,6 +62,26 @@ const TOPICS: HelpTopic[] = [
       'Tras una búsqueda con resultados, una IA revisa los primeros y marca uno como recomendado, explicando por qué -- considerando precio Y la hora de salida del hotel, no solo el precio más bajo.'
   },
   {
+    title: '"Sale más barato otro día"',
+    body:
+      'Cuando dentro de tu rango de fechas hay otra combinación de la misma ruta que sale más barata, te lo dice directamente en la tarjeta. No gasta ninguna petición extra: compara resultados que ya has obtenido en la misma búsqueda.'
+  },
+  {
+    title: 'Aviso de festivos',
+    body:
+      'Si tus fechas de ida o vuelta coinciden con un festivo público (en España o en el destino), aparece un aviso en la tarjeta -- relevante porque suele afectar al precio y a la aglomeración.'
+  },
+  {
+    title: 'CO₂ estimado',
+    body:
+      'Estimación aproximada (no una medición certificada) de las emisiones del vuelo ida y vuelta, calculada con la distancia real entre aeropuertos. Está en "Más detalles del destino", dentro de cada tarjeta.'
+  },
+  {
+    title: 'Clima habitual y tipo de cambio',
+    body:
+      'También en "Más detalles del destino": el clima típico para esas fechas (promedio de los últimos años, no un pronóstico exacto) y, si el destino usa una moneda distinta del euro, la conversión aproximada.'
+  },
+  {
     title: 'Historial y compartir',
     body:
       'Cada búsqueda que haces queda guardada en tu propio teléfono (no en un servidor) para repetirla con un toque. "Compartir esta búsqueda" genera un enlace que, al abrirlo, restaura los mismos filtros.'

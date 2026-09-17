@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.14.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.15.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,76 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 5) — Sesion: CO2, clima, tipo de cambio, festivos y "sale mas barato otro dia"
+
+### Contexto
+El usuario pidio implementar de golpe las 3 mejoras propuestas (dia mas barato, CO2,
+festivos) y las 3 APIs gratuitas sugeridas (Open-Meteo, Frankfurter, Nager.Date) -- en
+realidad 5 piezas distintas, ya que festivos y Nager.Date eran lo mismo contado dos
+veces en la propuesta original.
+
+### El problema de fondo antes de empezar: Aena no da coordenadas
+Para CO2 y clima hacia falta la posicion (lat/lon) de cada aeropuerto de destino, y para
+festivos/tipo de cambio el codigo ISO-2 del pais -- ninguna de las 2 cosas esta en
+`aena_destinations` (solo tiene `dest_iata, dest_name, country` en texto libre tipo
+"REINO UNIDO", scrapeado de la web de Aena). En vez de inventar coordenadas de memoria
+(riesgo real de errores), se descargo en esta sesion el dataset abierto
+`github.com/mwgg/Airports` (raw.githubusercontent.com esta en la lista de dominios
+permitidos para el sandbox), se filtro a los ~7900 aeropuertos con codigo IATA, y se
+guardo como `lib/data/airports-geo.json` (554 KB, solo importado en codigo de servidor
+-- verificado que el bundle del cliente no crecio). Esto resuelve coordenadas Y pais
+ISO-2 a la vez con una sola fuente verificada, en vez de 2 mapeos distintos.
+
+### Las 5 piezas
+1. **"Sale mas barato otro dia"**: sin API nueva -- compara los resultados YA obtenidos
+   en la misma busqueda (que ya prueba varias fechas dentro del rango) para la misma
+   ruta, y avisa si hay un ahorro de 10€ o mas.
+2. **CO2 estimado** (`lib/co2.ts`): formula de Haversine + factor estandar de 100 g CO2/
+   km/pasajero (cifra intermedia, documentada como estimacion en el propio codigo y en
+   la interfaz).
+3. **Clima habitual** (`lib/weather.ts`, Open-Meteo `archive-api`, gratis sin clave):
+   promedio de los ultimos 3 anos para las MISMAS fechas de calendario, no un
+   pronostico -- decision deliberada, ya que esta app se usa para planear viajes con
+   semanas/meses de antelacion y un pronostico normal solo cubre ~16 dias vista.
+   Atribucion visible en la interfaz (la licencia CC BY 4.0 de los datos la exige).
+4. **Tipo de cambio** (`lib/exchange-rate.ts`, Frankfurter.app, gratis sin clave, datos
+   oficiales del BCE): mapa manual pais ISO-2 -> moneda para los destinos habituales
+   fuera del euro; si el pais usa euro, no se muestra nada.
+5. **Festivos** (`lib/holidays.ts`, Nager.Date, gratis sin clave): festivos de España Y
+   del pais destino que caen dentro del rango de fechas de ida/vuelta.
+
+Los 4 campos nuevos (co2Estimate, climate, exchangeRate, holidays) mas
+cheaperOtherDay se calculan UNA VEZ por cada pareja origen-destino UNICA en el
+resultado (no por cada itinerario individual, que podria repetir la misma pareja en
+varias fechas), en paralelo entre si.
+
+### FIX proactivo (antes de desplegar, no reportado por el usuario): riesgo real de timeout de funcion
+Al revisar el propio diseño antes de dar la sesion por terminada, se detecto un riesgo
+serio: este enriquecimiento se ejecuta DESPUES de la busqueda real a Ignav (que ya
+puede tardar varios segundos en casos normales), sumando su propio tiempo encima. Con
+el limite de funcion de Vercel (10s en el plan Hobby, ya documentado como problema real
+en sesiones anteriores con el propio Ignav), esto podia hacer fallar busquedas que hoy
+funcionan bien, solo por unos datos que son un plus, no algo critico. Corregido antes de
+desplegar: timeouts individuales de las 3 APIs nuevas reducidos (8s/6s -> 4s/3s) y
+anadido un tope duro global de 4.5s sobre TODO el bloque de enriquecimiento
+(`Promise.race` contra un timeout) -- si no da tiempo, las parejas origen-destino que no
+hayan terminado se quedan simplemente sin esos campos (todos opcionales en el tipo), sin
+afectar a la busqueda en si.
+
+### AVISO (se repite, importante)
+Ninguna de las 3 APIs nuevas (Open-Meteo, Frankfurter, Nager.Date) se ha podido
+verificar contra su servicio real en esta sesion -- sin acceso de red desde este
+entorno a esos dominios. Escritas contra su documentacion oficial. Probar con una
+busqueda real (idealmente a un destino fuera de España y fuera de la zona euro, para
+ver las 5 piezas a la vez) y revisar si el formato de respuesta de cada una encaja.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios (varias veces, incluida la verificacion
+final tras el fix de timeout). Confirmado que `First Load JS` no crecio pese al nuevo
+archivo de datos de 554 KB (solo se importa en codigo de servidor).
 
 ---
 

@@ -195,6 +195,44 @@ export default function FlightResultCard({
               <div className="flex flex-wrap items-center gap-1.5"><IconPlaneLanding className="w-3.5 h-3.5 text-indigo shrink-0" /><span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.origin_iata}</span><span>{formatDateTime(result.inbound.departure_at)}</span><span className="text-slate-300 dark:text-slate-500">→</span><span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.destination_iata}</span><AirlineBadge name={result.inbound.airline} /><span className="text-slate-400 dark:text-slate-500">{result.inbound.airline}</span></div>
             </div>
             {result.notes.length > 0 && <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">{result.notes.join(' ')}</p>}
+            {result.cheaperOtherDay && (
+              <p className="mt-2 text-[11px] text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950 rounded-lg px-2 py-1 inline-block">
+                Sale {result.cheaperOtherDay.savings}€ mas barato saliendo el{' '}
+                {new Date(result.cheaperOtherDay.date).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })}.
+              </p>
+            )}
+            {result.holidays && result.holidays.length > 0 && (
+              <p className="mt-2 text-[11px] text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950 rounded-lg px-2 py-1 inline-block">
+                Coincide con festivo: {result.holidays.map((h) => h.localName).join(', ')}.
+              </p>
+            )}
+            {(result.co2Estimate || result.climate || result.exchangeRate) && (
+              <details className="mt-2 group">
+                <summary className="text-[11px] text-slate-400 dark:text-slate-500 cursor-pointer list-none underline decoration-dotted">
+                  Mas detalles del destino
+                </summary>
+                <div className="mt-1.5 space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                  {result.co2Estimate && (
+                    <p>
+                      🌍 CO₂ estimado ida y vuelta: ~{result.co2Estimate.kgPerPassenger} kg/pasajero ({result.co2Estimate.distanceKm} km
+                      por trayecto).
+                    </p>
+                  )}
+                  {result.climate && (
+                    <p>
+                      ☀️ Clima habitual esas fechas: {result.climate.avgMinC}-{result.climate.avgMaxC}°C,{' '}
+                      {result.climate.avgPrecipMm} mm de lluvia (promedio de {result.climate.yearsUsed} años).
+                    </p>
+                  )}
+                  {result.exchangeRate && (
+                    <p>
+                      💱 1 EUR ≈ {result.exchangeRate.rate.toFixed(2)} {result.exchangeRate.currency}
+                    </p>
+                  )}
+                  {result.climate && <p className="text-[10px] text-slate-400 dark:text-slate-600">Clima: Open-Meteo.com (CC BY 4.0)</p>}
+                </div>
+              </details>
+            )}
           </div>
           <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-2 sm:w-36 shrink-0 text-right sm:border-l sm:border-slate-100 sm:pl-4">
             <div>

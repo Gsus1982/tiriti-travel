@@ -5,6 +5,11 @@ import type { Pax } from './types';
 import { datesBetween } from './types';
 import { getIgnavUsageSummary, dynamicComboLimit } from './ignav-usage';
 import { logPriceObservation, getPriceTrend, type PriceTrend } from './price-history';
+import { getAirportGeo } from './airport-geo';
+import { estimateCo2, type Co2Estimate } from './co2';
+import { getTypicalClimate, type ClimateSummary } from './weather';
+import { getExchangeRateFromEur, type ExchangeRate } from './exchange-rate';
+import { getHolidaysInRange, type Holiday } from './holidays';
 
 const AIRPORT_BUFFER_MIN = 120;
 const MAX_DATE_RANGE_DAYS = 5;
@@ -72,6 +77,11 @@ export type LiveItinerary = {
   notes: string[];
   source: 'ignav' | 'skyscanner';
   priceTrend?: PriceTrend | null;
+  cheaperOtherDay?: { date: string; price: number; savings: number } | null;
+  co2Estimate?: Co2Estimate | null;
+  climate?: ClimateSummary | null;
+  exchangeRate?: ExchangeRate | null;
+  holidays?: Holiday[];
 };
 
 export type LiveSearchResult = {
@@ -483,6 +493,80 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
       void logPriceObservation(item.originIata, item.destinationId, item.outbound.departure_at.slice(0, 10), item.totalPrice, item.currency);
     })
   );
+
+  // "Sale mas barato otro dia": NO gasta ninguna peticion nueva -- la propia busqueda
+  // ya prueba varias fechas dentro del rango elegido, asi que basta con comparar los
+  // resultados YA obtenidos entre si para la MISMA pareja origen-destino.
+  for (const item of merged) {
+    const itemDate = item.outbound.departure_at.slice(0, 10);
+    let cheaperDate: string | null = null;
+    let cheaperPrice: number | null = null;
+    for (const other of merged) {
+      if (other === item) continue;
+      if (other.originIata !== item.originIata || other.destinationId !== item.destinationId) continue;
+      const otherDate = other.outbound.departure_at.slice(0, 10);
+      if (otherDate === itemDate) continue;
+      if (other.totalPrice < item.totalPrice && (cheaperPrice === null || other.totalPrice < cheaperPrice)) {
+        cheaperPrice = other.totalPrice;
+        cheaperDate = otherDate;
+      }
+    }
+    // Solo se avisa si el ahorro es significativo (>= 10), para no llenar la interfaz
+    // de avisos por diferencias de 1-2 euros que no cambian ninguna decision real.
+    if (cheaperDate && cheaperPrice !== null && item.totalPrice - cheaperPrice >= 10) {
+      item.cheaperOtherDay = { date: cheaperDate, price: cheaperPrice, savings: Math.round(item.totalPrice - cheaperPrice) };
+    }
+  }
+
+  // CO2 (sin API, solo geometria), clima habitual, tipo de cambio y festivos -- una
+  // sola vez por cada pareja origen-destino UNICA (no por cada resultado individual,
+  // que podria repetir la misma pareja en varias fechas), todo en paralelo y
+  // best-effort: si una de las 3 APIs externas falla o esta lenta, el resto sigue
+  // funcionando y la busqueda nunca se rompe por esto.
+  const uniquePairs = new Map<string, LiveItinerary[]>();
+  for (const item of merged) {
+    const key = `${item.originIata}|${item.destinationId}`;
+    if (!uniquePairs.has(key)) uniquePairs.set(key, []);
+    uniquePairs.get(key)!.push(item);
+  }
+
+  const enrichmentPairs = Array.from(uniquePairs.values()).map(async (items) => {
+    const [first] = items;
+    const primaryIata = first.destinationId.split('+')[0];
+    const geo = getAirportGeo(primaryIata);
+    const co2 = estimateCo2(first.originIata, primaryIata);
+
+    const outboundDates = items.map((i) => i.outbound.departure_at.slice(0, 10)).sort();
+    const earliestDate = outboundDates[0];
+    const latestDate = outboundDates[outboundDates.length - 1];
+    const [, m, d] = earliestDate.split('-').map(Number);
+    const spanDays = Math.max(1, Math.round((new Date(latestDate).getTime() - new Date(earliestDate).getTime()) / 86400000) + 1);
+
+    const isDomesticSpain = geo?.country === 'ES';
+    const [climate, holidaysES, holidaysDest, exchange] = await Promise.all([
+      getTypicalClimate(primaryIata, { month: m, day: d }, spanDays).catch(() => null),
+      getHolidaysInRange('ES', earliestDate, latestDate).catch(() => []),
+      geo && !isDomesticSpain ? getHolidaysInRange(geo.country, earliestDate, latestDate).catch(() => []) : Promise.resolve([]),
+      geo ? getExchangeRateFromEur(geo.country).catch(() => null) : Promise.resolve(null)
+    ]);
+
+    for (const item of items) {
+      item.co2Estimate = co2;
+      item.climate = climate;
+      item.exchangeRate = exchange;
+      item.holidays = [...holidaysES, ...holidaysDest];
+    }
+  });
+
+  // Tope duro sobre TODO el enriquecimiento externo (clima + festivos + tipo de
+  // cambio): con timeouts individuales de 3-4s por llamada, en el peor caso (varias
+  // parejas origen-destino, alguna API lenta) podia sumar varios segundos MAS al
+  // tiempo ya consumido por la busqueda real a Ignav -- arriesgando el limite de
+  // funcion de Vercel (10s en el plan Hobby) y haciendo fallar busquedas que hoy
+  // funcionan bien, solo por unos datos que son un plus, no algo critico. Si el tope
+  // salta, las parejas que no hayan terminado se quedan sin esos campos (todos
+  // opcionales en el tipo) -- la busqueda en si nunca se ve afectada.
+  await Promise.race([Promise.all(enrichmentPairs), new Promise((resolve) => setTimeout(resolve, 4500))]);
 
   return { itineraries: merged, warnings };
 }

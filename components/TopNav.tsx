@@ -1,5 +1,6 @@
 import { APP_VERSION } from '@/lib/version';
 import ThemeToggle from './ThemeToggle';
+import HelpModal from './HelpModal';
 
 // Logo propio: una golondrina estilizada (motivo clasico de viajero/bohemio, no un
 // avion generico reutilizado del resto de la interfaz). Trazo simple para que se lea
@@ -26,6 +27,7 @@ export default function TopNav() {
           <p className="hidden sm:block text-xs text-white/50">
             Vuelos directos con datos en vivo -- sin escalas, sin estimaciones
           </p>
+          <HelpModal />
           <ThemeToggle />
         </div>
       </div>

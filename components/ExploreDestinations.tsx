@@ -24,6 +24,19 @@ export default function ExploreDestinations({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+
+  function useDestination(d: ExploreDestination) {
+    onUseDestination(d.destinationIata);
+    setJustAdded(d.verifiedName ?? d.destinationIata);
+    // FIX (reportado: "el enlace no funciona"): antes esto anadia el destino EN
+    // SILENCIO -- sin confirmacion visible ni desplazamiento, parecia que el boton no
+    // hacia nada porque el resultado (el destino marcado mas abajo, en el formulario)
+    // quedaba fuera de la vista. Ahora se confirma con un texto y se baja hasta el
+    // formulario para que se vea el efecto de verdad.
+    document.getElementById('search-form')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => setJustAdded(null), 4000);
+  }
 
   async function explore() {
     const o = origin || originIatas[0];
@@ -105,6 +118,11 @@ export default function ExploreDestinations({
         </button>
       </div>
       {error && <p className="text-red-500 dark:text-red-400 text-xs mb-2">{error}</p>}
+      {justAdded && (
+        <p className="text-xs text-emerald-600 dark:text-emerald-400 mb-2">
+          Añadido "{justAdded}" a tu busqueda -- revisalo en el formulario de arriba.
+        </p>
+      )}
       {destinations && destinations.length === 0 && (
         <p className="text-xs text-slate-400 dark:text-slate-500">Sin datos para este origen todavia.</p>
       )}
@@ -121,7 +139,7 @@ export default function ExploreDestinations({
               </p>
               {d.verifiedName ? (
                 <button
-                  onClick={() => onUseDestination(d.destinationIata)}
+                  onClick={() => useDestination(d)}
                   className="mt-1 flex items-center gap-1 text-indigo hover:text-indigo-dark text-[11px] font-medium"
                 >
                   <IconMapPin className="w-3 h-3" />

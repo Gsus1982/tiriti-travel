@@ -102,6 +102,16 @@ export default function HomePage() {
   const [surpriseExplanation, setSurpriseExplanation] = useState<string | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState<{ rowKey: string; explanation: string } | null>(null);
   const [recommending, setRecommending] = useState(false);
+  const [comboLimit, setComboLimit] = useState(6);
+
+  useEffect(() => {
+    fetch('/api/ignav-usage')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data?.comboLimit) setComboLimit(data.comboLimit);
+      })
+      .catch(() => {});
+  }, []);
 
   const [realDestinations, setRealDestinations] = useState<RealDestination[]>([]);
   const [realDestError, setRealDestError] = useState<string | null>(null);
@@ -814,11 +824,14 @@ export default function HomePage() {
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Combinaciones origen x destino: <strong className="text-ink dark:text-slate-100">{combos}</strong>
-                  {combos > 6 && <span className="text-red-500 dark:text-red-400"> (maximo 6; reduce la seleccion)</span>}
+                  Combinaciones origen x destino: <strong className="text-ink dark:text-slate-100">{combos}</strong> de{' '}
+                  <strong className="text-ink dark:text-slate-100">{comboLimit}</strong> permitidas ahora mismo
+                  {combos > comboLimit && <span className="text-red-500 dark:text-red-400"> (reduce la seleccion)</span>}
                 </p>
                 <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
-                  Maximo 5 dias por tramo y 6 combinaciones origen x destino, para no agotar la cuota gratuita de Ignav.
+                  Maximo 5 dias por tramo. El maximo de combinaciones ({comboLimit} ahora mismo) varia segun cuanta cuota de
+                  Ignav te quede: hasta 10 si te queda mas de la mitad, bajando a 3 si queda poca -- mira "Cuota de Ignav"
+                  en el panel de herramientas para ver cuanto te queda antes de decidir cuantos origenes/destinos elegir.
                 </p>
 
                 <div className="flex items-center gap-3 flex-wrap">

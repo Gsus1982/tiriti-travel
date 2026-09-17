@@ -20,15 +20,17 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.12.0. Incluye TODO lo de v0.11.5 (IA
-real, destinos curados eliminados, comparador, alertas por email) MAS: contador real de
-cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis
-(Travelpayouts, sin gastar cuota), tendencia de precio sobre historial propio, y cron
-de alertas reducido de diario a cada 3 dias. Ver entrada fechada de esta sesion mas
-abajo para el detalle completo -- **hay 2 tablas nuevas pendientes de migrar en Neon**
-(`ignav_usage_log`, `price_history`) y una variable de entorno nueva opcional
-(`TRAVELPAYOUTS_TOKEN`) para activar "explorar destinos".
-fan-out masivo como `/one-way` -- ver entrada fechada del 17 sep mas abajo.
+**En produccion (rama `main`) ahora mismo**: v0.13.0. Incluye TODO lo de v0.12.0 (IA
+real, destinos curados eliminados, comparador, alertas por email, contador real de
+cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
+Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
+tendencia de precio sobre historial propio, cron de alertas cada 3 dias) MAS: feedback
+visual al anadir un destino desde "Explorar", el limite dinamico de combinaciones
+ahora es visible en la interfaz (no solo un numero fijo escrito a mano), y una seccion
+de ayuda dentro de la app (boton "?" en la barra superior). **El usuario ya aplico la
+migracion de las 2 tablas nuevas en Neon y configuro `TRAVELPAYOUTS_TOKEN` en Vercel --
+ya no hay nada pendiente de configurar por su parte.** Ver entrada fechada de esta
+sesion mas abajo para el detalle completo.
 
 **No hay ningun PR abierto pendiente de mergear.** Toda esta sesion se trabajo con
 commits directos a `main` (sin pasar por rama intermedia), tras encontrar que la rama
@@ -40,8 +42,8 @@ a ciegas por fragmentos de busqueda). La rama `revisar-por-claude` quedo obsolet
 borro manualmente por el usuario (esta sesion no tiene una herramienta para borrar
 ramas de GitHub, solo crear/actualizar/mergear).
 
-**`OPENAI_API_KEY` y las 3 variables de Resend (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`)
-ya estan configuradas en Vercel.**
+**`OPENAI_API_KEY`, las 3 variables de Resend (`RESEND_API_KEY`, `RESEND_FROM_EMAIL`) y
+`TRAVELPAYOUTS_TOKEN` ya estan configuradas en Vercel.**
 
 ### Bug real encontrado y arreglado esta sesion: el recorte de destinos por cuota no era determinista
 `lib/ai-parse.ts` recorta los destinos que la IA propone si `origenes x destinos > 6`
@@ -94,6 +96,52 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 3) — Sesion: feedback visual, limite visible, ayuda en la app
+
+### Contexto
+El usuario probo "Explorar destinos" con una captura real: **el token de Travelpayouts
+funciona perfectamente** (Ibiza 29€, Bilbao 46€, Asturias 56€... todo real). Pero
+reporto 3 cosas:
+1. "El enlace no funciona" al pulsar "Buscar este".
+2. No entendia con que criterio el limite de combinaciones sube o baja -- pregunta
+   directa: "Como sabe el usuario a que atenerse?".
+3. Pidio una seccion de ayuda dentro de la app explicando que hace cada cosa.
+
+### 1. FIX real: "Buscar este" no daba ninguna senal (no estaba roto, era mudo)
+`ExploreDestinations.tsx` anadia el destino a la seleccion en silencio (sin scroll, sin
+confirmacion) -- el destino se anadia de verdad, pero como el efecto quedaba fuera de
+la vista (mas abajo, en el formulario), parecia que el boton no hacia nada. Fix: al
+pulsar, se confirma con un mensaje ("Anadido X a tu busqueda") y se hace scroll
+automatico hasta `#search-form`.
+
+### 2. El limite dinamico ahora es visible, no solo aplicado en silencio
+Antes, el limite dinamico (implementado en la sesion anterior) solo se veia si lo
+superabas -- el mensaje de error, y un "maximo 6" hardcodeado en el texto normal del
+formulario que ni siquiera reflejaba el numero real. Fix:
+- `/api/ignav-usage` ahora devuelve tambien `comboLimit` (el mismo calculo que usa el
+  servidor al validar, `dynamicComboLimit`), para que cliente y servidor muestren
+  siempre el mismo numero.
+- El contador "Combinaciones origen x destino" en el formulario principal muestra el
+  maximo REAL actual, no un numero fijo escrito a mano.
+- El aviso justo debajo explica el criterio completo en una frase (sube a 10 con mucha
+  cuota, baja a 3 con poca) y remite a "Cuota de Ignav" en el panel de herramientas.
+- El propio indicador de cuota en `ToolsPanel.tsx` ahora tambien menciona el limite de
+  combinaciones vigente, ligando las 2 piezas de informacion que antes vivian
+  separadas.
+
+### 3. Seccion de ayuda dentro de la app (`components/HelpModal.tsx`)
+Boton "?" en la barra superior (junto al de tema oscuro) que abre un panel con 12
+temas explicados en lenguaje llano (destinos reales, limite dinamico, Sorprendeme,
+lenguaje natural con IA, explorar destinos, tendencia de precio, filtros, calendario de
+precios, alertas, comparador/vista lista, recomendacion de la IA, historial/compartir).
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP
+200 y presencia del texto "permitidas ahora mismo" (confirma que el limite dinamico ya
+no esta hardcodeado en el HTML).
 
 ---
 

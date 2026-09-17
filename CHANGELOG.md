@@ -2,6 +2,33 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.13.0] - 2026-09-17 (sesion 3) - feedback visual, limite visible, ayuda en la app
+
+El usuario confirmo con captura real que Travelpayouts funciona (destinos y precios
+reales), pero senalo 3 problemas: "Buscar este" no daba ninguna senal de haber hecho
+algo, el limite dinamico de combinaciones no se explicaba en ningun sitio, y pidio una
+seccion de ayuda para saber que hace cada cosa.
+
+### Corregido
+- **"Buscar este" en Explorar destinos no daba feedback** (reportado como "el enlace no
+  funciona"): anadia el destino en silencio, sin confirmacion ni desplazamiento --
+  parecia roto porque el efecto quedaba fuera de la vista. Ahora confirma con un
+  mensaje ("Anadido X a tu busqueda") y baja automaticamente hasta el formulario.
+
+### Anadido
+- **Limite de combinaciones dinamico ahora es VISIBLE, no solo un numero fijo escrito a
+  mano**: el contador "Combinaciones origen x destino" muestra el maximo REAL actual
+  (no un "6" hardcodeado), y el aviso explica el criterio completo (sube a 10 con mucha
+  cuota, baja a 3 con poca) remitiendo a "Cuota de Ignav" en el panel de herramientas
+  para decidir con datos antes de elegir origenes/destinos. `/api/ignav-usage` ahora
+  tambien devuelve `comboLimit` calculado, para que servidor y cliente muestren siempre
+  el mismo numero.
+- **Seccion de ayuda dentro de la app** (`components/HelpModal.tsx`, boton "?" en la
+  barra superior): explica en lenguaje llano que hace cada funcion -- destinos reales,
+  limite dinamico, Sorprendeme, lenguaje natural con IA, explorar destinos, tendencia
+  de precio, filtros, calendario de precios, alertas, comparador/vista lista,
+  recomendacion de la IA, historial y compartir.
+
 ## [0.12.0] - 2026-09-17 (contador de cuota, limite dinamico, explorar gratis, tendencia de precio)
 
 A peticion del usuario tras quejarse del limite de 6 combinaciones: "empieza por el

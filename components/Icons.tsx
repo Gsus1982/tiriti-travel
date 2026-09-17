@@ -25,6 +25,24 @@ export function IconGauge({ className = 'w-5 h-5' }: { className?: string }) {
   );
 }
 
+export function IconHelp({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M9.5 9.2a2.5 2.5 0 0 1 4.8.8c0 1.7-2.3 2-2.3 3.5" />
+      <circle cx="12" cy="16.7" r="0.15" fill="currentColor" />
+    </svg>
+  );
+}
+
+export function IconX({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
+  );
+}
+
 export function IconBell({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6}>

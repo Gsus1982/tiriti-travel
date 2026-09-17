@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { IconCalendar, IconBell, IconGauge } from './Icons';
 
-type IgnavUsage = { totalUsed: number; remaining: number; last7Days: number; last30Days: number; quota: number };
+type IgnavUsage = { totalUsed: number; remaining: number; last7Days: number; last30Days: number; quota: number; comboLimit: number };
 
 type CalendarDay = { date: string; minPrice: number | null; currency: string | null; flightCount: number };
 
@@ -218,7 +218,10 @@ export default function ToolsPanel({
             />
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
-            Se agota y no se renueva -- cada busqueda gasta origenes x destinos x dias de peticiones reales.
+            Se agota y no se renueva -- cada busqueda gasta origenes x destinos x dias de peticiones reales. Por eso ahora
+            mismo el maximo de combinaciones origen x destino permitido es{' '}
+            <strong className="text-slate-600 dark:text-slate-300">{usage.comboLimit}</strong> (sube a 10 con mucha cuota,
+            baja a 3 con poca).
           </p>
         </div>
       )}

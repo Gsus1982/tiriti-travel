@@ -30,6 +30,7 @@ export type IgnavUsageSummary = {
   last7Days: number;
   last30Days: number;
   quota: number;
+  comboLimit: number;
 };
 
 /** Resumen de cuota consumida, para mostrar en la interfaz. */
@@ -45,12 +46,14 @@ export async function getIgnavUsageSummary(): Promise<IgnavUsageSummary> {
   `) as { total: number }[];
 
   const totalUsed = totalRows[0]?.total ?? 0;
+  const remaining = Math.max(0, IGNAV_LIFETIME_QUOTA - totalUsed);
   return {
     totalUsed,
-    remaining: Math.max(0, IGNAV_LIFETIME_QUOTA - totalUsed),
+    remaining,
     last7Days: last7Rows[0]?.total ?? 0,
     last30Days: last30Rows[0]?.total ?? 0,
-    quota: IGNAV_LIFETIME_QUOTA
+    quota: IGNAV_LIFETIME_QUOTA,
+    comboLimit: dynamicComboLimit(remaining, IGNAV_LIFETIME_QUOTA)
   };
 }
 

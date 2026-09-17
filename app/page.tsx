@@ -7,13 +7,12 @@ import { buildShareUrl, parseShareParams, summarizeFilters } from '@/lib/share-l
 import { addSearchHistoryEntry } from '@/lib/search-history';
 import { getTravelProfile, saveTravelProfile } from '@/lib/travel-profile';
 import TopNav from '@/components/TopNav';
-import FlightPathStrip from '@/components/FlightPathStrip';
 import ToolsPanel from '@/components/ToolsPanel';
 import ResultsSection from '@/components/ResultsSection';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
 import ExploreDestinations from '@/components/ExploreDestinations';
-import { IconSliders, IconMapPin, IconShare, IconSparkles } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconShare, IconSparkles, IconChevronDown } from '@/components/Icons';
 
 type Meta = {
   origins: { iata: string; city: string }[];
@@ -562,8 +561,6 @@ export default function HomePage() {
             </p>
           </div>
 
-          <FlightPathStrip originLabels={originLabels} destinationLabels={destinationLabels} combos={combos} />
-
           <div className="bg-gradient-to-r from-indigo via-violet-500 to-fuchsia-500 rounded-2xl shadow-lg shadow-indigo-500/20 overflow-hidden">
             <button
               type="button"
@@ -874,8 +871,11 @@ export default function HomePage() {
             </div>
 
             <aside className="space-y-4 lg:sticky lg:top-6">
-              <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
-                <h2 className="text-sm font-semibold text-ink dark:text-slate-100 mb-1">Filtros y ajustes</h2>
+              <details className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm p-5">
+                <summary className="flex items-center justify-between cursor-pointer list-none mb-1">
+                  <h2 className="text-sm font-semibold text-ink dark:text-slate-100">Filtros y ajustes</h2>
+                  <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
+                </summary>
                 <FilterAccordion title="Horarios" defaultOpen>
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
                     Ida no antes de las (h)
@@ -972,7 +972,7 @@ export default function HomePage() {
                     </label>
                   </div>
                 </FilterAccordion>
-              </div>
+              </details>
 
               <ExploreDestinations
                 originIatas={originIatas.length > 0 ? originIatas : ['ALC']}

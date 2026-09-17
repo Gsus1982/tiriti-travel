@@ -2,7 +2,23 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
-## [0.13.0] - 2026-09-17 (sesion 3) - feedback visual, limite visible, ayuda en la app
+## [0.14.0] - 2026-09-17 (sesion 4) - secciones colapsables + quitada tira decorativa
+
+El usuario senalo que en movil la app se hace larga de desplazar, y que la tira
+"Origen ---- Destino" de arriba (`FlightPathStrip`) no tenia ninguna funcion real
+("creo que es adorno").
+
+### Eliminado
+- `components/FlightPathStrip.tsx`: quitada por completo (sin rastro en el codigo).
+  Aunque se hizo clicable en una sesion anterior (bajaba hasta el formulario), ya solo
+  repetia informacion que el propio formulario de abajo muestra con mas claridad --
+  redundante, y anadia scroll sin aportar nada propio.
+
+### Cambiado
+- **"Filtros y ajustes", "Explorar destinos (gratis)" y "Busquedas recientes" ahora
+  colapsan** (mismo patron `<details>`/`<summary>` que ya usaban los sub-filtros
+  dentro de "Filtros y ajustes"): reduce bastante el scroll en movil, sobre todo con
+  varias busquedas guardadas en el historial.
 
 El usuario confirmo con captura real que Travelpayouts funciona (destinos y precios
 reales), pero senalo 3 problemas: "Buscar este" no daba ninguna senal de haber hecho

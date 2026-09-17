@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.13.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.14.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,30 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 4) — Sesion: secciones colapsables + quitada tira decorativa
+
+El usuario senalo que en movil la app se hace larga de desplazar, y que la tira
+"Origen ---- Destino" (`FlightPathStrip.tsx`, mostrada justo bajo el titulo) no tenia
+ninguna funcion real -- "creo que es adorno, salvo que digas lo contrario". No llego
+captura en el mensaje, se infirio por contexto (todo lo demas del formulario se
+confirmaba abajo) y se acepto la valoracion: el componente se elimino por completo (sin
+dejar rastro en el codigo, mismo criterio que la eliminacion de destinos curados).
+
+"Filtros y ajustes", "Explorar destinos" y "Busquedas recientes" ahora colapsan
+(`<details>`/`<summary>`, mismo patron que ya usaban los sub-filtros de Horarios/
+Precio y orden/Extras). Reduce el scroll en movil notablemente, sobre todo con varias
+entradas en el historial de busquedas.
+
+Verificado con `npx tsc --noEmit` y `npm run build` limpios.
+
+En el mismo turno se propusieron (sin implementar, a la espera de que el usuario elija
+por donde seguir) varias APIs gratuitas nuevas -- ver la conversacion o pedirle al
+usuario el detalle si hace falta retomarlo: Open-Meteo (clima, sin key), Frankfurter.app
+(tipo de cambio, sin key), Nager.Date (festivos publicos, sin key), y calculo de CO2 por
+trayecto sin API (solo distancia entre coordenadas + factor de emision estandar).
 
 ---
 

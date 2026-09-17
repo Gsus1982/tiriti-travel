@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { IconSparkles, IconMapPin } from './Icons';
+import { IconSparkles, IconMapPin, IconChevronDown } from './Icons';
 
 type ExploreDestination = {
   destinationIata: string;
@@ -68,29 +68,35 @@ export default function ExploreDestinations({
 
   if (unavailable) {
     return (
-      <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6">
-        <div className="flex items-center gap-2 mb-1">
-          <IconSparkles className="w-4 h-4 text-indigo" />
-          <h2 className="text-base font-semibold text-ink dark:text-slate-100">Explorar destinos (gratis)</h2>
-        </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500">
+      <details className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6">
+        <summary className="flex items-center justify-between cursor-pointer list-none mb-1">
+          <span className="flex items-center gap-2">
+            <IconSparkles className="w-4 h-4 text-indigo" />
+            <h2 className="text-base font-semibold text-ink dark:text-slate-100">Explorar destinos (gratis)</h2>
+          </span>
+          <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
+        </summary>
+        <p className="text-xs text-slate-400 dark:text-slate-500 mt-2">
           Todavia no esta configurado. Registrate gratis en{' '}
           <a href="https://www.travelpayouts.com" target="_blank" rel="noreferrer" className="text-indigo underline">
             travelpayouts.com
           </a>{' '}
           (no piden tarjeta) y añade tu token como <code>TRAVELPAYOUTS_TOKEN</code> en Vercel.
         </p>
-      </section>
+      </details>
     );
   }
 
   return (
-    <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6">
-      <div className="flex items-center gap-2 mb-1">
-        <IconSparkles className="w-4 h-4 text-indigo" />
-        <h2 className="text-base font-semibold text-ink dark:text-slate-100">Explorar destinos (gratis)</h2>
-      </div>
-      <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
+    <details className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6">
+      <summary className="flex items-center justify-between cursor-pointer list-none mb-1">
+        <span className="flex items-center gap-2">
+          <IconSparkles className="w-4 h-4 text-indigo" />
+          <h2 className="text-base font-semibold text-ink dark:text-slate-100">Explorar destinos (gratis)</h2>
+        </span>
+        <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
+      </summary>
+      <p className="text-xs text-slate-400 dark:text-slate-500 mb-3 mt-2">
         Precios orientativos de otros viajeros (no en tiempo real, no gastan tu cuota de Ignav) para inspirarte antes de
         buscar de verdad.
       </p>
@@ -152,6 +158,6 @@ export default function ExploreDestinations({
           ))}
         </div>
       )}
-    </section>
+    </details>
   );
 }

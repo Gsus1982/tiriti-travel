@@ -59,6 +59,29 @@ CREATE TABLE IF NOT EXISTS skyscanner_airport_cache (
   resolved_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Contador de cuota de Ignav (1000 peticiones DE POR VIDA) -- una fila por dia, se
+-- incrementa desde el unico punto de salida real a Ignav (lib/ignav.ts::ignavPost).
+-- Escritura best-effort: si falla, nunca debe romper una busqueda real.
+CREATE TABLE IF NOT EXISTS ignav_usage_log (
+  date DATE PRIMARY KEY,
+  request_count INTEGER NOT NULL DEFAULT 0
+);
+
+-- Historial de precios REALMENTE vistos en busquedas en vivo, para poder decir "este
+-- precio esta por debajo/encima de lo habitual para esta ruta" sin llamar a ninguna
+-- API nueva -- se calcula sobre datos propios ya observados. Crece con el uso; sin
+-- limpieza automatica por ahora (bajo volumen esperado para un uso personal).
+CREATE TABLE IF NOT EXISTS price_history (
+  id BIGSERIAL PRIMARY KEY,
+  origin_iata CHAR(3) NOT NULL,
+  destination_iata CHAR(3) NOT NULL,
+  departure_date DATE NOT NULL,
+  price NUMERIC NOT NULL,
+  currency TEXT NOT NULL,
+  observed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS price_history_route_idx ON price_history (origin_iata, destination_iata);
+
 -- ============================================================================
 -- MIGRACION: eliminar destinos curados (sesion del 15 sep 2026)
 -- ============================================================================
@@ -84,3 +107,30 @@ CREATE TABLE IF NOT EXISTS skyscanner_airport_cache (
 -- la app funciona igual -- son columnas/tabla huerfanas que simplemente
 -- dejan de usarse, no bloquean nada. Ejecutarla es solo para tener la base
 -- de datos limpia y coherente con el codigo.
+
+-- ============================================================================
+-- MIGRACION: contador de cuota + historial de precios (sesion del 17 sep 2026)
+-- ============================================================================
+-- Ejecuta esto en el SQL Editor de Neon para crear las 2 tablas nuevas (mismo
+-- motivo que arriba: esta sesion no tiene credenciales de conexion a tu BD real).
+-- Son las mismas 2 sentencias CREATE TABLE de mas arriba, repetidas aqui para que
+-- sea facil copiar solo lo nuevo sin tener que releer todo el archivo:
+--
+--   CREATE TABLE IF NOT EXISTS ignav_usage_log (
+--     date DATE PRIMARY KEY,
+--     request_count INTEGER NOT NULL DEFAULT 0
+--   );
+--
+--   CREATE TABLE IF NOT EXISTS price_history (
+--     id BIGSERIAL PRIMARY KEY,
+--     origin_iata CHAR(3) NOT NULL,
+--     destination_iata CHAR(3) NOT NULL,
+--     departure_date DATE NOT NULL,
+--     price NUMERIC NOT NULL,
+--     currency TEXT NOT NULL,
+--     observed_at TIMESTAMPTZ NOT NULL DEFAULT now()
+--   );
+--   CREATE INDEX IF NOT EXISTS price_history_route_idx ON price_history (origin_iata, destination_iata);
+--
+-- Sin esta migracion, el contador de cuota y la tendencia de precio simplemente
+-- no aparecen (fallan en silencio, sin romper busquedas) hasta que la apliques.

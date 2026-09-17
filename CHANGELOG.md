@@ -2,6 +2,53 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.12.0] - 2026-09-17 (contador de cuota, limite dinamico, explorar gratis, tendencia de precio)
+
+A peticion del usuario tras quejarse del limite de 6 combinaciones: "empieza por el
+contador de cuota y despues con las dos mejoras propuestas, la de explorar y la
+tendencia historica de precio. Reduce tambien la frecuencia de alertas".
+
+### Anadido
+- **Contador real de cuota de Ignav** (`lib/ignav-usage.ts`, tabla `ignav_usage_log`):
+  cada peticion real a Ignav se registra desde el unico punto de salida
+  (`ignavPost` en `lib/ignav.ts`), contando cualquier respuesta HTTP recibida (no solo
+  200 -- Ignav factura la peticion aunque devuelva error). Visible en el panel de
+  herramientas: peticiones restantes de las 1000 de por vida, con barra de color y uso
+  de los ultimos 7 dias.
+- **Limite de combinaciones DINAMICO** (`dynamicComboLimit` en `lib/ignav-usage.ts`),
+  sustituyendo el fijo de 6 de siempre: hasta 10 si queda mas de la mitad de la cuota,
+  6 si queda mas de un 20%, 4 si queda mas de un 5%, 3 en el resto -- mas generoso
+  cuando sobra cuota, mas conservador cuando escasea. Cae al fijo de 6 si el contador
+  no esta disponible todavia (migracion pendiente).
+- **Explorar destinos sin gastar cuota** (`lib/travelpayouts.ts`, `/api/explore`,
+  `components/ExploreDestinations.tsx`): usa la API de datos de Travelpayouts
+  (Aviasales), gratuita, con precios orientativos de otros viajeros (no en tiempo
+  real, cacheados hasta 7 dias) para dar ideas de destino ANTES de gastar la cuota de
+  verdad. Cruza los resultados contra los destinos reales verificados por Aena para
+  marcar cuales tienen un boton directo "Buscar este". Requiere registrarse gratis en
+  travelpayouts.com y anadir `TRAVELPAYOUTS_TOKEN` en Vercel -- sin configurar, se
+  muestra un aviso claro en vez de rompers. **No verificado contra la API real en esta
+  sesion** (sin token de prueba disponible).
+- **Tendencia de precio sobre historial propio** (`lib/price-history.ts`, tabla
+  `price_history`): cada precio real visto en una busqueda se registra; a partir de 3
+  observaciones para una misma ruta, cada resultado nuevo se marca "precio bajo/normal/
+  alto para esta ruta" comparando contra el promedio historico -- sin llamar a ninguna
+  API nueva, solo con datos propios ya acumulados. Tarda en dar sus primeros frutos
+  (necesita busquedas repetidas de las mismas rutas para acumular muestra).
+
+### Cambiado
+- **Frecuencia del cron de alertas de precio** reducida de diaria a cada 3 dias
+  (`vercel.json`). Motivo: cada alerta guardada gasta varias peticiones reales de Ignav
+  en cada ejecucion (dias de rango x origenes x 2 sentidos); con varias alertas activas
+  y ejecucion diaria, el consumo de fondo puede sumar decenas de peticiones al mes sin
+  que se note -- una de las causas reales de que el limite de 6 combos se sintiera
+  estrecho.
+
+### Migracion pendiente (ejecutar en Neon, ver `scripts/schema.sql`)
+Las tablas `ignav_usage_log` y `price_history` son nuevas -- sin aplicar la migracion,
+el contador de cuota y la tendencia de precio simplemente no aparecen (fallan en
+silencio), sin romper ninguna busqueda.
+
 ## [0.11.5] - 2026-09-17 (FIX: 424 persistente en enlaces de reserva + mensajes crudos de Ignav)
 
 El usuario probo el fix de la v0.11.4 (ida/vuelta en paralelo) con una captura real:

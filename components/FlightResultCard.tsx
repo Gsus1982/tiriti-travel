@@ -197,7 +197,24 @@ export default function FlightResultCard({
             {result.notes.length > 0 && <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">{result.notes.join(' ')}</p>}
           </div>
           <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-2 sm:w-36 shrink-0 text-right sm:border-l sm:border-slate-100 sm:pl-4">
-            <div><p className="text-lg font-semibold text-ink dark:text-slate-100">{result.totalPrice.toFixed(2)} {result.currency}</p><p className="text-[11px] text-slate-400 dark:text-slate-500">Salida hotel {formatDateTime(result.hotelCheckoutAt)}</p></div>
+            <div>
+              <p className="text-lg font-semibold text-ink dark:text-slate-100">{result.totalPrice.toFixed(2)} {result.currency}</p>
+              {result.priceTrend && (
+                <p
+                  className={`text-[10px] font-medium uppercase tracking-wide ${
+                    result.priceTrend.label === 'bajo'
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : result.priceTrend.label === 'alto'
+                      ? 'text-red-500 dark:text-red-400'
+                      : 'text-slate-400 dark:text-slate-500'
+                  }`}
+                  title={`Promedio historico de esta ruta: ${result.priceTrend.avgPrice.toFixed(0)} ${result.currency} (${result.priceTrend.sampleSize} busquedas previas)`}
+                >
+                  Precio {result.priceTrend.label} para esta ruta
+                </p>
+              )}
+              <p className="text-[11px] text-slate-400 dark:text-slate-500">Salida hotel {formatDateTime(result.hotelCheckoutAt)}</p>
+            </div>
             <button onClick={loadBothBookingLinks} disabled={linksLoading} className="text-xs font-medium bg-indigo hover:bg-indigo-dark text-white px-3 py-1.5 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap">{linksLoading ? 'Cargando...' : 'Ver enlaces'}</button>
           </div>
         </div>

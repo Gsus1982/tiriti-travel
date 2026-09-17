@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { IconCalendar, IconBell } from './Icons';
+import { IconCalendar, IconBell, IconGauge } from './Icons';
+
+type IgnavUsage = { totalUsed: number; remaining: number; last7Days: number; last30Days: number; quota: number };
 
 type CalendarDay = { date: string; minPrice: number | null; currency: string | null; flightCount: number };
 
@@ -50,6 +52,19 @@ export default function ToolsPanel({
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [calendarError, setCalendarError] = useState<string | null>(null);
   const [calendarDest, setCalendarDest] = useState('');
+
+  const [usage, setUsage] = useState<IgnavUsage | null>(null);
+  const [usageUnavailable, setUsageUnavailable] = useState(false);
+
+  useEffect(() => {
+    fetch('/api/ignav-usage')
+      .then((r) => {
+        if (!r.ok) throw new Error('no disponible');
+        return r.json();
+      })
+      .then(setUsage)
+      .catch(() => setUsageUnavailable(true));
+  }, []);
 
   const [alertLabel, setAlertLabel] = useState('');
   const [alertEmail, setAlertEmail] = useState('');
@@ -177,7 +192,44 @@ export default function ToolsPanel({
 
   return (
     <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 space-y-6">
-      <div>
+      {usage && (
+        <div>
+          <div className="flex items-center gap-2 mb-2">
+            <IconGauge className="w-4 h-4 text-indigo" />
+            <h2 className="text-base font-semibold text-ink dark:text-slate-100">Cuota de Ignav</h2>
+          </div>
+          <div className="flex items-baseline justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <span>
+              <strong className="text-ink dark:text-slate-100 text-sm">{usage.remaining}</strong> de {usage.quota} peticiones
+              restantes (de por vida)
+            </span>
+            <span>{usage.last7Days} en los ultimos 7 dias</span>
+          </div>
+          <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full ${
+                usage.remaining / usage.quota > 0.5
+                  ? 'bg-emerald-500'
+                  : usage.remaining / usage.quota > 0.2
+                  ? 'bg-amber-500'
+                  : 'bg-red-500'
+              }`}
+              style={{ width: `${Math.max(2, (usage.remaining / usage.quota) * 100)}%` }}
+            />
+          </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+            Se agota y no se renueva -- cada busqueda gasta origenes x destinos x dias de peticiones reales.
+          </p>
+        </div>
+      )}
+      {usageUnavailable && (
+        <p className="text-[11px] text-slate-400 dark:text-slate-500">
+          Contador de cuota no disponible todavia (falta aplicar la migracion de la tabla <code>ignav_usage_log</code> en
+          Neon).
+        </p>
+      )}
+
+      <div className={usage || usageUnavailable ? 'border-t border-slate-100 dark:border-slate-800 pt-4' : ''}>
         <div className="flex items-center gap-2 mb-2">
           <IconCalendar className="w-4 h-4 text-indigo" />
           <h2 className="text-base font-semibold text-ink dark:text-slate-100">Calendario de precios (un solo tramo)</h2>

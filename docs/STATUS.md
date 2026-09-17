@@ -20,14 +20,14 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.11.5. Incluye TODO: IA real (OpenAI,
-las 3 funciones: interpretar/Sorprendeme/recomendar), destinos curados eliminados,
-comparador de vuelos, vista lista, alertas de precio por email real (Resend) con
-historial y borrado, el fix del recorte no-determinista de destinos en `ai-parse.ts`
-(v0.11.3), y 2 fixes mas pequenos del 17 sep (v0.11.4/0.11.5): los enlaces de reserva
-ahora se piden para ida Y vuelta por separado (antes solo pedia el de ida, perdiendo el
-de vuelta cuando cada tramo iba con una aerolinea distinta), y mas reintentos (3 en vez
-de 1) especificamente para esa llamada, ya que es una peticion suelta por tramo, no un
+**En produccion (rama `main`) ahora mismo**: v0.12.0. Incluye TODO lo de v0.11.5 (IA
+real, destinos curados eliminados, comparador, alertas por email) MAS: contador real de
+cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis
+(Travelpayouts, sin gastar cuota), tendencia de precio sobre historial propio, y cron
+de alertas reducido de diario a cada 3 dias. Ver entrada fechada de esta sesion mas
+abajo para el detalle completo -- **hay 2 tablas nuevas pendientes de migrar en Neon**
+(`ignav_usage_log`, `price_history`) y una variable de entorno nueva opcional
+(`TRAVELPAYOUTS_TOKEN`) para activar "explorar destinos".
 fan-out masivo como `/one-way` -- ver entrada fechada del 17 sep mas abajo.
 
 **No hay ningun PR abierto pendiente de mergear.** Toda esta sesion se trabajo con
@@ -94,6 +94,91 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 2) — Sesion: contador de cuota + limite dinamico + explorar gratis + tendencia de precio
+
+### Contexto
+El usuario, tras usar la app un tiempo, se quejo de que el limite de 6 combinaciones
+"limita mucho". Se le propusieron 4 mejoras concretas (contador de cuota visible,
+explorar destinos sin gastar cuota, tendencia historica de precio, reducir frecuencia
+del cron de alertas) y pidio implementarlas todas, en ese orden de prioridad.
+
+### Hallazgo real antes de programar nada: el cron de alertas gastaba cuota en silencio
+Se investigo el codigo real antes de proponer soluciones (no se asumio nada a ciegas):
+el cron `check-alerts` corria A DIARIO, y cada alerta guardada activa dispara una
+busqueda completa (dias de rango x origenes x 2 sentidos) contra Ignav en cada
+ejecucion. Con varias alertas guardadas y rangos de fechas amplios, esto puede sumar
+decenas de peticiones reales al mes sin que el usuario lo vea -- una causa real (no
+solo el limite de 6 en si) de por que la cuota se sentia escasa.
+
+### 1. Contador real de cuota (`lib/ignav-usage.ts`, tabla `ignav_usage_log`)
+Se registra cada peticion real desde el UNICO punto de salida a Ignav (`ignavPost` en
+`lib/ignav.ts`), justo tras recibir cualquier respuesta HTTP -- no solo 200, ya que
+Ignav factura la peticion en cuanto su servidor la procesa, devuelva lo que devuelva.
+Las peticiones que fallan ANTES de llegar a Ignav (timeout de red, DNS) no cuentan, con
+razon. Escritura best-effort (nunca rompe una busqueda real si falla el contador).
+Expuesto via `/api/ignav-usage` y mostrado en `ToolsPanel.tsx`: peticiones restantes de
+las 1000 de por vida, barra de color (verde/ambar/rojo segun lo que quede), uso de los
+ultimos 7 dias.
+
+### 2. Limite de combinaciones DINAMICO (sustituye el fijo de 6 de siempre)
+`dynamicComboLimit()` en `lib/ignav-usage.ts`: 10 si queda mas del 50% de la cuota, 6
+si queda mas del 20%, 4 si queda mas del 5%, 3 en el resto. Aplicado en
+`searchLiveItineraries` (`lib/live-engine.ts`), con fallback al fijo de 6 si el
+contador no esta disponible todavia (tabla sin migrar). Responde directamente a la
+queja del usuario: el limite deja de ser un numero arbitrario fijo para siempre y pasa
+a reflejar cuanta cuota queda de verdad.
+
+### 3. Explorar destinos sin gastar cuota (`lib/travelpayouts.ts`, `/api/explore`)
+Investigado por busqueda web en esta sesion (nunca se habia usado Travelpayouts antes,
+solo se habia mencionado como posibilidad en una sesion anterior): la Aviasales Data
+API de Travelpayouts (`v1/city-directions`) da una lista de destinos baratos desde un
+origen, con precios basados en busquedas reales de otros viajeros cacheadas hasta 7
+dias -- gratis, solo hace falta un token de registro (sin tarjeta). No son precios en
+firme, son orientativos para decidir QUE destinos merece la pena buscar de verdad antes
+de gastar la cuota real de Ignav en ellos. El endpoint cruza los resultados contra
+`aena_destinations` (destinos reales verificados) para marcar cuales tienen boton
+directo "Buscar este" -- los demas se muestran igual, como pura inspiracion.
+**AVISO: no se ha podido probar contra la API real** (sin token de prueba disponible en
+esta sesion) -- escrito contra la documentacion oficial
+(https://travelpayouts.github.io/slate/). Si falla o no esta configurado
+(`TRAVELPAYOUTS_TOKEN` sin definir), se muestra un aviso claro con enlace de registro,
+nunca rompe nada.
+
+### 4. Tendencia de precio sobre historial propio (`lib/price-history.ts`, tabla `price_history`)
+Cada precio real visto en una busqueda en vivo se registra (`logPriceObservation`,
+fire-and-forget, no anade latencia a la busqueda actual). A partir de 3 observaciones
+previas para una misma ruta (origen-destino, cualquier fecha -- exigir la misma fecha
+dejaria casi siempre sin datos con el volumen de un uso personal), cada resultado nuevo
+se compara contra el promedio historico y se etiqueta "precio bajo/normal/alto para
+esta ruta" en `FlightResultCard.tsx`. No llama a ninguna API nueva, solo usa datos ya
+observados. Empieza vacio -- tarda en dar sus primeros frutos segun se repitan
+busquedas de las mismas rutas.
+
+### 5. Cron de alertas: de diario a cada 3 dias (`vercel.json`)
+`"0 6 * * *"` -> `"0 6 */3 * *"`. Reduce a un tercio el consumo de fondo de cuota por
+las alertas guardadas, sin perder demasiada capacidad de reaccion (una bajada de precio
+se sigue detectando dentro de un margen razonable para viajes planeados con semanas/
+meses de antelacion).
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios contra el `main` real (clonado en esta
+sesion, no reconstruido de fragmentos). Los 3 endpoints nuevos (`/api/ignav-usage`,
+`/api/explore`, y el limite dinamico en `/api/search-live`) probados localmente SIN la
+migracion aplicada ni `TRAVELPAYOUTS_TOKEN` configurado: fallan con errores claros (503,
+aviso en la interfaz) en vez de romper nada, tal como estaba pensado.
+
+### Pendiente (usuario)
+- **Ejecutar en Neon** la migracion de las 2 tablas nuevas (`ignav_usage_log`,
+  `price_history`) -- SQL exacto en `scripts/schema.sql`, bloque "MIGRACION: contador
+  de cuota + historial de precios". Sin esto, el contador y la tendencia simplemente no
+  aparecen (no rompen nada).
+- **Si se quiere activar "explorar destinos"**: registrarse gratis en
+  travelpayouts.com (sin tarjeta) y anadir `TRAVELPAYOUTS_TOKEN` en Vercel.
+- Confirmar en vivo que Travelpayouts responde como se espera (unica pieza de esta
+  sesion sin verificar contra su API real).
 
 ---
 

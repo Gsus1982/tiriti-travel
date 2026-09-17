@@ -3,6 +3,8 @@ import { searchOneWay, type IgnavItinerary, type IgnavOneWayResponse } from './i
 import { searchSkyRoundTrip } from './skyscanner-adapter';
 import type { Pax } from './types';
 import { datesBetween } from './types';
+import { getIgnavUsageSummary, dynamicComboLimit } from './ignav-usage';
+import { logPriceObservation, getPriceTrend, type PriceTrend } from './price-history';
 
 const AIRPORT_BUFFER_MIN = 120;
 const MAX_DATE_RANGE_DAYS = 5;
@@ -69,6 +71,7 @@ export type LiveItinerary = {
   airportTransferMinutes: number;
   notes: string[];
   source: 'ignav' | 'skyscanner';
+  priceTrend?: PriceTrend | null;
 };
 
 export type LiveSearchResult = {
@@ -382,17 +385,29 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
 
   const allTargets = await resolveDestinationTargets(destinationIatas ?? []);
 
+  // Limite dinamico segun cuota restante de Ignav (en vez del fijo de 6 de siempre):
+  // generoso si queda mucha cuota, conservador si queda poca. Si el contador de cuota
+  // no esta disponible todavia (tabla ignav_usage_log sin crear -- migracion
+  // pendiente), se cae al limite fijo de 6 de toda la vida, sin romper nada.
+  let comboLimit = MAX_ORIGIN_DESTINATION_COMBOS;
+  try {
+    const usage = await getIgnavUsageSummary();
+    comboLimit = dynamicComboLimit(usage.remaining, usage.quota);
+  } catch {
+    // Sin contador disponible -- limite fijo de siempre.
+  }
+
   const combos = originIatas.length * allTargets.length;
-  if (combos > MAX_ORIGIN_DESTINATION_COMBOS) {
+  if (combos > comboLimit) {
     throw new Error(
-      `Has seleccionado ${originIatas.length} origen(es) x ${allTargets.length} destino(s) = ${combos} combinaciones. El maximo permitido en modo Ignav es ${MAX_ORIGIN_DESTINATION_COMBOS}, para proteger tu cuota gratuita. Reduce el numero de origenes o destinos seleccionados.`
+      `Has seleccionado ${originIatas.length} origen(es) x ${allTargets.length} destino(s) = ${combos} combinaciones. El maximo permitido ahora mismo es ${comboLimit} (varia segun tu cuota restante de Ignav), para proteger tu cuota gratuita. Reduce el numero de origenes o destinos seleccionados.`
     );
   }
   if (combos === 0) {
     throw new Error('No hay destinos seleccionados.');
   }
 
-  // El cap de MAX_ORIGIN_DESTINATION_COMBOS de arriba NO limita el multiplicador real de
+  // El cap de arriba NO limita el multiplicador real de
   // peticiones a Ignav: un destino con varios aeropuertos en la misma ciudad (ej.
   // Londres: hasta 4)
   // dispara una peticion por aeropuerto x fecha x sentido. Con el maximo de 5 dias de
@@ -457,6 +472,17 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     }
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
+
+  // Tendencia de precio (bajo/normal/alto) sobre historial propio -- se calcula para
+  // cada resultado antes de devolver, en paralelo. Registrar el precio observado ahora
+  // NO se espera (fire-and-forget): alimenta las busquedas FUTURAS, no la respuesta
+  // actual, y no debe anadir latencia a la busqueda de ahora mismo.
+  await Promise.all(
+    merged.map(async (item) => {
+      item.priceTrend = await getPriceTrend(item.originIata, item.destinationId, item.totalPrice);
+      void logPriceObservation(item.originIata, item.destinationId, item.outbound.departure_at.slice(0, 10), item.totalPrice, item.currency);
+    })
+  );
 
   return { itineraries: merged, warnings };
 }

@@ -12,6 +12,7 @@ import ToolsPanel from '@/components/ToolsPanel';
 import ResultsSection from '@/components/ResultsSection';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
+import ExploreDestinations from '@/components/ExploreDestinations';
 import { IconSliders, IconMapPin, IconShare, IconSparkles } from '@/components/Icons';
 
 type Meta = {
@@ -959,6 +960,11 @@ export default function HomePage() {
                   </div>
                 </FilterAccordion>
               </div>
+
+              <ExploreDestinations
+                originIatas={originIatas.length > 0 ? originIatas : ['ALC']}
+                onUseDestination={(iata) => setSelectedDestIatas((prev) => (prev.includes(iata) ? prev : [...prev, iata]))}
+              />
 
               <SearchHistoryPanel onRestore={handleRestoreFromHistory} />
 

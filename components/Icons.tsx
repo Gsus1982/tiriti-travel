@@ -15,6 +15,16 @@ export function IconCalendar({ className = 'w-5 h-5' }: { className?: string }) 
   );
 }
 
+export function IconGauge({ className = 'w-5 h-5' }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 15a8 8 0 1 1 16 0" />
+      <path d="M12 15 16 9" />
+      <circle cx="12" cy="15" r="1.2" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
 export function IconBell({ className = 'w-5 h-5' }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" className={className} stroke="currentColor" strokeWidth={1.6}>

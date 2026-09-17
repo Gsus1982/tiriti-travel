@@ -1,5 +1,7 @@
 const IGNAV_BASE_URL = 'https://ignav.com/api/fares';
 
+import { logIgnavRequest } from './ignav-usage';
+
 export type IgnavPrice = { amount: number; currency: string; status: 'verified' | 'unverified' };
 
 export type IgnavSegment = {
@@ -132,6 +134,12 @@ async function ignavPost<T>(path: string, body: Record<string, unknown>, maxRetr
       await sleep(400 * (attempt + 1));
       continue;
     }
+    // Contador de cuota: se registra aqui, tras recibir CUALQUIER respuesta HTTP (no
+    // solo 200) -- Ignav factura la peticion en cuanto su servidor la procesa, aunque
+    // devuelva un error. Las peticiones que fallan ANTES de esto (catch de arriba,
+    // fetch() nunca llego a Ignav) no cuentan, con razon. Fire-and-forget: no bloquea
+    // la respuesta real ni la rompe si falla el contador.
+    void logIgnavRequest();
     if (res.ok) {
       return (await res.json()) as T;
     }

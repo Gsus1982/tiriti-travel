@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { IconSparkles, IconMapPin, IconChevronDown } from './Icons';
+import { getVisitedDestinations, toggleVisitedDestination } from '@/lib/visited-destinations';
 
 type ExploreDestination = {
   destinationIata: string;
@@ -25,6 +26,16 @@ export default function ExploreDestinations({
   const [error, setError] = useState<string | null>(null);
   const [unavailable, setUnavailable] = useState(false);
   const [justAdded, setJustAdded] = useState<string | null>(null);
+  const [visited, setVisited] = useState<string[]>([]);
+  const [showVisited, setShowVisited] = useState(false);
+
+  useEffect(() => {
+    setVisited(getVisitedDestinations());
+  }, []);
+
+  function markVisited(iata: string) {
+    setVisited(toggleVisitedDestination(iata));
+  }
 
   function useDestination(d: ExploreDestination) {
     onUseDestination(d.destinationIata);
@@ -133,30 +144,55 @@ export default function ExploreDestinations({
         <p className="text-xs text-slate-400 dark:text-slate-500">Sin datos para este origen todavia.</p>
       )}
       {destinations && destinations.length > 0 && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-          {destinations.map((d) => (
-            <div
-              key={d.destinationIata}
-              className="rounded-lg border border-slate-100 dark:border-slate-800 p-2.5 text-xs flex flex-col gap-1"
+        <>
+          {visited.length > 0 && (
+            <button
+              onClick={() => setShowVisited((v) => !v)}
+              className="text-[11px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 mb-2 underline decoration-dotted"
             >
-              <p className="font-medium text-ink dark:text-slate-100 truncate">{d.verifiedName ?? d.destinationIata}</p>
-              <p className="text-slate-500 dark:text-slate-400">
-                desde {d.price.toFixed(0)} {d.currency}
-              </p>
-              {d.verifiedName ? (
-                <button
-                  onClick={() => useDestination(d)}
-                  className="mt-1 flex items-center gap-1 text-indigo hover:text-indigo-dark text-[11px] font-medium"
-                >
-                  <IconMapPin className="w-3 h-3" />
-                  Buscar este
-                </button>
-              ) : (
-                <p className="text-[10px] text-slate-400 dark:text-slate-500">Sin verificar vuelo directo</p>
-              )}
-            </div>
-          ))}
-        </div>
+              {showVisited ? 'Ocultar' : 'Mostrar'} destinos ya visitados ({visited.length})
+            </button>
+          )}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+            {destinations
+              .filter((d) => showVisited || !visited.includes(d.destinationIata))
+              .map((d) => {
+                const isVisited = visited.includes(d.destinationIata);
+                return (
+                  <div
+                    key={d.destinationIata}
+                    className={`rounded-lg border p-2.5 text-xs flex flex-col gap-1 ${
+                      isVisited
+                        ? 'border-slate-100 dark:border-slate-800 opacity-50'
+                        : 'border-slate-100 dark:border-slate-800'
+                    }`}
+                  >
+                    <p className="font-medium text-ink dark:text-slate-100 truncate">{d.verifiedName ?? d.destinationIata}</p>
+                    <p className="text-slate-500 dark:text-slate-400">
+                      desde {d.price.toFixed(0)} {d.currency}
+                    </p>
+                    {d.verifiedName ? (
+                      <button
+                        onClick={() => useDestination(d)}
+                        className="mt-1 flex items-center gap-1 text-indigo hover:text-indigo-dark text-[11px] font-medium"
+                      >
+                        <IconMapPin className="w-3 h-3" />
+                        Buscar este
+                      </button>
+                    ) : (
+                      <p className="text-[10px] text-slate-400 dark:text-slate-500">Sin verificar vuelo directo</p>
+                    )}
+                    <button
+                      onClick={() => markVisited(d.destinationIata)}
+                      className="text-[10px] text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 text-left"
+                    >
+                      {isVisited ? 'Desmarcar visitado' : 'Ya he estado aqui'}
+                    </button>
+                  </div>
+                );
+              })}
+          </div>
+        </>
       )}
     </details>
   );

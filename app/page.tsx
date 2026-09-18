@@ -6,13 +6,15 @@ import { parseSearchQuery } from '@/lib/nlp-search';
 import { buildShareUrl, parseShareParams, summarizeFilters } from '@/lib/share-link';
 import { addSearchHistoryEntry } from '@/lib/search-history';
 import { getTravelProfile, saveTravelProfile } from '@/lib/travel-profile';
+import { getVisitedDestinations, toggleVisitedDestination } from '@/lib/visited-destinations';
+import { saveOfflineCache, getOfflineCache } from '@/lib/offline-cache';
 import TopNav from '@/components/TopNav';
 import ToolsPanel from '@/components/ToolsPanel';
 import ResultsSection from '@/components/ResultsSection';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
 import ExploreDestinations from '@/components/ExploreDestinations';
-import { IconSliders, IconMapPin, IconShare, IconSparkles, IconChevronDown } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconShare, IconSparkles, IconChevronDown, IconWhatsApp } from '@/components/Icons';
 
 type Meta = {
   origins: { iata: string; city: string }[];
@@ -102,6 +104,7 @@ export default function HomePage() {
   const [aiRecommendation, setAiRecommendation] = useState<{ rowKey: string; explanation: string } | null>(null);
   const [recommending, setRecommending] = useState(false);
   const [comboLimit, setComboLimit] = useState(6);
+  const [isOfflineResult, setIsOfflineResult] = useState(false);
 
   useEffect(() => {
     fetch('/api/ignav-usage')
@@ -320,6 +323,10 @@ export default function HomePage() {
       if (data.warnings?.length) setWarnings(data.warnings);
       const sortedResults = sortResults(data.itineraries ?? [], effectiveSortBy);
       setLiveResults(sortedResults);
+      setIsOfflineResult(false);
+      if (sortedResults.length > 0) {
+        saveOfflineCache(sortedResults, `${originIatas.join('/')} -> ${destinationLabels[0] ?? ''}`);
+      }
       setAiRecommendation(null);
       if (sortedResults.length > 0) requestAiRecommendation(sortedResults);
 
@@ -348,7 +355,22 @@ export default function HomePage() {
       addSearchHistoryEntry(label, url);
       window.dispatchEvent(new Event('tiriti:search-history-updated'));
     } catch (e: any) {
-      setError(e.message);
+      // Si el fallo es de RED (sin conexion), no un error normal de la busqueda,
+      // ofrece la ultima busqueda guardada en el propio telefono en vez de un error
+      // seco -- no es una PWA offline completa, solo el ultimo resultado visto.
+      const isNetworkError = e instanceof TypeError || (typeof navigator !== 'undefined' && !navigator.onLine);
+      if (isNetworkError) {
+        const cached = getOfflineCache();
+        if (cached && cached.itineraries.length > 0) {
+          setLiveResults(cached.itineraries as LiveItinerary[]);
+          setIsOfflineResult(true);
+          setError(null);
+        } else {
+          setError('Sin conexion y sin ninguna busqueda guardada todavia para mostrar.');
+        }
+      } else {
+        setError(e.message);
+      }
     } finally {
       setLoading(false);
     }
@@ -394,10 +416,12 @@ export default function HomePage() {
       setError('Elige al menos un origen antes de pulsar "Sorprendeme".');
       return;
     }
-    const pool = filteredRealDestinations.length > 0 ? filteredRealDestinations : realDestinations;
+    const basePool = filteredRealDestinations.length > 0 ? filteredRealDestinations : realDestinations;
+    const visited = getVisitedDestinations();
+    const pool = basePool.filter((d) => !visited.includes(d.dest_iata));
     if (pool.length === 0) {
       setError(
-        'Todavia no hay destinos reales cargados para tus origenes (o la cache de Aena esta vacia para ellos). Prueba con otro origen o espera un momento.'
+        'Todavia no hay destinos reales cargados para tus origenes (o la cache de Aena esta vacia para ellos), o ya has marcado todos como visitados. Prueba con otro origen o espera un momento.'
       );
       return;
     }
@@ -502,6 +526,12 @@ export default function HomePage() {
       setShareMessage(url);
     }
     setTimeout(() => setShareMessage(null), 4000);
+  }
+
+  function handleShareWhatsApp() {
+    const url = buildShareUrl(currentShareFilters());
+    const text = `Mira esta busqueda de vuelos en Tiriti Travel: ${url}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
   }
 
   function handleRestoreFromHistory(url: string) {
@@ -846,6 +876,13 @@ export default function HomePage() {
                     <IconShare className="w-4 h-4" />
                     Compartir esta busqueda
                   </button>
+                  <button
+                    onClick={handleShareWhatsApp}
+                    aria-label="Compartir por WhatsApp"
+                    className="flex items-center gap-1.5 text-sm text-emerald-600 dark:text-emerald-400 hover:text-emerald-700 px-3 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-emerald-400 transition-colors"
+                  >
+                    <IconWhatsApp className="w-4 h-4" />
+                  </button>
                   {shareMessage && <span className="text-xs text-emerald-600 dark:text-emerald-400">{shareMessage}</span>}
                 </div>
 
@@ -857,7 +894,13 @@ export default function HomePage() {
               </section>
 
               {liveResults && (
-                <ResultsSection
+                <>
+                  {isOfflineResult && (
+                    <p className="text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-lg px-3 py-2">
+                      Sin conexion -- mostrando tu ultima busqueda guardada en el telefono, puede no estar actualizada.
+                    </p>
+                  )}
+                  <ResultsSection
                   liveResults={liveResults}
                   bookingLinks={bookingLinks}
                   loadingLinks={loadingLinks}
@@ -866,7 +909,9 @@ export default function HomePage() {
                   recommending={recommending}
                   warnings={warnings}
                   sortSelect={renderSortSelect('results')}
+                  paxCount={adults + children}
                 />
+                </>
               )}
             </div>
 

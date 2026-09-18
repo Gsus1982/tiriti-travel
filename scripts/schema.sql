@@ -134,3 +134,16 @@ CREATE INDEX IF NOT EXISTS price_history_route_idx ON price_history (origin_iata
 --
 -- Sin esta migracion, el contador de cuota y la tendencia de precio simplemente
 -- no aparecen (fallan en silencio, sin romper busquedas) hasta que la apliques.
+
+-- ============================================================================
+-- MIGRACION: notificaciones push (sesion del 17 sep 2026)
+-- ============================================================================
+--   CREATE TABLE IF NOT EXISTS push_subscriptions (
+--     id BIGSERIAL PRIMARY KEY,
+--     endpoint TEXT UNIQUE NOT NULL,
+--     p256dh TEXT NOT NULL,
+--     auth TEXT NOT NULL,
+--     created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+--   );
+-- Sin esta migracion, activar notificaciones push simplemente no funciona (aviso claro
+-- en la interfaz), sin afectar al resto de la app.

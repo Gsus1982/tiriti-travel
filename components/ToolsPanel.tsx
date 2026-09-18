@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { IconCalendar, IconBell, IconGauge } from './Icons';
+import PushNotificationSetup from './PushNotificationSetup';
 
 type IgnavUsage = { totalUsed: number; remaining: number; last7Days: number; last30Days: number; quota: number; comboLimit: number };
 
@@ -189,6 +190,26 @@ export default function ToolsPanel({
     if (min === null || d.minPrice < min) return d.minPrice;
     return min;
   }, null);
+  const maxOfCalendar = calendarDays?.reduce<number | null>((max, d) => {
+    if (d.minPrice === null) return max;
+    if (max === null || d.minPrice > max) return d.minPrice;
+    return max;
+  }, null);
+
+  // Mapa de calor: interpola entre verde (barato) y rojo (caro) segun donde cae el
+  // precio del dia dentro del rango minimo-maximo encontrado. Con un unico precio
+  // (rango 0) se queda en verde neutro.
+  function heatmapStyle(price: number | null): React.CSSProperties {
+    if (price === null || minOfCalendar === null || maxOfCalendar === null || minOfCalendar === undefined || maxOfCalendar === undefined) {
+      return {};
+    }
+    const range = maxOfCalendar - minOfCalendar;
+    const ratio = range === 0 ? 0 : (price - minOfCalendar) / range;
+    // Verde (~150,50%) a rojo (~0,50%) en HSL, pasando por amarillo -- ratio 0 = mas
+    // barato, 1 = mas caro.
+    const hue = 150 - ratio * 150;
+    return { backgroundColor: `hsl(${hue}, 65%, 92%)`, borderColor: `hsl(${hue}, 55%, 75%)` };
+  }
 
   return (
     <section className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-100 dark:border-slate-800 p-6 space-y-6">
@@ -270,12 +291,13 @@ export default function ToolsPanel({
             {calendarDays.map((d) => (
               <div
                 key={d.date}
+                style={d.minPrice !== null ? heatmapStyle(d.minPrice) : undefined}
                 className={`text-center rounded-lg p-2 text-xs border ${
                   d.minPrice === null
-                    ? 'bg-slate-50 text-slate-400 border-slate-100'
+                    ? 'bg-slate-50 dark:bg-slate-800 text-slate-400 dark:text-slate-500 border-slate-100 dark:border-slate-700'
                     : minOfCalendar !== null && d.minPrice === minOfCalendar
-                    ? 'bg-indigo/10 border-indigo/50 text-indigo font-semibold'
-                    : 'bg-slate-50 border-slate-100 text-slate-600'
+                    ? 'font-semibold ring-2 ring-indigo/60'
+                    : 'text-slate-700'
                 }`}
               >
                 <div>{d.date.slice(5)}</div>
@@ -291,7 +313,8 @@ export default function ToolsPanel({
           <IconBell className="w-4 h-4 text-indigo" />
           <h2 className="text-base font-semibold text-ink dark:text-slate-100">Guardar alerta de precio</h2>
         </div>
-        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2">
+        <PushNotificationSetup />
+        <p className="text-xs text-slate-400 dark:text-slate-500 mb-2 mt-2">
           Usa los origenes, fechas y destino actuales del buscador de arriba (
           <strong className="text-slate-600 dark:text-slate-300">
             {destinationIatas[0] ?? 'sin destino elegido todavia'}

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.15.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.16.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,77 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 6) — Sesion: 8 mejoras de golpe (push, historial visual, offline, IA de destino...)
+
+### Contexto
+El usuario pidio implantar TODO lo sugerido en la sesion anterior (dia mas barato/CO2/
+clima/festivos ya hechos) excepto accesibilidad: precio por persona, WhatsApp, "ya he
+estado aqui", calendario en mapa de calor, grafico de precio historico, consejo de la
+IA sobre el destino, modo sin conexion, y notificaciones push reales -- 8 piezas.
+
+### Las 8 piezas (resumen, detalle completo en CHANGELOG.md)
+1. Interruptor precio total/por persona en resultados.
+2. Boton directo de WhatsApp para compartir.
+3. "Ya he estado aqui": destinos visitados (localStorage) excluidos de Sorprendeme, y
+   atenuados en Explorar con opcion de mostrar/ocultar.
+4. Calendario de precios: mapa de calor real (gradiente verde-rojo por precio, no solo
+   destacar el minimo).
+5. Grafico de precio historico por ruta (SVG propio, sin libreria de graficos nueva) en
+   "Mas detalles del destino" de cada tarjeta, alimentado por `price_history` (la misma
+   tabla que ya usa la tendencia "bajo/normal/alto").
+6. Consejo de la IA sobre el destino (que ver, que llevar), BAJO DEMANDA (boton, no
+   automatico) para no gastar tokens en cada resultado sin que el usuario lo pida.
+7. Modo sin conexion basico: si una busqueda falla por red, se muestra la ultima
+   busqueda guardada en el telefono. No es una PWA offline completa (no hay cache de
+   assets/paginas), solo el ultimo resultado de busqueda.
+8. **Notificaciones push reales** -- la pieza grande. Ver detalle abajo.
+
+### Notificaciones push: lo que se monto y lo que falta configurar
+- `web-push` instalado como dependencia real (+ `@types/web-push` para que compile).
+- Claves VAPID generadas EN ESTA SESION con `webpush.generateVAPIDKeys()` (no
+  reutilizadas de ningun sitio, propias de este despliegue). **La clave privada se le
+  dio al usuario directamente en el chat, nunca se comitea a este repositorio publico**
+  -- si hace falta regenerarlas, ejecutar `node -e "console.log(require('web-push').generateVAPIDKeys())"`
+  y pegar el resultado directamente en las variables de entorno de Vercel.
+  **El usuario tiene que anadir estas 2 (o 3) variables en Vercel** para que funcionen
+  -- sin ellas, el boton de activar muestra un aviso claro (503), no rompe nada.
+- Tabla nueva `push_subscriptions` (ver bloque de migracion en `scripts/schema.sql`) --
+  misma mecanica que las migraciones anteriores, el usuario la aplica a mano en Neon.
+- Service worker minimo en `public/sw.js`: SOLO recibe push y los muestra, no cachea
+  nada (no es el service worker de una PWA completa).
+- `components/PushNotificationSetup.tsx`: boton en el panel de herramientas que
+  registra el service worker, pide permiso, se suscribe, y manda la suscripcion a
+  `/api/push/subscribe`. **Detecta si es iPhone sin la app anadida a inicio** y avisa
+  claramente en vez de fallar en silencio -- las push de Apple en Safari/PWA solo
+  funcionan asi, es una limitacion de iOS, no de esta app.
+- El cron de alertas (`app/api/cron/check-alerts/route.ts`) manda la push real junto al
+  email cuando encuentra una bajada de precio, via `sendPushToAll()` en `lib/push.ts`
+  (limpia automaticamente suscripciones caducadas que el navegador devuelva como
+  404/410).
+
+### FIX de tipos encontrado durante la verificacion (antes de desplegar)
+`urlBase64ToUint8Array` en `PushNotificationSetup.tsx` devolvia un `Uint8Array` que
+TypeScript moderno no aceptaba como `BufferSource` para `applicationServerKey`
+(distincion estricta `ArrayBuffer` vs `SharedArrayBuffer`) -- corregido construyendo el
+buffer explicitamente como `ArrayBuffer`. Tambien hizo falta instalar
+`@types/web-push` (el paquete no trae sus propios tipos).
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios (tras corregir los 2 errores de tipos de
+arriba). `next start` + `curl` confirmando: home HTTP 200, `/api/push/vapid-public-key`
+devuelve 503 controlado sin las claves configuradas, `sw.js` se sirve correctamente
+(HTTP 200) desde `public/`.
+
+### Pendiente (usuario)
+- Anadir `VAPID_PUBLIC_KEY` y `VAPID_PRIVATE_KEY` (y opcionalmente `VAPID_SUBJECT`) en
+  Vercel.
+- Aplicar la migracion de `push_subscriptions` en Neon.
+- Probar el boton de activar push en el movil (idealmente con la app anadida a la
+  pantalla de inicio si es iPhone) y confirmar que llega una notificacion real cuando
+  salte una alerta.
 
 ---
 

@@ -5,6 +5,8 @@ import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
 import { getAirlineBadge } from '@/lib/airline-badge';
 import { IconPlaneTakeoff, IconPlaneLanding, IconSparkles } from './Icons';
+import PriceHistoryChart from './PriceHistoryChart';
+import DestinationTipsButton from './DestinationTipsButton';
 
 type BookingLink = {
   provider_name: string;
@@ -12,6 +14,16 @@ type BookingLink = {
   price?: { amount: number; currency: string };
   leg?: 'outbound' | 'inbound';
 };
+
+function formatPrice(total: number, currency: string, paxCount: number | undefined, perPerson: boolean): { main: string; note?: string } {
+  if (paxCount && paxCount > 1 && perPerson) {
+    return { main: `${(total / paxCount).toFixed(2)} ${currency}`, note: `${total.toFixed(2)} ${currency} total` };
+  }
+  if (paxCount && paxCount > 1) {
+    return { main: `${total.toFixed(2)} ${currency}`, note: `${(total / paxCount).toFixed(2)} ${currency}/persona` };
+  }
+  return { main: `${total.toFixed(2)} ${currency}` };
+}
 
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
@@ -85,7 +97,9 @@ export default function FlightResultCard({
   compact,
   isComparing,
   onToggleCompare,
-  cheaperAlternative
+  cheaperAlternative,
+  paxCount,
+  perPerson
 }: {
   result: LiveItinerary;
   bookingLinks?: BookingLink[];
@@ -96,6 +110,8 @@ export default function FlightResultCard({
   isComparing?: boolean;
   onToggleCompare?: () => void;
   cheaperAlternative?: LiveItinerary | null;
+  paxCount?: number;
+  perPerson?: boolean;
 }) {
   const destinationLabel = result.destinationName;
   const imageUrl = getCityImageUrl(destinationLabel);
@@ -162,7 +178,7 @@ export default function FlightResultCard({
             <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{formatDateTime(result.outbound.departure_at)} → {formatDateTime(result.inbound.departure_at)} · Salida hotel {formatDateTime(result.hotelCheckoutAt)}</p>
           </div>
           {saving !== null && <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full shrink-0">-{saving.toFixed(0)}€ casi igual</span>}
-          <p className="text-sm font-semibold text-ink dark:text-slate-100 shrink-0 whitespace-nowrap">{result.totalPrice.toFixed(2)} {result.currency}</p>
+          <p className="text-sm font-semibold text-ink dark:text-slate-100 shrink-0 whitespace-nowrap">{formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).main}</p>
           <button onClick={loadBothBookingLinks} disabled={linksLoading} className="text-xs font-medium bg-indigo hover:bg-indigo-dark text-white px-2.5 py-1 rounded-lg transition-colors disabled:opacity-50 whitespace-nowrap shrink-0">{linksLoading ? '...' : 'Enlaces'}</button>
         </div>
         <div className="border-t border-slate-100 dark:border-slate-800 px-3 py-2 bg-slate-50/60">
@@ -206,37 +222,44 @@ export default function FlightResultCard({
                 Coincide con festivo: {result.holidays.map((h) => h.localName).join(', ')}.
               </p>
             )}
-            {(result.co2Estimate || result.climate || result.exchangeRate) && (
-              <details className="mt-2 group">
-                <summary className="text-[11px] text-slate-400 dark:text-slate-500 cursor-pointer list-none underline decoration-dotted">
-                  Mas detalles del destino
-                </summary>
-                <div className="mt-1.5 space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
-                  {result.co2Estimate && (
-                    <p>
-                      🌍 CO₂ estimado ida y vuelta: ~{result.co2Estimate.kgPerPassenger} kg/pasajero ({result.co2Estimate.distanceKm} km
-                      por trayecto).
-                    </p>
-                  )}
-                  {result.climate && (
-                    <p>
-                      ☀️ Clima habitual esas fechas: {result.climate.avgMinC}-{result.climate.avgMaxC}°C,{' '}
-                      {result.climate.avgPrecipMm} mm de lluvia (promedio de {result.climate.yearsUsed} años).
-                    </p>
-                  )}
-                  {result.exchangeRate && (
-                    <p>
-                      💱 1 EUR ≈ {result.exchangeRate.rate.toFixed(2)} {result.exchangeRate.currency}
-                    </p>
-                  )}
-                  {result.climate && <p className="text-[10px] text-slate-400 dark:text-slate-600">Clima: Open-Meteo.com (CC BY 4.0)</p>}
-                </div>
-              </details>
-            )}
+            <details className="mt-2 group">
+              <summary className="text-[11px] text-slate-400 dark:text-slate-500 cursor-pointer list-none underline decoration-dotted">
+                Mas detalles del destino
+              </summary>
+              <div className="mt-1.5 space-y-1 text-[11px] text-slate-500 dark:text-slate-400">
+                {result.co2Estimate && (
+                  <p>
+                    🌍 CO₂ estimado ida y vuelta: ~{result.co2Estimate.kgPerPassenger} kg/pasajero ({result.co2Estimate.distanceKm} km
+                    por trayecto).
+                  </p>
+                )}
+                {result.climate && (
+                  <p>
+                    ☀️ Clima habitual esas fechas: {result.climate.avgMinC}-{result.climate.avgMaxC}°C,{' '}
+                    {result.climate.avgPrecipMm} mm de lluvia (promedio de {result.climate.yearsUsed} años).
+                  </p>
+                )}
+                {result.exchangeRate && (
+                  <p>
+                    💱 1 EUR ≈ {result.exchangeRate.rate.toFixed(2)} {result.exchangeRate.currency}
+                  </p>
+                )}
+                {result.climate && <p className="text-[10px] text-slate-400 dark:text-slate-600">Clima: Open-Meteo.com (CC BY 4.0)</p>}
+              </div>
+              <PriceHistoryChart originIata={result.originIata} destinationIata={result.destinationId.split('+')[0]} />
+              <DestinationTipsButton
+                destinationName={destinationLabel.replace(/\s*\([^)]*\)\s*$/, '')}
+                country={destinationLabel.match(/\(([^)]*)\)\s*$/)?.[1] ?? ''}
+                month={new Date(result.outbound.departure_at).getMonth() + 1}
+              />
+            </details>
           </div>
           <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-2 sm:w-36 shrink-0 text-right sm:border-l sm:border-slate-100 sm:pl-4">
             <div>
-              <p className="text-lg font-semibold text-ink dark:text-slate-100">{result.totalPrice.toFixed(2)} {result.currency}</p>
+              <p className="text-lg font-semibold text-ink dark:text-slate-100">{formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).main}</p>
+              {formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).note && (
+                <p className="text-[10px] text-slate-400 dark:text-slate-500">{formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).note}</p>
+              )}
               {result.priceTrend && (
                 <p
                   className={`text-[10px] font-medium uppercase tracking-wide ${

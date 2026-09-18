@@ -2,6 +2,41 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.16.0] - 2026-09-17 (sesion 6) - 8 mejoras de golpe: push, historial visual, offline, IA de destino y mas
+
+A peticion explicita del usuario ("implanta todo lo sugerido a excepcion de accesibilidad").
+
+### Anadido
+- **Notificaciones push reales** (`lib/push.ts`, `web-push`, service worker en
+  `public/sw.js`): botón en el panel de herramientas para activarlas en el dispositivo;
+  el cron de alertas las manda junto al email cuando encuentra una bajada de precio.
+  Requiere generar claves VAPID y configurarlas en Vercel (ver `docs/STATUS.md`).
+  **Aviso importante para iPhone**: solo funcionan si la app esta añadida a la pantalla
+  de inicio, nunca en una pestaña normal de Safari -- el propio boton lo detecta y avisa.
+- **"Ya he estado aquí"** (`lib/visited-destinations.ts`): marca destinos visitados en
+  el propio telefono; se excluyen de Sorprendeme y aparecen atenuados en Explorar (con
+  opcion de mostrarlos/ocultarlos).
+- **Gráfico de precio histórico** por ruta (`components/PriceHistoryChart.tsx`, SVG
+  simple sin librerias nuevas) + endpoint `/api/price-history`, dentro de "Más detalles
+  del destino" en cada tarjeta.
+- **Consejo de la IA sobre el destino** (`lib/ai-destination-tips.ts`,
+  `/api/ai-destination-tips`): que ver y que llevar en la maleta, bajo demanda (boton,
+  no automatico) para controlar el gasto de tokens.
+- **Modo sin conexión básico** (`lib/offline-cache.ts`): si una busqueda falla por
+  perdida de red, se muestra la ultima busqueda guardada en el telefono con un aviso
+  claro. No es una PWA offline completa (no cachea assets), solo el ultimo resultado.
+- **Precio por persona / total**: interruptor en los resultados junto al de vista
+  Tarjetas/Lista.
+- **Botón directo de WhatsApp** para compartir la busqueda.
+
+### Cambiado
+- **Calendario de precios como mapa de calor real**: gradiente de color verde (barato)
+  a rojo (caro) segun el precio de cada dia, en vez de solo destacar el mas barato.
+
+### Aviso
+Notificaciones push, IA de destino y las 3 APIs de la sesion anterior siguen sin poder
+verificarse contra sus servicios reales desde este entorno de trabajo.
+
 ## [0.15.0] - 2026-09-17 (sesion 5) - CO2, clima, tipo de cambio, festivos y "sale mas barato otro dia"
 
 A peticion del usuario ("implementa las 3 mejoras y las 3 api"): las 3 mejoras

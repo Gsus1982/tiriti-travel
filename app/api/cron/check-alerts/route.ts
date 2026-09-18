@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { sql } from '@/lib/db';
 import { searchLiveItineraries } from '@/lib/live-engine';
 import { sendAlertEmail } from '@/lib/email';
+import { sendPushToAll } from '@/lib/push';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -47,6 +48,13 @@ export async function GET(request: Request) {
           maxPriceTotal: Number(alert.max_price_total)
         });
         emailSent = result.sent;
+      }
+      if (matchFound && !alert.notified_at) {
+        const currency = itineraries[0]?.currency ?? 'EUR';
+        await sendPushToAll(
+          '¡Bajada de precio en Tiriti Travel!',
+          `${alert.label ?? 'Tu alerta'}: ${(minPrice as number).toFixed(2)} ${currency} (tope: ${alert.max_price_total})`
+        );
       }
 
       await sql`

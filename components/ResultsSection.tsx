@@ -55,7 +55,8 @@ export default function ResultsSection({
   aiRecommendation,
   recommending,
   warnings,
-  sortSelect
+  sortSelect,
+  paxCount
 }: {
   liveResults: LiveItinerary[];
   bookingLinks: BookingLinksState;
@@ -65,8 +66,10 @@ export default function ResultsSection({
   recommending: boolean;
   warnings: string[];
   sortSelect: React.ReactNode;
+  paxCount?: number;
 }) {
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
+  const [perPerson, setPerPerson] = useState(false);
   const [compareKeys, setCompareKeys] = useState<string[]>([]);
   const [limitNotice, setLimitNotice] = useState(false);
 
@@ -139,6 +142,28 @@ export default function ResultsSection({
               Lista
             </button>
           </div>
+          {paxCount && paxCount > 1 && (
+            <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden text-xs font-medium">
+              <button
+                type="button"
+                onClick={() => setPerPerson(false)}
+                className={`px-3 py-1.5 transition-colors ${
+                  !perPerson ? 'bg-indigo text-white' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                Total
+              </button>
+              <button
+                type="button"
+                onClick={() => setPerPerson(true)}
+                className={`px-3 py-1.5 transition-colors ${
+                  perPerson ? 'bg-indigo text-white' : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400'
+                }`}
+              >
+                Por persona
+              </button>
+            </div>
+          )}
           <div className="w-44">{sortSelect}</div>
         </div>
       </div>
@@ -289,6 +314,8 @@ export default function ResultsSection({
               isComparing={compareKeys.includes(rowKey)}
               onToggleCompare={() => toggleCompare(rowKey)}
               cheaperAlternative={cheaperAltByKey.get(rowKey) ?? null}
+              paxCount={paxCount}
+              perPerson={perPerson}
             />
           );
         })}

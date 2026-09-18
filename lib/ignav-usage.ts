@@ -70,3 +70,17 @@ export function dynamicComboLimit(remaining: number, quota: number): number {
   if (ratio > 0.05) return 4;
   return 3;
 }
+
+/**
+ * Limite dinamico de dias para el calendario de precios (cada dia consultado gasta 1
+ * peticion real a Ignav, igual que dynamicComboLimit pero para esta otra herramienta).
+ * Techo subido de 14 a 30 (peticion del usuario), pero se ajusta segun cuanta cuota
+ * quede para no vaciarla de golpe si ya esta baja.
+ */
+export function dynamicCalendarDaysLimit(remaining: number, quota: number): number {
+  const ratio = remaining / quota;
+  if (ratio > 0.5) return 30;
+  if (ratio > 0.2) return 21;
+  if (ratio > 0.05) return 10;
+  return 7;
+}

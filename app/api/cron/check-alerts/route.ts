@@ -3,6 +3,7 @@ import { sql } from '@/lib/db';
 import { searchLiveItineraries } from '@/lib/live-engine';
 import { sendAlertEmail } from '@/lib/email';
 import { sendPushToAll } from '@/lib/push';
+import { detectAndNotifyDeals } from '@/lib/deal-detector';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -71,5 +72,16 @@ export async function GET(request: Request) {
     }
   }
 
-  return NextResponse.json({ checked: alerts.length, summary, checked_at: new Date().toISOString() });
+  // Detector de chollos: se ejecuta aqui (no en un cron aparte) para no anadir una 6a
+  // entrada de cron y arriesgar el limite del plan de Vercel -- ademas tiene sentido
+  // logico, justo despues de comprobar las alertas es cuando mas precios frescos hay
+  // en price_history para comparar.
+  const dealsResult = await detectAndNotifyDeals();
+
+  return NextResponse.json({
+    checked: alerts.length,
+    summary,
+    deals_detected: dealsResult.detected,
+    checked_at: new Date().toISOString()
+  });
 }

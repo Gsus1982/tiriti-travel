@@ -2,6 +2,44 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.19.0] - 2026-09-17 (sesion 9) - detector de chollos, insignia de chollo, aviso de equipaje, calendario a 30 dias
+
+A peticion del usuario ("empieza con el detector de chollos y luego con el resto"),
+inspirado en Dollar Flight Club.
+
+### Anadido
+- **Detector de chollos** (`lib/deal-detector.ts`, tabla `detected_deals`): version
+  realista adaptada a la cuota de Ignav -- DFC busca activamente en cientos de rutas
+  con un equipo humano; aqui eso supondria gastar cuota real sin limite, asi que el
+  detector es PASIVO: se apoya en los precios que la propia app ya registra
+  (`price_history`) por el uso normal y las alertas guardadas, sin gastar ni una
+  peticion extra. Si un precio recien visto (ultimas 24h) esta un 35% o mas por debajo
+  del promedio historico de esa ruta (con al menos 5 observaciones previas), manda una
+  notificacion push directa -- sin que haga falta tener una alerta guardada para esa
+  ruta. Con deduplicacion para no avisar 2 veces del mismo chollo. Se ejecuta al final
+  del cron de alertas existente (no se creo un cron nuevo, para no arriesgar el limite
+  de crons del plan de Vercel).
+- **Insignia "🔥 Chollo"** en las tarjetas de resultado: mismo umbral que el detector
+  (35%+ por debajo del promedio historico de la ruta), calculado en el propio
+  navegador reutilizando `priceTrend` (ya se calculaba antes), sin ninguna peticion
+  nueva.
+- **Aviso de politica de equipaje** (`lib/airline-baggage-notes.ts`): nota fija para
+  aerolineas conocidas por cobrar aparte hasta la maleta de cabina grande (Ryanair,
+  Wizz Air, EasyJet, Vueling, Volotea, Norwegian). Contenido editorial, sin API.
+
+### Cambiado
+- **Calendario de precios: de 14 a 30 dias como techo**, pero con limite DINAMICO segun
+  la cuota restante de Ignav (`dynamicCalendarDaysLimit` en `lib/ignav-usage.ts`, mismo
+  criterio que ya se aplicaba al limite de combinaciones): 30 con mucha cuota, bajando
+  hasta 7 si queda poca.
+
+### Corregido (proactivo, no reportado)
+`lib/price-calendar.ts` tenia el mismo patron fragil de fechas que el bug real de la
+sesion anterior (mezclar metodos de fecha locales con `toISOString()`, que trabaja en
+UTC) -- aqui no llegaba a manifestarse porque Vercel corre en UTC por defecto, pero se
+corrigio igualmente para no depender de esa asuncion implicita del entorno de
+ejecucion.
+
 ## [0.18.0] - 2026-09-17 (sesion 8) - calendario propio, dias sueltos independientes, hora por dia
 
 El usuario probo el selector "dia + flexibilidad" de la sesion anterior y reporto que

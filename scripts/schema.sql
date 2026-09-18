@@ -147,3 +147,19 @@ CREATE INDEX IF NOT EXISTS price_history_route_idx ON price_history (origin_iata
 --   );
 -- Sin esta migracion, activar notificaciones push simplemente no funciona (aviso claro
 -- en la interfaz), sin afectar al resto de la app.
+
+-- ============================================================================
+-- MIGRACION: detector de chollos (sesion del 17 sep 2026)
+-- ============================================================================
+--   CREATE TABLE IF NOT EXISTS detected_deals (
+--     id BIGSERIAL PRIMARY KEY,
+--     origin_iata CHAR(3) NOT NULL,
+--     destination_iata CHAR(3) NOT NULL,
+--     price NUMERIC NOT NULL,
+--     avg_price NUMERIC NOT NULL,
+--     discount_pct INTEGER NOT NULL,
+--     currency TEXT NOT NULL,
+--     notified_at TIMESTAMPTZ NOT NULL DEFAULT now()
+--   );
+-- Sin esta migracion, el detector de chollos simplemente no hace nada (falla en
+-- silencio, ver lib/deal-detector.ts), sin afectar al resto de la app.

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
 import { getAirlineBadge } from '@/lib/airline-badge';
+import { getBaggageNote } from '@/lib/airline-baggage-notes';
 import { IconPlaneTakeoff, IconPlaneLanding, IconSparkles } from './Icons';
 import PriceHistoryChart from './PriceHistoryChart';
 import DestinationTipsButton from './DestinationTipsButton';
@@ -209,6 +210,13 @@ export default function FlightResultCard({
             <div className="mt-2 space-y-1.5 text-xs text-slate-500 dark:text-slate-400">
               <div className="flex flex-wrap items-center gap-1.5"><IconPlaneTakeoff className="w-3.5 h-3.5 text-indigo shrink-0" /><span className="font-medium text-slate-700 dark:text-slate-300">{result.outbound.origin_iata}</span><span>{formatDateTime(result.outbound.departure_at)}</span><span className="text-slate-300 dark:text-slate-500">→</span><span className="font-medium text-slate-700 dark:text-slate-300">{result.outbound.destination_iata}</span><AirlineBadge name={result.outbound.airline} /><span className="text-slate-400 dark:text-slate-500">{result.outbound.airline}</span></div>
               <div className="flex flex-wrap items-center gap-1.5"><IconPlaneLanding className="w-3.5 h-3.5 text-indigo shrink-0" /><span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.origin_iata}</span><span>{formatDateTime(result.inbound.departure_at)}</span><span className="text-slate-300 dark:text-slate-500">→</span><span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.destination_iata}</span><AirlineBadge name={result.inbound.airline} /><span className="text-slate-400 dark:text-slate-500">{result.inbound.airline}</span></div>
+              {Array.from(
+                new Set([getBaggageNote(result.outbound.airline), getBaggageNote(result.inbound.airline)].filter(Boolean) as string[])
+              ).map((note, i) => (
+                <p key={i} className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5">
+                  🧳 {note}
+                </p>
+              ))}
             </div>
             {result.notes.length > 0 && <p className="mt-2 text-[11px] text-slate-400 dark:text-slate-500">{result.notes.join(' ')}</p>}
             {result.cheaperOtherDay && (
@@ -259,6 +267,14 @@ export default function FlightResultCard({
               <p className="text-lg font-semibold text-ink dark:text-slate-100">{formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).main}</p>
               {formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).note && (
                 <p className="text-[10px] text-slate-400 dark:text-slate-500">{formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).note}</p>
+              )}
+              {result.priceTrend && result.totalPrice / result.priceTrend.avgPrice <= 0.65 && (
+                <p
+                  className="text-[10px] font-bold uppercase tracking-wide text-white bg-gradient-to-r from-orange-500 to-red-500 rounded-full px-2 py-0.5 inline-block mb-0.5"
+                  title={`Promedio historico de esta ruta: ${result.priceTrend.avgPrice.toFixed(0)} ${result.currency}`}
+                >
+                  🔥 Chollo
+                </p>
               )}
               {result.priceTrend && (
                 <p

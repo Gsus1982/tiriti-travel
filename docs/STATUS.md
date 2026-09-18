@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.18.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.19.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,77 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 9) — Sesion: detector de chollos, insignia, aviso de equipaje, calendario a 30 dias
+
+### Contexto
+El usuario pidio inspirarse en Dollar Flight Club (detector de chollos automatico) y
+"el resto" de ideas propuestas: insignia de chollo en las tarjetas, aviso de politica
+de equipaje, y calendario de precios ampliado.
+
+### Detector de chollos: por que es una version REALISTA de DFC, no una copia
+Dollar Flight Club tiene un equipo humano buscando activamente tarifas de error en
+cientos de rutas al dia. Copiar eso literalmente aqui significaria buscar activamente
+sin parar, lo cual gastaria la cuota de 1000 peticiones DE POR VIDA de Ignav en dias,
+no en años. En vez de eso, se diseño un detector PASIVO: se apoya en `price_history`
+(la tabla que ya registra cada precio real visto, sea por busquedas normales del
+usuario o por el cron de alertas) -- CERO peticiones nuevas a Ignav. Logica
+(`lib/deal-detector.ts`): cada vez que se ejecuta (al final del cron de alertas, cada 3
+dias -- no se creo un cron nuevo para no arriesgar el limite de crons del plan de
+Vercel), agrupa los precios vistos en las ultimas 24h por ruta, calcula el promedio
+historico de esa ruta EXCLUYENDO esa ventana reciente (para que el propio chollo no
+infle su propia referencia), y si el precio reciente es un 35% o mas barato que ese
+promedio (con al menos 5 observaciones previas para que el promedio sea fiable), manda
+una notificacion push real -- sin que haga falta tener una alerta guardada para esa
+ruta en concreto. Deduplicacion: no vuelve a avisar de la misma ruta (con un precio
+igual o peor) si ya lo hizo en los ultimos 3 dias (tabla `detected_deals`).
+
+**Limitacion honesta, explicada tambien al usuario**: solo puede detectar chollos en
+rutas que la app YA ha visto antes (hace falta historial para calcular un promedio de
+referencia) -- no es un rastreador universal como DFC, es un "aviso inteligente" sobre
+las rutas que de verdad le interesan al usuario, construido sobre datos que la propia
+app ya recopila por su uso normal.
+
+### Insignia "🔥 Chollo" en las tarjetas
+Mismo umbral (35%+ por debajo del promedio) que el detector, pero calculado en el
+propio navegador a partir de `priceTrend` (que ya se enviaba en cada resultado desde
+hace varias sesiones) -- cero peticiones nuevas, es solo una comparacion aritmetica
+mas visible que el texto "precio bajo/normal/alto" que ya existia.
+
+### Aviso de equipaje
+`lib/airline-baggage-notes.ts`: contenido editorial fijo (no una API) para las
+aerolineas de bajo coste habituales en estas rutas, conocidas por cobrar aparte la
+maleta de cabina grande. Se muestra una sola vez por tarjeta (deduplicado si ida y
+vuelta son la misma aerolinea).
+
+### Calendario de precios: 14 -> 30 dias, pero dinamico
+Igual que se hizo con el limite de combinaciones en una sesion anterior
+(`dynamicComboLimit`), se anadio `dynamicCalendarDaysLimit` en `lib/ignav-usage.ts`:
+sube el techo absoluto de 14 a 30 dias (peticion del usuario), pero el maximo REAL
+aplicado en cada consulta depende de cuanta cuota quede -- 30 con mucha cuota, bajando
+hasta 7 si queda poca. Cada dia del calendario gasta 1 peticion real, asi que subir el
+techo sin este ajuste habria sido irresponsable con la cuota de por vida.
+
+### FIX proactivo (no reportado, encontrado al tocar el archivo)
+`lib/price-calendar.ts` tenia el MISMO patron fragil de fechas que causo el bug real
+de la sesion anterior: mezclar `Date.prototype.getDate()`/`setDate()` (metodos locales)
+con `toISOString()` (que siempre trabaja en UTC). Aqui, al ser codigo de SERVIDOR
+ejecutandose en Vercel (que corre en UTC por defecto), el bug no llegaba a manifestarse
+en la practica -- pero corregirlo evita depender de una asuncion implicita sobre el
+entorno de ejecucion que podria dejar de ser cierta en el futuro (por ejemplo, si
+Vercel cambiara su comportamiento por defecto, o si el codigo se ejecutara alguna vez
+en otro entorno). Reescrito con metodos UTC explicitos de principio a fin.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP
+200 en la home.
+
+### Pendiente (usuario)
+Aplicar en Neon la migracion de la tabla `detected_deals` (ver `scripts/schema.sql`,
+bloque "MIGRACION: detector de chollos") -- sin ella, el detector simplemente no hace
+nada (falla en silencio), sin afectar al resto de la app.
 
 ---
 

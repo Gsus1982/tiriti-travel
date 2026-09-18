@@ -259,8 +259,8 @@ export default function ToolsPanel({
           <h2 className="text-base font-semibold text-ink dark:text-slate-100">Calendario de precios (un solo tramo)</h2>
         </div>
         <p className="text-xs text-slate-400 dark:text-slate-500 mb-3">
-          Precio minimo por dia entre las fechas de ida seleccionadas arriba, para el primer origen elegido. Maximo 14 dias
-          por consulta (limite de cuota Ignav).
+          Precio minimo por dia entre las fechas de ida seleccionadas arriba, para el primer origen elegido. Hasta 30 dias
+          por consulta -- el maximo real varia segun tu cuota restante de Ignav (mira "Cuota de Ignav" arriba).
         </p>
         <div className="flex gap-2 items-end flex-wrap">
           <label className="text-xs font-medium text-slate-600 dark:text-slate-300">

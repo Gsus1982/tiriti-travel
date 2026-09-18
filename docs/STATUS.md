@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.17.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.18.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,69 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 8) — Sesion: calendario propio, dias sueltos independientes, hora por dia
+
+### Contexto y diagnostico del bug real
+El usuario probo el selector "dia + flexibilidad" (sesion 7) con una captura: tocar un
+dia en el picker nativo no hacia nada visible. Causa raiz identificada: `applyFlexDay`
+usaba `Date.prototype.toISOString().slice(0,10)` para formatear la fecha calculada --
+`toISOString()` SIEMPRE convierte a UTC, y España en invierno es UTC+1, asi que la
+medianoche local de un dia puede caer en las 23h UTC del dia anterior, desplazando la
+fecha un dia hacia atras. Combinado con el hecho de que HABIA 2 `<input type="date">`
+nativos controlando la MISMA variable de estado (`outboundDateFrom`): el picker nativo
+de iOS (que internamente es una rueda con su propio estado efimero) se desincronizaba
+al re-renderizar por el OTRO input observando el mismo valor, dando la sensacion de que
+"no hacia caso".
+
+### Decision de diseño: eliminar la clase de bug, no solo el sintoma
+En vez de parchear el calculo de fechas (que habria dejado el problema de fondo de 2
+inputs nativos compartiendo estado), se sustituyo el `<input type="date">` nativo por
+un calendario propio 100% en React (`components/DayPicker.tsx`) que nunca pasa por
+`toISOString()` ni depende de ningun picker del sistema operativo -- construye el ISO
+directamente desde año/mes/dia locales (`toIso()`). Esto ademas encajaba con lo que el
+usuario pedia a continuacion: mas potencia (dias sueltos independientes + hora por
+dia), algo que un simple `<input type="date">` con rango simetrico nunca podria dar.
+
+### Diseño elegido para "dias sueltos independientes + hora por dia"
+Se penso en reescribir todo el modelo de fechas (quitar el concepto de rango por
+completo), pero eso habria roto MUCHAS integraciones que dependen de un rango
+`outboundDateFrom`/`outboundDateTo` simple: interpretacion con IA, enlaces para
+compartir, historial de busquedas, y el cron de alertas. En vez de eso, diseño hibrido
+de bajo riesgo:
+- **Dato canonico nuevo**: `outboundSelectedDays`/`inboundSelectedDays` (arrays de
+  fechas sueltas, no necesariamente contiguas) + `outboundDayHours`/`inboundDayHours`
+  (mapa fecha -> {before, after} opcional).
+- **Compatibilidad**: `outboundDateFrom`/`outboundDateTo` se siguen manteniendo,
+  derivados como min/max de los dias seleccionados, para que TODO lo que ya lee esas 2
+  variables (IA, enlaces, historial, cron) siga funcionando sin tocarlas. Al RESTAURAR
+  desde cualquiera de esas fuentes (que dan un rango, no una lista), se expande
+  automaticamente a `datesBetween(from, to)` para poblar el calendario -- funciones
+  nuevas `syncOutboundRangeToDays`/`syncInboundRangeToDays`, aplicadas en los 4 puntos
+  de restauracion (URL al cargar, respuesta de la IA, parser de respaldo, historial).
+- **Backend**: `lib/live-engine.ts` recibe los campos nuevos opcionales
+  `outboundDates`/`inboundDates` (lista explicita) y usa esa lista EN VEZ de
+  `datesBetween(dateFrom, dateTo)` cuando se proporciona -- asi soporta dias NO
+  contiguos de verdad. Mismo patron para `outboundDayHours`/`inboundDayHours`: si el
+  dia concreto tiene una hora propia, se usa esa; si no, cae a la franja general
+  (`outboundNotBeforeHour`/`outboundNotAfterHour`) que ya existia. El limite de 5 dias
+  (`MAX_DATE_RANGE_DAYS`) tambien se corrigio para contar sobre la lista real de dias
+  elegidos, no sobre el rango envolvente (que podria ser mas largo si los dias no son
+  contiguos).
+- **UI**: quitados del todo los inputs "Ida desde/hasta"/"Vuelta desde/hasta" en bruto,
+  tal como pidio el usuario una vez el calendario nuevo estuviera funcionando.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que
+"Dias de ida"/"Dias de vuelta" (calendario nuevo) aparecen y "Ida desde"/"Ida hasta"
+(inputs viejos) ya NO aparecen en el HTML.
+
+### Aviso
+El campo `latest_hour` (franja horaria completa, sesion 7) y ahora tambien las horas
+POR DIA concreto siguen sin poder verificarse contra la API real de Ignav desde esta
+sesion.
 
 ---
 

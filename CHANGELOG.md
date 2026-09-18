@@ -2,6 +2,44 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.18.0] - 2026-09-17 (sesion 8) - calendario propio, dias sueltos independientes, hora por dia
+
+El usuario probo el selector "dia + flexibilidad" de la sesion anterior y reporto que
+no funcionaba (tocar un dia no hacia nada). Pidio ademas un enfoque mas potente: dias
+sueltos elegibles de forma independiente (no un rango simetrico obligatorio), con hora
+concreta por cada dia, usando un calendario visual en vez del picker nativo. Una vez
+funcionando, pidio quitar los inputs de rango de fecha en bruto.
+
+### Corregido (bug real)
+- **`applyFlexDay` calculaba mal la fecha por un problema de zona horaria**:
+  `Date.prototype.toISOString()` convierte a UTC, y España en invierno es UTC+1 -- la
+  medianoche local de un dia podia caer en las 23h UTC del dia anterior, desplazando la
+  fecha. Combinado con 2 `<input type="date">` nativos controlando la MISMA variable de
+  estado (el picker nuevo y el input de rango de siempre), el picker de rueda nativo de
+  iOS se desincronizaba y parecia "no hacer caso" al tocar un dia.
+
+### Cambiado
+- **Sustituido el `<input type="date">` nativo por un calendario propio**
+  (`components/DayPicker.tsx`), 100% controlado por React, sin pasar nunca por
+  `toISOString()` ni depender de ningun picker nativo -- elimina la clase entera de bug
+  de raiz, no solo el sintoma.
+- **Dias sueltos, elegibles de forma independiente** (no un rango simetrico
+  obligatorio): se puede marcar, por ejemplo, el dia 3 y el dia 6 sin necesidad de
+  incluir el 4 y el 5. Maximo 5 dias por sentido (protege la cuota de Ignav, igual que
+  antes).
+- **Hora especifica por cada dia elegido** (`components/DayHoursList.tsx`): cada dia
+  seleccionado tiene su propia franja horaria opcional (desde-hasta), independiente de
+  los demas dias -- si se deja vacia, usa la franja general del panel de "Horarios".
+- **Quitados los inputs "Ida desde/hasta" y "Vuelta desde/hasta" en bruto**: el
+  calendario nuevo es ahora la unica forma de elegir fechas en el formulario principal.
+- Compatibilidad mantenida con IA, enlaces para compartir, historial y alertas: siguen
+  guardando/restaurando un rango (`outboundDateFrom`/`To`), que ahora se traduce
+  automaticamente a la lista de dias sueltos correspondiente al restaurarlo.
+- Backend (`lib/live-engine.ts`): nuevos campos `outboundDates`/`inboundDates` (lista
+  explicita de dias, no necesariamente contigua) y `outboundDayHours`/`inboundDayHours`
+  (franja horaria por dia concreto), con fallback al comportamiento de rango anterior
+  para quien siga sin mandarlos (cron de alertas).
+
 ## [0.17.0] - 2026-09-17 (sesion 7) - orden por defecto, destinos seleccionados visibles, dia+flexibilidad, franja horaria completa
 
 ### Corregido

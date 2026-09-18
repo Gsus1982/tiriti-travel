@@ -40,6 +40,10 @@ export type LiveFilters = {
   inboundNotBeforeHour?: number;
   outboundNotAfterHour?: number;
   inboundNotAfterHour?: number;
+  outboundDates?: string[];
+  inboundDates?: string[];
+  outboundDayHours?: Record<string, { before?: number; after?: number }>;
+  inboundDayHours?: Record<string, { before?: number; after?: number }>;
   maxPriceTotal?: number;
   airlinesInclude?: string[];
   airlinesExclude?: string[];
@@ -201,13 +205,22 @@ async function searchLiveForTarget(
     inboundNotBeforeHour,
     outboundNotAfterHour,
     inboundNotAfterHour,
+    outboundDates: explicitOutboundDates,
+    inboundDates: explicitInboundDates,
+    outboundDayHours,
+    inboundDayHours,
     maxPriceTotal,
     airlinesInclude,
     airlinesExclude
   } = filters;
 
-  const outboundDates = datesBetween(outboundDateFrom, outboundDateTo);
-  const inboundDates = datesBetween(inboundDateFrom, inboundDateTo);
+  // Dias sueltos, NO necesariamente contiguos (peticion real: "poder elegir mas un dia
+  // o menos un dia de forma independiente") -- si el cliente manda una lista explicita
+  // de dias, se usa tal cual en vez de generar el rango completo dia a dia con
+  // datesBetween. Se mantiene datesBetween como fallback por compatibilidad con quien
+  // siga mandando solo el rango (cron de alertas, por ejemplo).
+  const outboundDates = explicitOutboundDates?.length ? explicitOutboundDates : datesBetween(outboundDateFrom, outboundDateTo);
+  const inboundDates = explicitInboundDates?.length ? explicitInboundDates : datesBetween(inboundDateFrom, inboundDateTo);
 
   const groupRows = target.airports;
   const groupName = target.name;
@@ -238,10 +251,12 @@ async function searchLiveForTarget(
             min_carry_on_bags: minCarryOn,
             airlines_include: safeAirlinesInclude,
             airlines_exclude: safeAirlinesExclude,
-            departure_time_range:
-              outboundNotBeforeHour !== undefined || outboundNotAfterHour !== undefined
-                ? { earliest_hour: outboundNotBeforeHour, latest_hour: outboundNotAfterHour }
-                : undefined
+            departure_time_range: (() => {
+              const dayOverride = outboundDayHours?.[date];
+              const earliest = dayOverride?.before ?? outboundNotBeforeHour;
+              const latest = dayOverride?.after ?? outboundNotAfterHour;
+              return earliest !== undefined || latest !== undefined ? { earliest_hour: earliest, latest_hour: latest } : undefined;
+            })()
           },
           warnings
         )
@@ -264,10 +279,12 @@ async function searchLiveForTarget(
             min_carry_on_bags: minCarryOn,
             airlines_include: safeAirlinesInclude,
             airlines_exclude: safeAirlinesExclude,
-            departure_time_range:
-              inboundNotBeforeHour !== undefined || inboundNotAfterHour !== undefined
-                ? { earliest_hour: inboundNotBeforeHour, latest_hour: inboundNotAfterHour }
-                : undefined
+            departure_time_range: (() => {
+              const dayOverride = inboundDayHours?.[date];
+              const earliest = dayOverride?.before ?? inboundNotBeforeHour;
+              const latest = dayOverride?.after ?? inboundNotAfterHour;
+              return earliest !== undefined || latest !== undefined ? { earliest_hour: earliest, latest_hour: latest } : undefined;
+            })()
           },
           warnings
         )
@@ -397,10 +414,10 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
   const { originIatas, destinationIatas } = filters;
   const sortBy = filters.sortBy;
 
-  const outboundDates = datesBetween(filters.outboundDateFrom, filters.outboundDateTo);
-  const inboundDates = datesBetween(filters.inboundDateFrom, filters.inboundDateTo);
+  const outboundDates = filters.outboundDates?.length ? filters.outboundDates : datesBetween(filters.outboundDateFrom, filters.outboundDateTo);
+  const inboundDates = filters.inboundDates?.length ? filters.inboundDates : datesBetween(filters.inboundDateFrom, filters.inboundDateTo);
   if (outboundDates.length > MAX_DATE_RANGE_DAYS || inboundDates.length > MAX_DATE_RANGE_DAYS) {
-    throw new Error(`El rango de fechas maximo permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} dias por tramo.`);
+    throw new Error(`El maximo de dias sueltos permitido en modo Ignav es de ${MAX_DATE_RANGE_DAYS} por tramo.`);
   }
 
   const allTargets = await resolveDestinationTargets(destinationIatas ?? []);

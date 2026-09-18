@@ -39,10 +39,12 @@ export async function POST(req: NextRequest) {
       allowOpenJaw: body.allowOpenJaw ?? true,
       outboundNotBeforeHour: body.outboundNotBeforeHour,
       inboundNotBeforeHour: body.inboundNotBeforeHour,
+      outboundNotAfterHour: body.outboundNotAfterHour,
+      inboundNotAfterHour: body.inboundNotAfterHour,
       maxPriceTotal: body.maxPriceTotal,
       airlinesInclude: body.airlinesInclude,
       airlinesExclude: body.airlinesExclude,
-      sortBy: body.sortBy ?? 'checkout_time',
+      sortBy: body.sortBy ?? 'price',
       includeSkyScanner: body.includeSkyScanner ?? false
     } as LiveFilters;
 

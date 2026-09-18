@@ -38,6 +38,8 @@ export type LiveFilters = {
   allowOpenJaw: boolean;
   outboundNotBeforeHour?: number;
   inboundNotBeforeHour?: number;
+  outboundNotAfterHour?: number;
+  inboundNotAfterHour?: number;
   maxPriceTotal?: number;
   airlinesInclude?: string[];
   airlinesExclude?: string[];
@@ -197,6 +199,8 @@ async function searchLiveForTarget(
     allowOpenJaw,
     outboundNotBeforeHour,
     inboundNotBeforeHour,
+    outboundNotAfterHour,
+    inboundNotAfterHour,
     maxPriceTotal,
     airlinesInclude,
     airlinesExclude
@@ -234,7 +238,10 @@ async function searchLiveForTarget(
             min_carry_on_bags: minCarryOn,
             airlines_include: safeAirlinesInclude,
             airlines_exclude: safeAirlinesExclude,
-            departure_time_range: outboundNotBeforeHour !== undefined ? { earliest_hour: outboundNotBeforeHour } : undefined
+            departure_time_range:
+              outboundNotBeforeHour !== undefined || outboundNotAfterHour !== undefined
+                ? { earliest_hour: outboundNotBeforeHour, latest_hour: outboundNotAfterHour }
+                : undefined
           },
           warnings
         )
@@ -257,7 +264,10 @@ async function searchLiveForTarget(
             min_carry_on_bags: minCarryOn,
             airlines_include: safeAirlinesInclude,
             airlines_exclude: safeAirlinesExclude,
-            departure_time_range: inboundNotBeforeHour !== undefined ? { earliest_hour: inboundNotBeforeHour } : undefined
+            departure_time_range:
+              inboundNotBeforeHour !== undefined || inboundNotAfterHour !== undefined
+                ? { earliest_hour: inboundNotBeforeHour, latest_hour: inboundNotAfterHour }
+                : undefined
           },
           warnings
         )

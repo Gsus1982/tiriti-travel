@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.16.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.17.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,65 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 7) — Sesion: orden por defecto, destinos visibles, dia+flexibilidad, franja horaria
+
+### Contexto
+El usuario pidio 4 cosas: confirmar que todo estaba en GitHub (si, confirmado), que los
+destinos seleccionados se vean sin desplazarse por el listado, un selector de fecha
+estilo Kiwi (dia + flexibilidad + franja horaria), y reportar un vuelo que "consta
+disponible" pero no salia en resultados, sospechando del orden de seleccion de
+aeropuertos -- ademas de pedir que el orden por defecto de resultados sea precio.
+
+### Investigacion del vuelo que no aparecia (sin cambio de codigo)
+Revisada de arriba a abajo la logica de `lib/live-engine.ts`: el bucle
+`originIatas.flatMap((originIata) => allTargets.map((target) => searchLiveForTarget(...)))`
+lanza TODAS las combinaciones origen x destino en paralelo via `Promise.all`, de forma
+simetrica -- ningun origen o destino se procesa "primero" ni "ultimo" de forma que
+pueda perderse por el orden de seleccion. Tampoco hay ningun `slice`/corte que dependa
+del orden. Las 2 unicas comprobaciones que SI pueden hacer fallar una busqueda entera
+(`comboLimit` dinamico y `MAX_IGNAV_REQUESTS_PER_SEARCH`) lanzan un ERROR VISIBLE, no
+recortan resultados en silencio -- si hubieran saltado, el usuario habria visto un
+aviso, no un simple "falta un vuelo". **Conclusion honesta, sin poder verificarlo
+contra la API real**: lo mas probable es que Ignav (proveedor de datos externo) no
+tenga ese vuelo concreto indexado -- no cubre el 100% de las aerolineas/rutas, es una
+limitacion conocida de depender de un unico agregador, no un bug de esta app. Si el
+usuario puede reproducirlo con datos concretos (origen, destino, fecha exacta, y
+aerolinea del vuelo que "consta disponible"), séria la unica forma de investigar mas a
+fondo -- de momento no hay suficiente informacion para ir mas alla de esto.
+
+### Cambios de codigo
+1. **Orden por defecto: precio** (antes "hora de salida del hotel") -- cambiado en
+   `app/page.tsx` (estado inicial) y `app/api/search-live/route.ts` (fallback del
+   backend cuando no se manda `sortBy`).
+2. **Destinos seleccionados visibles sin scroll**: chips con boton de quitar, justo
+   encima del filtro y el listado completo de destinos.
+3. **Selector "dia + flexibilidad" estilo Kiwi**: un `<input type="date">` (calendario
+   nativo del movil) para el dia central de ida/vuelta, mas 3 botones de flexibilidad
+   (Exacto / ±1 dia / ±2 dias) que calculan automaticamente
+   `outboundDateFrom/To`/`inboundDateFrom/To` -- sin sustituir los inputs de rango
+   originales (se dejan debajo, editables a mano, para quien prefiera un rango no
+   simetrico). Con ±2 dias el rango resultante es de 5 dias, justo el maximo permitido
+   (`MAX_DATE_RANGE_DAYS`), asi que no hace falta un limite adicional.
+4. **Franja horaria completa** (no solo "no antes de"): anadidos
+   `outboundNotAfterHour`/`inboundNotAfterHour`, usando el campo `latest_hour` que la
+   API de Ignav ya soportaba en el tipo (`lib/ignav.ts`) pero que no estaba expuesto en
+   ningun sitio de la interfaz -- hilo completo: estado en `page.tsx` -> payload ->
+   `app/api/search-live/route.ts` -> `LiveFilters` -> `departure_time_range` en
+   `searchLiveForTarget`.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando HTTP
+200 y presencia de los textos nuevos ("Elige un dia y cuanta flexibilidad", "Ida no
+despues de", "Vuelta no despues de").
+
+### Aviso
+La franja horaria completa (`latest_hour`) no se ha podido verificar contra la API real
+de Ignav en esta sesion -- se confia en que la API la respeta igual que `earliest_hour`
+(que ya llevaba tiempo en produccion sin problemas reportados), pero no hay una
+confirmacion directa para el campo nuevo.
 
 ---
 

@@ -14,7 +14,7 @@ import ResultsSection from '@/components/ResultsSection';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
 import ExploreDestinations from '@/components/ExploreDestinations';
-import { IconSliders, IconMapPin, IconShare, IconSparkles, IconChevronDown, IconWhatsApp } from '@/components/Icons';
+import { IconSliders, IconMapPin, IconShare, IconSparkles, IconChevronDown, IconWhatsApp, IconX } from '@/components/Icons';
 
 type Meta = {
   origins: { iata: string; city: string }[];
@@ -78,6 +78,8 @@ export default function HomePage() {
   const [outboundDateTo, setOutboundDateTo] = useState('2026-12-05');
   const [inboundDateFrom, setInboundDateFrom] = useState('2026-12-08');
   const [inboundDateTo, setInboundDateTo] = useState('2026-12-08');
+  const [outboundFlex, setOutboundFlex] = useState(0);
+  const [inboundFlex, setInboundFlex] = useState(0);
   const [adults, setAdults] = useState(() => getTravelProfile()?.adults ?? 2);
   const [children, setChildren] = useState(() => getTravelProfile()?.children ?? 1);
   const [requireCabinBaggage, setRequireCabinBaggage] = useState(() => getTravelProfile()?.requireCabinBaggage ?? false);
@@ -85,8 +87,10 @@ export default function HomePage() {
   const [includeSkyScanner, setIncludeSkyScanner] = useState(false);
   const [outboundNotBeforeHour, setOutboundNotBeforeHour] = useState<number | ''>('');
   const [inboundNotBeforeHour, setInboundNotBeforeHour] = useState<number | ''>(6);
+  const [outboundNotAfterHour, setOutboundNotAfterHour] = useState<number | ''>('');
+  const [inboundNotAfterHour, setInboundNotAfterHour] = useState<number | ''>('');
   const [maxPriceTotal, setMaxPriceTotal] = useState<number | ''>('');
-  const [sortBy, setSortBy] = useState<'checkout_time' | 'price' | 'duration'>('checkout_time');
+  const [sortBy, setSortBy] = useState<'checkout_time' | 'price' | 'duration'>('price');
   const [liveResults, setLiveResults] = useState<LiveItinerary[] | null>(null);
   const [warnings, setWarnings] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -309,6 +313,8 @@ export default function HomePage() {
       includeSkyScanner,
       outboundNotBeforeHour: outboundNotBeforeHour === '' ? undefined : Number(outboundNotBeforeHour),
       inboundNotBeforeHour: inboundNotBeforeHour === '' ? undefined : Number(inboundNotBeforeHour),
+      outboundNotAfterHour: outboundNotAfterHour === '' ? undefined : Number(outboundNotAfterHour),
+      inboundNotAfterHour: inboundNotAfterHour === '' ? undefined : Number(inboundNotAfterHour),
       maxPriceTotal: maxPriceTotal === '' ? undefined : Number(maxPriceTotal),
       sortBy: effectiveSortBy
     };
@@ -404,6 +410,25 @@ export default function HomePage() {
     } catch {
     } finally {
       setRecommending(false);
+    }
+  }
+
+  function applyFlexDay(which: 'outbound' | 'inbound', centerDateStr: string, flex: number) {
+    if (!centerDateStr) return;
+    const center = new Date(`${centerDateStr}T00:00:00`);
+    const from = new Date(center);
+    from.setDate(from.getDate() - flex);
+    const to = new Date(center);
+    to.setDate(to.getDate() + flex);
+    const fmt = (d: Date) => d.toISOString().slice(0, 10);
+    if (which === 'outbound') {
+      setOutboundFlex(flex);
+      setOutboundDateFrom(fmt(from));
+      setOutboundDateTo(fmt(to));
+    } else {
+      setInboundFlex(flex);
+      setInboundDateFrom(fmt(from));
+      setInboundDateTo(fmt(to));
     }
   }
 
@@ -716,6 +741,25 @@ export default function HomePage() {
                       No se pudo cargar el listado: {realDestError}
                     </p>
                   )}
+                  {selectedDestIatas.length > 0 && (
+                    <div className="mb-2 flex flex-wrap gap-1.5 border border-indigo/30 rounded-xl p-2 bg-indigo-pale dark:bg-indigo-950">
+                      {selectedDestIatas.map((iata) => {
+                        const found = realDestinations.find((d) => d.dest_iata === iata);
+                        return (
+                          <button
+                            key={iata}
+                            type="button"
+                            onClick={() => setSelectedDestIatas((prev) => prev.filter((i) => i !== iata))}
+                            className="text-xs px-2.5 py-1.5 rounded-lg bg-indigo text-white flex items-center gap-1"
+                            title="Quitar de la seleccion"
+                          >
+                            {found?.dest_name ?? iata} ({iata})
+                            <IconX className="w-3 h-3" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                   <input
                     type="text"
                     placeholder="Filtrar por ciudad, pais o codigo IATA..."
@@ -785,6 +829,72 @@ export default function HomePage() {
                       en Francia") en vez de elegir de una lista fija -- así no te repetimos siempre las mismas ciudades.
                     </p>
                   </div>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-2">
+                    Elige un dia y cuanta flexibilidad quieres (calcula el rango de abajo por ti)
+                  </p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2.5">
+                      <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
+                        Dia de ida
+                        <input
+                          type="date"
+                          className="mt-1 w-full min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                          value={outboundDateFrom}
+                          onChange={(e) => applyFlexDay('outbound', e.target.value, outboundFlex)}
+                        />
+                      </label>
+                      <div className="flex gap-1.5 mt-2">
+                        {[0, 1, 2].map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => applyFlexDay('outbound', outboundDateFrom, f)}
+                            className={`text-[11px] px-2 py-1 rounded-lg border ${
+                              outboundFlex === f
+                                ? 'bg-indigo text-white border-indigo'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                            }`}
+                          >
+                            {f === 0 ? 'Exacto' : `± ${f} dia${f > 1 ? 's' : ''}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="bg-slate-50 dark:bg-slate-800 rounded-lg p-2.5">
+                      <label className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">
+                        Dia de vuelta
+                        <input
+                          type="date"
+                          className="mt-1 w-full min-w-0 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                          value={inboundDateFrom}
+                          onChange={(e) => applyFlexDay('inbound', e.target.value, inboundFlex)}
+                        />
+                      </label>
+                      <div className="flex gap-1.5 mt-2">
+                        {[0, 1, 2].map((f) => (
+                          <button
+                            key={f}
+                            type="button"
+                            onClick={() => applyFlexDay('inbound', inboundDateFrom, f)}
+                            className={`text-[11px] px-2 py-1 rounded-lg border ${
+                              inboundFlex === f
+                                ? 'bg-indigo text-white border-indigo'
+                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-700 text-slate-500 dark:text-slate-400'
+                            }`}
+                          >
+                            {f === 0 ? 'Exacto' : `± ${f} dia${f > 1 ? 's' : ''}`}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1.5">
+                    Esto rellena las fechas de abajo por ti; tambien puedes editarlas a mano si prefieres un rango
+                    concreto que no sea simetrico.
+                  </p>
                 </div>
 
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
@@ -922,28 +1032,52 @@ export default function HomePage() {
                   <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
                 </summary>
                 <FilterAccordion title="Horarios" defaultOpen>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
-                    Ida no antes de las (h)
-                    <input
-                      type="number"
-                      min={0}
-                      max={23}
-                      className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                      value={outboundNotBeforeHour}
-                      onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  </label>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
-                    Vuelta no antes de las (h)
-                    <input
-                      type="number"
-                      min={0}
-                      max={23}
-                      className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                      value={inboundNotBeforeHour}
-                      onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
-                    />
-                  </label>
+                  <div className="grid grid-cols-2 gap-2">
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
+                      Ida no antes de (h)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        value={outboundNotBeforeHour}
+                        onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
+                      Ida no despues de (h)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        value={outboundNotAfterHour}
+                        onChange={(e) => setOutboundNotAfterHour(e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
+                      Vuelta no antes de (h)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        value={inboundNotBeforeHour}
+                        onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </label>
+                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
+                      Vuelta no despues de (h)
+                      <input
+                        type="number"
+                        min={0}
+                        max={23}
+                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                        value={inboundNotAfterHour}
+                        onChange={(e) => setInboundNotAfterHour(e.target.value === '' ? '' : Number(e.target.value))}
+                      />
+                    </label>
+                  </div>
                 </FilterAccordion>
 
                 <FilterAccordion title="Precio y orden" defaultOpen>

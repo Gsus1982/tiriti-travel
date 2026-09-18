@@ -2,6 +2,34 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.17.0] - 2026-09-17 (sesion 7) - orden por defecto, destinos seleccionados visibles, dia+flexibilidad, franja horaria completa
+
+### Corregido
+- **Orden por defecto de los resultados cambiado a precio** (antes "hora de salida del
+  hotel"), a peticion explicita del usuario.
+- **Destinos seleccionados ahora se ven sin desplazarse por el listado completo**:
+  aparecen como chips justo encima del buscador de destinos, con boton para quitarlos
+  directamente.
+
+### Investigado (sin cambio de codigo -- explicado honestamente)
+El usuario reporto un vuelo que "consta disponible" pero no salia en los resultados,
+sospechando del orden de seleccion de aeropuertos. Revisada la logica completa de
+`lib/live-engine.ts` (bucle origen x destino, agrupacion por ciudad, filtros): ningun
+punto del codigo depende del orden en que se seleccionan aeropuertos -- todas las
+combinaciones se buscan en paralelo, de forma simetrica. La explicacion mas probable es
+que Ignav (proveedor de datos externo) simplemente no tenga ese vuelo concreto en su
+inventario -- no indexa el 100% de las aerolineas, es una limitacion real de depender
+de un unico proveedor, no un bug de esta app.
+
+### Anadido
+- **Selector visual "dia + flexibilidad" estilo Kiwi**: eliges un dia de ida y uno de
+  vuelta, y un boton de flexibilidad (exacto / ±1 dia / ±2 dias) calcula
+  automaticamente el rango de fechas por ti. Los inputs de rango de fecha originales se
+  mantienen debajo, editables a mano si se prefiere un rango no simetrico.
+- **Franja horaria completa** (no solo "no antes de"): añadido "no despues de" para
+  ida y vuelta, usando `latest_hour` de la API de Ignav (el tipo ya lo soportaba, pero
+  no estaba expuesto en ningun sitio de la interfaz).
+
 ## [0.16.0] - 2026-09-17 (sesion 6) - 8 mejoras de golpe: push, historial visual, offline, IA de destino y mas
 
 A peticion explicita del usuario ("implanta todo lo sugerido a excepcion de accesibilidad").

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.25.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.25.1. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,36 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 16) — Sesion: FIX de regresion propia en "Sorprendeme"
+
+### Contexto y leccion importante para sesiones futuras
+El usuario reporto que "Sorprendeme" seguia proponiendo ciudades que tenia en
+"Ciudades a descartar". **Esto era una regresion introducida por esta misma serie de
+sesiones, en el commit anterior (v0.25.0)**, no un bug preexistente: al cambiar
+`filteredRealDestinations` para que YA NO quitara las ciudades descartadas de la lista
+(a proposito, para poder mostrarlas en rojo/tachadas en el selector en vez de
+ocultarlas del todo), no se revisaron TODOS los sitios que usaban esa variable dando
+por hecho que ya venia filtrada. `handleSurpriseMe` era uno de esos sitios: construia
+su `pool` de candidatos a partir de `filteredRealDestinations` asumiendo que las
+descartadas ya no estarian ahi -- al dejar de ser cierto, volvieron a colarse.
+
+**Leccion**: cuando se cambia el comportamiento de una variable/funcion compartida
+(quitar un filtro implicito, por ejemplo), hay que repasar TODOS sus usos con
+`grep`, no solo el sitio donde se origino el cambio -- se hizo a medias en la sesion
+anterior (se reviso el render de la lista y el conteo, pero no `handleSurpriseMe`).
+
+### Fix
+- `handleSurpriseMe`: añadido `&& !excludeIatas.includes(d.dest_iata)` al filtro del
+  `pool`, junto al de destinos visitados que ya tenia.
+- De paso, corregido tambien el contador "(N vuelos directos reales)" del titulo de la
+  seccion "Destinos", que por el mismo motivo estaba incluyendo las descartadas en la
+  cuenta.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios.
 
 ---
 

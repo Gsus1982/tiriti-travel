@@ -567,7 +567,7 @@ export default function HomePage() {
     }
     const basePool = filteredRealDestinations.length > 0 ? filteredRealDestinations : realDestinations;
     const visited = getVisitedDestinations();
-    const pool = basePool.filter((d) => !visited.includes(d.dest_iata));
+    const pool = basePool.filter((d) => !visited.includes(d.dest_iata) && !excludeIatas.includes(d.dest_iata));
     if (pool.length === 0) {
       setError(
         'Todavia no hay destinos reales cargados para tus origenes (o la cache de Aena esta vacia para ellos), o ya has marcado todos como visitados. Prueba con otro origen o espera un momento.'
@@ -897,7 +897,8 @@ export default function HomePage() {
                   <div className="flex items-center gap-2 mb-2">
                     <IconMapPin className="w-4 h-4 text-indigo" />
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      Destinos ({filteredRealDestinations.length} vuelos directos reales desde tus origenes -- puedes elegir varios)
+                      Destinos ({filteredRealDestinations.filter((d) => !isExcludedDestination(d)).length} vuelos directos reales desde tus
+                      origenes -- puedes elegir varios)
                     </p>
                   </div>
                   {realDestError && (

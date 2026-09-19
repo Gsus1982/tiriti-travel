@@ -2,6 +2,21 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.25.1] - 2026-09-17 (sesion 16) - FIX: regresion propia, "Sorprendeme" seguia proponiendo ciudades descartadas
+
+El usuario reporto que, con ciudades excluidas, "Sorprendeme" las seguia proponiendo.
+
+### Corregido (regresion introducida en la sesion anterior, no reportada hasta ahora)
+En la sesion anterior, `filteredRealDestinations` dejo de quitar las ciudades
+descartadas de la lista (a proposito, para poder mostrarlas en rojo/tachadas en vez de
+ocultarlas del todo) -- pero `handleSurpriseMe` seguia usando esa misma variable
+asumiendo que ya venia sin las descartadas, como hacia antes. Al dejar de filtrarlas
+ahi, "Sorprendeme" volvio a poder proponerlas. Añadido el filtro de `excludeIatas`
+explicitamente en `handleSurpriseMe`, junto al de destinos visitados que ya tenia.
+Tambien corregido, de paso, el contador "N vuelos directos reales" del titulo de la
+seccion de destinos, que por el mismo motivo estaba contando las descartadas como si
+fueran elegibles.
+
 ## [0.25.0] - 2026-09-17 (sesion 15) - FIX real: "Ciudades a descartar" no funcionaba con nombres de ciudad
 
 El usuario reporto que escribiendo "Berlín" (con tilde, puesta por el autocorrector

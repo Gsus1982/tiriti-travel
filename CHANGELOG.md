@@ -2,6 +2,27 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.24.0] - 2026-09-17 (sesion 14) - Wikipedia y destinos visitados, mas visibles
+
+El usuario reporto no encontrar 2 funciones que ya estaban implementadas (destinos
+visitados, resumen de Wikipedia) -- se comprobo que seguian en el codigo intactas, el
+problema real era que estaban demasiado escondidas dentro de desplegables anidados.
+
+### Cambiado
+- **Resumen de Wikipedia y ficha de pais, sacados del desplegable "Mas detalles del
+  destino"**: antes habia que encontrar la tarjeta de resultado Y ADEMAS abrir ese
+  desplegable para verlo -- ahora aparece siempre visible en la tarjeta, sin tocar
+  nada (se sigue cargando solo, sin boton). Lo que sigue dentro del desplegable
+  (CO2, clima, tipo de cambio, grafico de precio historico) es informacion mas de
+  detalle, tiene sentido que siga opcional.
+- **Destinos visitados, con su propia seccion en el panel de herramientas**: antes
+  solo se podian gestionar entrando en "Ideas de destino" y viendo las tarjetas
+  atenuadas -- ahora hay una seccion "Destinos marcados como visitados (N)" en el
+  panel de herramientas, visible en cuanto hay alguno marcado, con boton para
+  quitarlos directamente.
+- `HelpModal.tsx`: añadido un tema dedicado a ambas cosas, que no tenian ninguno
+  propio hasta ahora.
+
 ## [0.23.0] - 2026-09-17 (sesion 13) - Sorpréndeme rediseñado en 2 fases, FIX destinos inventados por la IA, orden de campos
 
 Feedback de la esposa del usuario tras probar la app.

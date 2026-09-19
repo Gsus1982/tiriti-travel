@@ -82,6 +82,11 @@ const TOPICS: HelpTopic[] = [
       'También en "Más detalles del destino": el clima típico para esas fechas (promedio de los últimos años, no un pronóstico exacto) y, si el destino usa una moneda distinta del euro, la conversión aproximada.'
   },
   {
+    title: 'Destinos visitados y ficha del destino (Wikipedia, país)',
+    body:
+      'Marca "Ya he estado aquí" en cualquier tarjeta de "Ideas de destino" para excluirlo de futuras sugerencias de Sorpréndeme y de esa misma lista; gestiónalos (o quítalos) desde "Destinos marcados como visitados" en el panel de herramientas. Además, cada resultado de una búsqueda real muestra directamente (sin tocar nada) un resumen de Wikipedia y una ficha del país -- idioma, capital, lado de conducción, tipo de enchufe.'
+  },
+  {
     title: 'Historial y compartir',
     body:
       'Cada búsqueda que haces queda guardada en tu propio teléfono (no en un servidor) para repetirla con un toque. "Compartir esta búsqueda" genera un enlace que, al abrirlo, restaura los mismos filtros.'

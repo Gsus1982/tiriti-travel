@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.23.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.24.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,47 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 14) — Sesion: Wikipedia y destinos visitados, hechos mas visibles
+
+### Contexto
+El usuario dijo "no veo las opciones que implementaste en algun momento: destinos
+descartados... ni la informacion de Wikipedia". Antes de asumir un bug, se comprobo
+directamente en el codigo si algo se habia roto o borrado por accidente en alguna
+sesion posterior -- **no era el caso**: `lib/visited-destinations.ts`,
+`lib/wikipedia.ts`, `app/api/destination-info/route.ts` y su uso en
+`ExploreDestinations.tsx`/`DestinationTipsButton.tsx` seguian intactos y funcionando.
+El problema real era de descubribilidad: ambas funciones estaban escondidas dentro de
+desplegables anidados (2-3 niveles: encontrar la tarjeta -> abrir "Mas detalles del
+destino" -> ver Wikipedia; o encontrar "Ideas de destino" -> pulsar "Ver ideas" -> ver
+el boton de marcar visitado), sin ningun sitio mas directo para verlas o gestionarlas.
+
+### Cambios (solo de disposicion en la interfaz, sin tocar la logica de ninguna de las 2 funciones)
+- **Wikipedia + ficha de pais, sacados del desplegable "Mas detalles del destino"**
+  en `components/FlightResultCard.tsx`: `DestinationTipsButton` (que contiene el
+  resumen de Wikipedia, la ficha de pais, y el boton de consejo de la IA) se movio
+  FUERA del `<details>`, quedando siempre visible en la tarjeta sin necesidad de tocar
+  nada -- se carga solo via `useEffect`, como siempre. Lo que sigue dentro del
+  desplegable (CO2, clima, tipo de cambio, grafico de precio historico) es informacion
+  mas secundaria, tiene sentido que siga opcional/colapsada.
+- **Seccion propia para destinos visitados** en `components/ToolsPanel.tsx`: nueva
+  seccion "Destinos marcados como visitados (N)" (solo visible si hay al menos uno
+  marcado), con boton para quitar cada uno directamente -- antes solo se podian ver/
+  quitar entrando en "Ideas de destino" y buscando las tarjetas atenuadas.
+- `components/HelpModal.tsx`: nuevo tema dedicado a ambas funciones, que no tenian
+  ninguno propio (se explicaban de pasada dentro de otros temas, sin ser faciles de
+  encontrar tampoco ahi).
+
+### Leccion para sesiones futuras
+Cuando el usuario reporte "no veo la funcion X que hiciste", el primer paso deberia
+ser SIEMPRE comprobar en el codigo si sigue ahi (grep de las funciones/componentes
+clave) antes de asumir que se rompio algo -- en este caso no habia ningun bug de
+codigo, solo un problema de donde se colocan las cosas en la interfaz.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios.
 
 ---
 

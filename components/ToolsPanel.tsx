@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { IconCalendar, IconBell, IconGauge } from './Icons';
 import PushNotificationSetup from './PushNotificationSetup';
 import FreeCalendarPreview from './FreeCalendarPreview';
+import { getVisitedDestinations, toggleVisitedDestination } from '@/lib/visited-destinations';
 
 type IgnavUsage = { totalUsed: number; remaining: number; last7Days: number; last30Days: number; quota: number; comboLimit: number };
 
@@ -56,6 +57,11 @@ export default function ToolsPanel({
   const [calendarDest, setCalendarDest] = useState('');
 
   const [usage, setUsage] = useState<IgnavUsage | null>(null);
+  const [visited, setVisited] = useState<string[]>([]);
+
+  useEffect(() => {
+    setVisited(getVisitedDestinations());
+  }, []);
   const [usageUnavailable, setUsageUnavailable] = useState(false);
 
   useEffect(() => {
@@ -252,6 +258,30 @@ export default function ToolsPanel({
           Contador de cuota no disponible todavia (falta aplicar la migracion de la tabla <code>ignav_usage_log</code> en
           Neon).
         </p>
+      )}
+
+      {visited.length > 0 && (
+        <details className="border-t border-slate-100 dark:border-slate-800 pt-4">
+          <summary className="text-sm font-semibold text-ink dark:text-slate-100 cursor-pointer list-none">
+            Destinos marcados como visitados ({visited.length})
+          </summary>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1 mb-2">
+            Se excluyen de "Sorprendeme" y aparecen atenuados en "Ideas de destino". Se marcan desde ahi mismo (boton "Ya he
+            estado aqui" en cada tarjeta); aqui puedes quitarlos.
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {visited.map((iata) => (
+              <button
+                key={iata}
+                onClick={() => setVisited(toggleVisitedDestination(iata))}
+                className="text-xs px-2.5 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:border-red-300 hover:text-red-600 transition-colors"
+                title="Quitar de visitados"
+              >
+                {iata} ✕
+              </button>
+            ))}
+          </div>
+        </details>
       )}
 
       <div className={usage || usageUnavailable ? 'border-t border-slate-100 dark:border-slate-800 pt-4' : ''}>

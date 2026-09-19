@@ -267,15 +267,15 @@ export default function FlightResultCard({
                 {result.climate && <p className="text-[10px] text-slate-400 dark:text-slate-600">Clima: Open-Meteo.com (CC BY 4.0)</p>}
               </div>
               <PriceHistoryChart originIata={result.originIata} destinationIata={result.destinationId.split('+')[0]} />
-              <DestinationTipsButton
-                destinationName={destinationLabel.replace(/\s*\([^)]*\)\s*$/, '')}
-                country={destinationLabel.match(/\(([^)]*)\)\s*$/)?.[1] ?? ''}
-                countryIso2={result.destinationCountryIso2}
-                month={new Date(result.outbound.departure_at).getMonth() + 1}
-                climate={result.climate}
-                childrenCount={childrenCount}
-              />
             </details>
+            <DestinationTipsButton
+              destinationName={destinationLabel.replace(/\s*\([^)]*\)\s*$/, '')}
+              country={destinationLabel.match(/\(([^)]*)\)\s*$/)?.[1] ?? ''}
+              countryIso2={result.destinationCountryIso2}
+              month={new Date(result.outbound.departure_at).getMonth() + 1}
+              climate={result.climate}
+              childrenCount={childrenCount}
+            />
           </div>
           <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-2 sm:w-36 shrink-0 text-right sm:border-l sm:border-slate-100 sm:pl-4">
             <div>

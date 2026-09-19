@@ -56,7 +56,8 @@ export default function ResultsSection({
   recommending,
   warnings,
   sortSelect,
-  paxCount
+  paxCount,
+  childrenCount
 }: {
   liveResults: LiveItinerary[];
   bookingLinks: BookingLinksState;
@@ -67,6 +68,7 @@ export default function ResultsSection({
   warnings: string[];
   sortSelect: React.ReactNode;
   paxCount?: number;
+  childrenCount?: number;
 }) {
   const [viewMode, setViewMode] = useState<'cards' | 'list'>('cards');
   const [perPerson, setPerPerson] = useState(false);
@@ -316,6 +318,7 @@ export default function ResultsSection({
               cheaperAlternative={cheaperAltByKey.get(rowKey) ?? null}
               paxCount={paxCount}
               perPerson={perPerson}
+              childrenCount={childrenCount}
             />
           );
         })}

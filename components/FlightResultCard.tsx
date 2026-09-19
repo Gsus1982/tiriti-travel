@@ -100,7 +100,8 @@ export default function FlightResultCard({
   onToggleCompare,
   cheaperAlternative,
   paxCount,
-  perPerson
+  perPerson,
+  childrenCount
 }: {
   result: LiveItinerary;
   bookingLinks?: BookingLink[];
@@ -113,6 +114,7 @@ export default function FlightResultCard({
   cheaperAlternative?: LiveItinerary | null;
   paxCount?: number;
   perPerson?: boolean;
+  childrenCount?: number;
 }) {
   const destinationLabel = result.destinationName;
   const imageUrl = getCityImageUrl(destinationLabel);
@@ -193,12 +195,17 @@ export default function FlightResultCard({
   return (
     <article className={`bg-white dark:bg-slate-900 rounded-2xl shadow-sm hover:shadow-md transition-all overflow-hidden ${cardBorderClass}`}>
       {isRecommended && <div className="bg-indigo text-white text-[11px] font-semibold uppercase tracking-wide px-4 py-1.5 flex items-center gap-1.5"><IconSparkles className="w-3 h-3" />Recomendado por la IA</div>}
-      <div className="flex flex-col sm:flex-row">
-        <div className="sm:w-40 h-36 sm:h-auto shrink-0 relative">
+      <div className="flex flex-row">
+        <div className="w-16 h-16 sm:w-24 sm:h-24 m-3 shrink-0 relative rounded-xl overflow-hidden">
           <img src={imageUrl} alt={destinationLabel} className="w-full h-full object-cover" loading="lazy" />
-          {onToggleCompare && <label className="absolute top-2 left-2 bg-white/90 dark:bg-slate-900/90 rounded-full px-2 py-1 flex items-center gap-1 text-[10px] font-medium text-ink dark:text-slate-100 cursor-pointer shadow-sm"><input type="checkbox" checked={!!isComparing} onChange={onToggleCompare} />Comparar</label>}
+          {onToggleCompare && (
+            <label className="absolute bottom-0.5 left-0.5 right-0.5 bg-white/90 dark:bg-slate-900/90 rounded px-1 py-0.5 flex items-center justify-center gap-1 text-[8px] sm:text-[9px] font-medium text-ink dark:text-slate-100 cursor-pointer">
+              <input type="checkbox" checked={!!isComparing} onChange={onToggleCompare} className="scale-75" />
+              Comparar
+            </label>
+          )}
         </div>
-        <div className="flex-1 p-4 flex flex-col sm:flex-row gap-4">
+        <div className="flex-1 p-4 pl-0 flex flex-col sm:flex-row gap-4">
           <div className="flex-1 min-w-0">
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               <span className="text-[10px] font-medium uppercase tracking-wide bg-indigo-pale dark:bg-indigo-950 text-indigo-dark px-2 py-0.5 rounded-full">Directo</span>
@@ -258,7 +265,10 @@ export default function FlightResultCard({
               <DestinationTipsButton
                 destinationName={destinationLabel.replace(/\s*\([^)]*\)\s*$/, '')}
                 country={destinationLabel.match(/\(([^)]*)\)\s*$/)?.[1] ?? ''}
+                countryIso2={result.destinationCountryIso2}
                 month={new Date(result.outbound.departure_at).getMonth() + 1}
+                climate={result.climate}
+                childrenCount={childrenCount}
               />
             </details>
           </div>

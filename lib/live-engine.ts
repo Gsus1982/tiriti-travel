@@ -88,6 +88,7 @@ export type LiveItinerary = {
   climate?: ClimateSummary | null;
   exchangeRate?: ExchangeRate | null;
   holidays?: Holiday[];
+  destinationCountryIso2?: string | null;
 };
 
 export type LiveSearchResult = {
@@ -582,6 +583,7 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
       item.climate = climate;
       item.exchangeRate = exchange;
       item.holidays = [...holidaysES, ...holidaysDest];
+      item.destinationCountryIso2 = geo?.country ?? null;
     }
   });
 

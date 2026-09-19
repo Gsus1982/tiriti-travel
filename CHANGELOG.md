@@ -2,6 +2,45 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.20.0] - 2026-09-17 (sesion 10) - calendario gratis, IA con clima real, ficha de pais, Wikipedia, y 3 ajustes de usabilidad
+
+A peticion del usuario: 5 mejoras gratuitas de golpe, mas 3 ajustes reportados tras
+usar la app.
+
+### Anadido
+- **Calendario de precios GRATIS previo** (`lib/travelpayouts.ts::getFreePriceCalendar`,
+  `/api/free-calendar`, `components/FreeCalendarPreview.tsx`): un mes completo de
+  precios orientativos de Travelpayouts, sin gastar cuota de Ignav, para decidir que
+  dias merece la pena consultar de verdad con el calendario real (que si cuesta 1
+  peticion por dia). Aparece justo debajo del calendario real, en el panel de
+  herramientas.
+- **Consejo de la IA sobre el destino ahora usa el CLIMA REAL** (ya calculado por
+  Open-Meteo para esa misma busqueda) en vez de que la IA lo adivine solo por el mes --
+  mismo coste de tokens, consejo mas preciso. Tambien tiene en cuenta cuantos niños
+  viajan para dar un angulo familiar cuando aplica.
+- **Ficha rapida de pais gratis** (`lib/country-info.ts`, REST Countries, sin clave):
+  idioma, capital, lado de conduccion, y una nota fija de tipo de enchufe para los
+  paises donde cambia respecto a España. Se carga sola, sin boton, porque es gratis e
+  instantanea (a diferencia del consejo de la IA, que si gasta tokens).
+- **Resumen de Wikipedia** (`lib/wikipedia.ts`, gratis, sin clave): extracto sobre el
+  destino, disponible incluso sin `OPENAI_API_KEY` configurada.
+
+### Cambiado
+- **Fotos de las tarjetas de resultado, mucho mas pequeñas**: antes eran un banner de
+  ancho completo y 144px de alto en movil (con muchos resultados, mucho scroll
+  innecesario) -- ahora son una miniatura pequeña siempre lateral, en movil y
+  escritorio.
+- **"Sorpréndeme" ahora indica lo minimo que hace falta** para usarlo (un origen
+  elegido; las fechas/horas/pasajeros usan lo que haya puesto en el formulario, con
+  valores por defecto si no se ha tocado nada).
+- **Indicado que se pueden elegir varios orígenes y varios destinos** (no solo uno),
+  en los propios títulos de esas secciones -- no era evidente sin haberlo probado.
+- **Explicado que es open-jaw con un ejemplo concreto** (Londres-Gatwick de ida,
+  Londres-Stansted de vuelta) en vez de solo el nombre técnico entre paréntesis.
+- `docs`/`HelpModal.tsx`: actualizado el primer tema de ayuda, que aun describia el
+  antiguo modelo de "rango de fechas" (ya sustituido por el calendario de dias
+  sueltos de la sesion anterior).
+
 ## [0.19.0] - 2026-09-17 (sesion 9) - detector de chollos, insignia de chollo, aviso de equipaje, calendario a 30 dias
 
 A peticion del usuario ("empieza con el detector de chollos y luego con el resto"),

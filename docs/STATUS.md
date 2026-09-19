@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.19.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.20.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,67 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 10) — Sesion: calendario gratis, IA con clima real, ficha de pais, Wikipedia, 3 ajustes de usabilidad
+
+### Contexto
+El usuario pregunto que pasaria cuando se agote la cuota de Ignav (se le explico: la
+app no se rompe, cada llamada fallida se captura una a una -- ver
+`safeSearchOneWay` en `lib/live-engine.ts` -- pero sin Sky Scrapper configurado se
+quedaria sin resultados reales; Sky Scrapper renueva 100/mes, a diferencia de la cuota
+de por vida de Ignav). Luego pidio implementar 5 mejoras gratuitas propuestas, y
+durante la prueba reporto 3 cosas mas: que Sorprendeme no explicaba que hacia falta
+para usarlo, que las fotos de los resultados eran demasiado grandes, y que no se
+indicaba que se pueden elegir varios aeropuertos ni que es open-jaw.
+
+### Las 5 mejoras gratuitas
+1. **Calendario de precios gratis previo** (`getFreePriceCalendar` en
+   `lib/travelpayouts.ts`, endpoint `v1/prices/calendar` de Travelpayouts): un mes
+   completo de precios orientativos SIN gastar cuota de Ignav, pensado como filtro
+   previo antes de gastar cuota real en el calendario de verdad (que cuesta 1 peticion
+   por dia). Aparece justo debajo del calendario real en el panel de herramientas.
+2. **IA de destino con clima real**: antes solo se le pasaba el mes a la IA para el
+   consejo de equipaje; ahora se le pasa el dato REAL de Open-Meteo ya calculado para
+   esa busqueda (mismo coste de tokens, mejor precision). Tambien se le pasa cuantos
+   niños viajan para un angulo familiar.
+3. **Ficha de pais gratis** (REST Countries, `lib/country-info.ts`): idioma, capital,
+   lado de conduccion, y una nota fija de tipo de enchufe (mapa editorial pequeño,
+   REST Countries no da esa informacion). Se carga sola sin boton -- es gratis e
+   instantanea, a diferencia del consejo de la IA.
+4. **Resumen de Wikipedia** (`lib/wikipedia.ts`): funciona incluso sin
+   `OPENAI_API_KEY` configurada, alternativa gratuita de contexto sobre el destino.
+5. El codigo ISO2 del pais del destino, ya resuelto en el servidor para clima/CO2/
+   cambio, se expuso tambien en `LiveItinerary.destinationCountryIso2` para que el
+   cliente no tuviera que volver a resolverlo (evita duplicar logica cliente/servidor).
+
+### Los 3 ajustes de usabilidad
+- **Fotos de resultado, mucho mas pequeñas**: en movil eran un banner de ancho
+  completo y 144px de alto (`sm:w-40 h-36 sm:h-auto`) -- con muchos resultados eso
+  significaba mucho scroll solo para pasar las fotos. Cambiado a una miniatura fija
+  (`w-16 h-16 sm:w-24 sm:h-24`), siempre lateral, en movil y escritorio por igual (se
+  quito el `flex-col` que apilaba la foto arriba en movil).
+- **Nota de requisitos minimos en Sorprendeme**: el boton ya estaba `disabled` sin
+  origen elegido, pero no se explicaba en ningun sitio -- añadida una frase justo
+  debajo indicando que solo hace falta un origen, y que usa lo que haya en el
+  formulario (fechas/horas/pasajeros) en ese momento.
+- **Multi-seleccion y open-jaw mas visibles**: los titulos de "Origenes" y "Destinos"
+  ahora dicen explicitamente "puedes elegir varios" (siempre fue posible, pero no era
+  obvio sin probarlo); el checkbox de open-jaw ahora tiene un ejemplo concreto
+  (Londres-Gatwick de ida, Londres-Stansted de vuelta) en vez de solo el nombre
+  tecnico entre parentesis. Tambien se actualizo el primer tema de `HelpModal.tsx`,
+  que aun describia el antiguo modelo de "rango de fechas" ya sustituido por el
+  calendario de dias sueltos de la sesion anterior.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando la
+presencia de los 3 textos nuevos de usabilidad y de "Vista previa gratis" en el HTML.
+
+### Pendiente (usuario)
+Nada nuevo que configurar -- las 3 APIs nuevas (Travelpayouts calendario, REST
+Countries, Wikipedia) usan credenciales que ya existian (`TRAVELPAYOUTS_TOKEN`) o no
+necesitan ninguna (REST Countries, Wikipedia son publicas y sin clave).
 
 ---
 

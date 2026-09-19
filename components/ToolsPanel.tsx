@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { IconCalendar, IconBell, IconGauge } from './Icons';
 import PushNotificationSetup from './PushNotificationSetup';
+import FreeCalendarPreview from './FreeCalendarPreview';
 
 type IgnavUsage = { totalUsed: number; remaining: number; last7Days: number; last30Days: number; quota: number; comboLimit: number };
 
@@ -306,6 +307,7 @@ export default function ToolsPanel({
             ))}
           </div>
         )}
+        <FreeCalendarPreview origin={originIatas[0] ?? ''} destination={calendarDest.toUpperCase()} />
       </div>
 
       <div className="border-t border-slate-100 dark:border-slate-800 pt-4">

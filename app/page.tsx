@@ -707,6 +707,11 @@ export default function HomePage() {
               </p>
             )}
           </div>
+          <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-2">
+            Para usar "Sorpréndeme" solo hace falta tener elegido al menos un origen (más abajo). Usa las fechas, horas y
+            pasajeros que tengas puestos en el formulario en ese momento -- si no has tocado nada, se usan los valores por
+            defecto.
+          </p>
 
           <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
             <div className="space-y-6 min-w-0">
@@ -772,7 +777,7 @@ export default function HomePage() {
                 </div>
 
                 <div>
-                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Origenes</p>
+                  <p className="text-sm font-medium text-slate-600 dark:text-slate-300 mb-2">Origenes (puedes elegir varios)</p>
                   <div className="flex flex-wrap gap-2">
                     {originsList.map((o) => (
                       <label
@@ -799,7 +804,7 @@ export default function HomePage() {
                   <div className="flex items-center gap-2 mb-2">
                     <IconMapPin className="w-4 h-4 text-indigo" />
                     <p className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                      Destinos ({filteredRealDestinations.length} vuelos directos reales desde tus origenes)
+                      Destinos ({filteredRealDestinations.length} vuelos directos reales desde tus origenes -- puedes elegir varios)
                     </p>
                   </div>
                   {realDestError && (
@@ -1011,6 +1016,7 @@ export default function HomePage() {
                   warnings={warnings}
                   sortSelect={renderSortSelect('results')}
                   paxCount={adults + children}
+                  childrenCount={children}
                 />
                 </>
               )}
@@ -1097,6 +1103,10 @@ export default function HomePage() {
                     <input type="checkbox" checked={allowOpenJaw} onChange={(e) => setAllowOpenJaw(e.target.checked)} />
                     Permitir llegar y salir por aeropuertos distintos (open-jaw)
                   </label>
+                  <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-2">
+                    Ejemplo de open-jaw: llegar a Londres-Gatwick y volver desde Londres-Stansted -- misma ciudad, aeropuerto
+                    distinto en cada sentido. Util cuando eso sale mas barato o encaja mejor con los horarios.
+                  </p>
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-300 flex items-center gap-2">
                     <input type="checkbox" checked={includeSkyScanner} onChange={(e) => setIncludeSkyScanner(e.target.checked)} />
                     Incluir Sky Scrapper (cuota mensual limitada)

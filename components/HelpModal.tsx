@@ -9,7 +9,7 @@ const TOPICS: HelpTopic[] = [
   {
     title: 'Orígenes, destinos y fechas',
     body:
-      'Los "Destinos" que puedes elegir son siempre REALES: verificados a diario contra datos públicos de Aena, con vuelo directo confirmado desde el origen que elijas. Las fechas de ida/vuelta son rangos (hasta 5 días), no un solo día -- la app prueba todas las combinaciones dentro de ese rango.'
+      'Puedes elegir varios orígenes y varios destinos a la vez (toca los que quieras, no solo uno). Los "Destinos" son siempre REALES: verificados a diario contra datos públicos de Aena, con vuelo directo confirmado. Las fechas se eligen en un calendario propio: toca uno o varios días sueltos (no tienen que ser seguidos) para ida y para vuelta, con hasta 5 días por sentido y una franja horaria propia para cada día si quieres.'
   },
   {
     title: '¿Por qué hay un límite de combinaciones (y por qué cambia)?',

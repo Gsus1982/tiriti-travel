@@ -83,7 +83,7 @@ export default function ExploreDestinations({
         <summary className="flex items-center justify-between cursor-pointer list-none mb-1">
           <span className="flex items-center gap-2">
             <IconSparkles className="w-4 h-4 text-indigo" />
-            <h2 className="text-base font-semibold text-ink dark:text-slate-100">Explorar destinos (gratis)</h2>
+            <h2 className="text-base font-semibold text-ink dark:text-slate-100">Ideas de destino (gratis, no es una busqueda real)</h2>
           </span>
           <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
         </summary>
@@ -103,17 +103,19 @@ export default function ExploreDestinations({
       <summary className="flex items-center justify-between cursor-pointer list-none mb-1">
         <span className="flex items-center gap-2">
           <IconSparkles className="w-4 h-4 text-indigo" />
-          <h2 className="text-base font-semibold text-ink dark:text-slate-100">Explorar destinos (gratis)</h2>
+          <h2 className="text-base font-semibold text-ink dark:text-slate-100">Ideas de destino (gratis, no es una busqueda real)</h2>
         </span>
         <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
       </summary>
       <p className="text-xs text-slate-400 dark:text-slate-500 mb-3 mt-2">
-        Precios orientativos de otros viajeros (no en tiempo real, no gastan tu cuota de Ignav) para inspirarte antes de
-        buscar de verdad.
+        <strong className="text-slate-600 dark:text-slate-300">Esto no busca vuelos de verdad.</strong> Elige un origen y pulsa
+        el boton de abajo para ver una lista de destinos con precios ORIENTATIVOS (de otros viajeros, no en tiempo real, no
+        gastan tu cuota de Ignav) -- solo para darte ideas. Cuando veas uno que te interese, pulsa "Buscar vuelos reales" en
+        esa tarjeta para lanzar la busqueda de verdad con precios en firme.
       </p>
       <div className="flex gap-2 items-end flex-wrap mb-3">
         <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
-          Origen
+          Desde que origen
           <select
             className="mt-1 bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-800 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
             value={origin}
@@ -131,7 +133,7 @@ export default function ExploreDestinations({
           disabled={loading}
           className="bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-ink dark:text-slate-100 text-sm font-medium px-4 py-2 rounded-lg transition-colors border border-slate-100 dark:border-slate-800 disabled:opacity-50"
         >
-          {loading ? 'Explorando...' : 'Explorar'}
+          {loading ? 'Buscando ideas...' : 'Ver ideas de destino'}
         </button>
       </div>
       {error && <p className="text-red-500 dark:text-red-400 text-xs mb-2">{error}</p>}
@@ -169,7 +171,7 @@ export default function ExploreDestinations({
                   >
                     <p className="font-medium text-ink dark:text-slate-100 truncate">{d.verifiedName ?? d.destinationIata}</p>
                     <p className="text-slate-500 dark:text-slate-400">
-                      desde {d.price.toFixed(0)} {d.currency}
+                      desde {d.price.toFixed(0)} {d.currency} <span className="text-slate-400 dark:text-slate-500">(orientativo)</span>
                     </p>
                     {d.verifiedName ? (
                       <button
@@ -177,7 +179,7 @@ export default function ExploreDestinations({
                         className="mt-1 flex items-center gap-1 text-indigo hover:text-indigo-dark text-[11px] font-medium"
                       >
                         <IconMapPin className="w-3 h-3" />
-                        Buscar este
+                        Buscar vuelos reales
                       </button>
                     ) : (
                       <p className="text-[10px] text-slate-400 dark:text-slate-500">Sin verificar vuelo directo</p>

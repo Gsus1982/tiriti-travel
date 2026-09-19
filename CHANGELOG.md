@@ -2,6 +2,39 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.21.0] - 2026-09-17 (sesion 11) - quitado panel de horarios duplicado, medidas de equipaje, "Explorar" renombrado y explicado
+
+A peticion del usuario tras usar la app: 3 mejoras de claridad.
+
+### Quitado
+- **Panel "Horarios" duplicado en "Filtros y ajustes"**: desde la sesion 8, cada dia
+  del calendario ya tiene su propia franja horaria -- tener ADEMAS un panel general
+  con los mismos 4 campos (ida/vuelta, no antes/no despues) resultaba confuso, sin
+  quedar claro cual mandaba. El valor general se sigue usando internamente como
+  respaldo (por ejemplo cuando la IA interpreta una frase tipo "salida despues de las
+  18h"), pero ahora, en vez de vivir solo en un panel aparte, se refleja
+  automaticamente en cada dia seleccionado que no tenga ya su propia hora -- asi el
+  calendario es el UNICO sitio donde se ve y se edita la hora, sin perder la
+  informacion que pueda venir de la IA.
+
+### Anadido
+- **Medidas y peso del equipaje de mano gratis, por aerolinea**
+  (`lib/airline-baggage-notes.ts`): ademas del aviso de "no incluye maleta grande" que
+  ya habia, ahora se muestran las medidas exactas del bolso que SI va gratis (ej.
+  Ryanair 40x20x25cm sin limite de peso indicado, Wizz Air 40x30x20cm hasta 10kg,
+  EasyJet 45x36x20cm, Vueling 40x30x20cm) -- justo lo que hace falta comprobar antes
+  de facturar por error en la puerta de embarque. Marcado como aproximado, con aviso
+  de comprobar antes de viajar (son cifras que cambian con el tiempo).
+
+### Cambiado
+- **"Explorar destinos" renombrado y explicado mucho mas claro**: el usuario reporto
+  que no entendia que era ("veo un desplegable de aeropuertos y un listado, pero no se
+  que son"). Renombrado a "Ideas de destino (gratis, no es una busqueda real)", con una
+  frase en negrita al principio dejando claro que NO busca vuelos de verdad, cada
+  precio marcado explicitamente como "(orientativo)", y el boton de cada tarjeta
+  renombrado de "Buscar este" a "Buscar vuelos reales" para que quede claro que ESE es
+  el paso que lanza la busqueda de verdad.
+
 ## [0.20.0] - 2026-09-17 (sesion 10) - calendario gratis, IA con clima real, ficha de pais, Wikipedia, y 3 ajustes de usabilidad
 
 A peticion del usuario: 5 mejoras gratuitas de golpe, mas 3 ajustes reportados tras

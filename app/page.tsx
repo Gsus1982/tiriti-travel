@@ -485,6 +485,38 @@ export default function HomePage() {
     });
   }
 
+  useEffect(() => {
+    if (outboundNotBeforeHour === '' && outboundNotAfterHour === '') return;
+    setOutboundDayHours((prev) => {
+      const next: Record<string, DayHours> = { ...prev };
+      for (const d of outboundSelectedDays) {
+        const current = next[d] ?? {};
+        next[d] = {
+          before: current.before ?? (outboundNotBeforeHour === '' ? undefined : Number(outboundNotBeforeHour)),
+          after: current.after ?? (outboundNotAfterHour === '' ? undefined : Number(outboundNotAfterHour))
+        };
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [outboundNotBeforeHour, outboundNotAfterHour]);
+
+  useEffect(() => {
+    if (inboundNotBeforeHour === '' && inboundNotAfterHour === '') return;
+    setInboundDayHours((prev) => {
+      const next: Record<string, DayHours> = { ...prev };
+      for (const d of inboundSelectedDays) {
+        const current = next[d] ?? {};
+        next[d] = {
+          before: current.before ?? (inboundNotBeforeHour === '' ? undefined : Number(inboundNotBeforeHour)),
+          after: current.after ?? (inboundNotAfterHour === '' ? undefined : Number(inboundNotAfterHour))
+        };
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inboundNotBeforeHour, inboundNotAfterHour]);
+
   function changeOutboundDayHour(date: string, field: 'before' | 'after', value: number | undefined) {
     setOutboundDayHours((prev) => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
   }
@@ -1028,55 +1060,6 @@ export default function HomePage() {
                   <h2 className="text-sm font-semibold text-ink dark:text-slate-100">Filtros y ajustes</h2>
                   <IconChevronDown className="w-4 h-4 text-slate-400 dark:text-slate-500 transition-transform group-open:rotate-180" />
                 </summary>
-                <FilterAccordion title="Horarios" defaultOpen>
-                  <div className="grid grid-cols-2 gap-2">
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
-                      Ida no antes de (h)
-                      <input
-                        type="number"
-                        min={0}
-                        max={23}
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                        value={outboundNotBeforeHour}
-                        onChange={(e) => setOutboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
-                      />
-                    </label>
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
-                      Ida no despues de (h)
-                      <input
-                        type="number"
-                        min={0}
-                        max={23}
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                        value={outboundNotAfterHour}
-                        onChange={(e) => setOutboundNotAfterHour(e.target.value === '' ? '' : Number(e.target.value))}
-                      />
-                    </label>
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
-                      Vuelta no antes de (h)
-                      <input
-                        type="number"
-                        min={0}
-                        max={23}
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                        value={inboundNotBeforeHour}
-                        onChange={(e) => setInboundNotBeforeHour(e.target.value === '' ? '' : Number(e.target.value))}
-                      />
-                    </label>
-                    <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
-                      Vuelta no despues de (h)
-                      <input
-                        type="number"
-                        min={0}
-                        max={23}
-                        className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                        value={inboundNotAfterHour}
-                        onChange={(e) => setInboundNotAfterHour(e.target.value === '' ? '' : Number(e.target.value))}
-                      />
-                    </label>
-                  </div>
-                </FilterAccordion>
-
                 <FilterAccordion title="Precio y orden" defaultOpen>
                   <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block">
                     Precio maximo total

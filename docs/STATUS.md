@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.20.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.21.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,55 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 11) — Sesion: quitado panel de horarios duplicado, medidas de equipaje, "Explorar" renombrado
+
+### Contexto
+El usuario reporto 3 cosas de claridad tras usar la app: por que "Filtros y ajustes" >
+"Horarios" mostraba de nuevo la hora si ya se veia por dia en el calendario; pidio
+medidas y peso del equipaje de mano por aerolinea; y dijo no entender que era
+"Explorar destinos" (veia un desplegable de aeropuertos y un listado, sin contexto).
+
+### 1. Panel de Horarios duplicado -- por que existia y por que se quito
+No era un duplicado literal: el panel general (`outboundNotBeforeHour`,
+`outboundNotAfterHour`, etc.) es el valor de RESPALDO que usa cada dia sin hora propia,
+y ademas es lo que rellena la IA cuando interpreta una frase tipo "salida despues de
+las 18h" (ver `app/page.tsx`, puntos de restauracion de IA/enlaces/historial). Pero
+tener 2 sitios con el mismo aspecto (4 campos de hora) sin explicar la relacion entre
+ambos era confuso de verdad. Se quito el panel visible de "Filtros y ajustes", pero
+para no perder la utilidad real del respaldo (sobre todo el de la IA), se añadieron 2
+`useEffect` que, cuando el valor general cambia, lo copian automaticamente a cada dia
+seleccionado que TODAVIA no tenga su propia hora -- asi el calendario sigue siendo el
+UNICO sitio visible, pero nunca se pierde una hora que venga de fuera (IA, enlace
+compartido, historial).
+
+### 2. Medidas de equipaje de mano gratis
+`lib/airline-baggage-notes.ts` ampliado con medidas y peso reales del bolso que SI va
+gratis (no solo el aviso generico de antes). Investigado por busqueda web en esta
+sesion, cruzando varias fuentes de comparativas de equipaje de 2026 (algunas cifras
+variaban ligeramente entre fuentes segun la fecha de publicacion, señal de que estos
+datos cambian con cierta frecuencia): Ryanair 40x20x25cm sin limite de peso indicado,
+Wizz Air 40x30x20cm hasta 10kg, EasyJet 45x36x20cm, Vueling 40x30x20cm, Volotea y
+Norwegian 40x30x20cm. Se marca explicitamente como "aproximado, comprueba antes de
+viajar" en la propia interfaz, dado que estas cifras no son estables a largo plazo.
+
+### 3. "Explorar destinos" renombrado y explicado
+Renombrado a "Ideas de destino (gratis, no es una busqueda real)", con una frase en
+negrita justo al principio ("Esto no busca vuelos de verdad") antes de cualquier otra
+cosa, cada precio ahora dice explicitamente "(orientativo)", y el boton de cada
+tarjeta paso de "Buscar este" a "Buscar vuelos reales" -- para dejar claro cual es el
+paso que de verdad lanza una busqueda con datos en firme. Mismo cambio reflejado en el
+tema correspondiente de `HelpModal.tsx`.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que el
+texto "Esto no busca vuelos de verdad" aparece y que "Ida no antes de (h)" (el panel
+duplicado que se quito) ya no aparece en el HTML.
+
+### Pendiente (usuario)
+Nada nuevo que configurar.
 
 ---
 

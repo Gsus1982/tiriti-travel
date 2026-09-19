@@ -27,9 +27,9 @@ const TOPICS: HelpTopic[] = [
       'Escribe la búsqueda en una frase normal (fechas, horas, destino, tema...) y una IA real la interpreta y precarga los filtros, explicándote cómo lo ha entendido. Revisa siempre la explicación antes de pulsar "Buscar con esta interpretación". Si la IA no está disponible, cae automáticamente a un analizador más simple, sin IA.'
   },
   {
-    title: 'Explorar destinos (gratis)',
+    title: 'Ideas de destino (gratis, no es una búsqueda real)',
     body:
-      'Muestra precios orientativos de otros viajeros reales (no en tiempo real, no reservables) para darte ideas de a dónde ir SIN gastar tu cuota de Ignav. Los destinos con nombre y botón "Buscar este" tienen vuelo directo confirmado desde tu origen; los que salen en gris son solo inspiración, sin verificar todavía.'
+      'No busca vuelos de verdad. Muestra precios orientativos de otros viajeros (no en tiempo real, no reservables) para darte ideas de a dónde ir SIN gastar tu cuota de Ignav. Los destinos con nombre y botón "Buscar vuelos reales" tienen vuelo directo confirmado desde tu origen y lanzan la búsqueda de verdad; los que salen en gris son solo inspiración, sin verificar todavía.'
   },
   {
     title: 'Precio "bajo/normal/alto para esta ruta"',

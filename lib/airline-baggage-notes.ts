@@ -1,23 +1,55 @@
 // Avisos fijos sobre politica de equipaje de las aerolineas mas habituales en rutas
-// directas desde Espana, conocidas por cobrar aparte hasta la maleta de cabina grande.
-// Contenido editorial (no una API, no cambia con frecuencia) -- si una aerolinea
-// cambia su politica, actualizar aqui a mano.
+// directas desde Espana, con medidas y peso del equipaje de MANO (el que va gratis,
+// bajo el asiento) -- es lo que mas importa para no acabar facturando en la puerta de
+// embarque. Contenido editorial (no una API): estas cifras SI cambian con el tiempo y
+// varian por tarifa, asi que se marcan como aproximadas y se anima a comprobar antes
+// de viajar. Fuentes consultadas en esta sesion (2026): paginas de comparativa de
+// equipaje de mano de varias tiendas especializadas y Which?, cruzadas entre si.
 
-const BAGGAGE_NOTES: Record<string, string> = {
-  ryanair: 'Solo incluye un bolso pequeno bajo el asiento. La maleta de cabina grande y la facturada se pagan aparte.',
-  'wizz air': 'Solo incluye un bolso pequeno bajo el asiento. La maleta de cabina grande y la facturada se pagan aparte.',
-  easyjet: 'Incluye un bolso pequeno bajo el asiento. La maleta de cabina grande (con ruedas) normalmente se paga aparte.',
-  vueling: 'Incluye un bolso pequeno bajo el asiento. La maleta de cabina grande depende de la tarifa elegida.',
-  volotea: 'Solo incluye un bolso pequeno bajo el asiento en la tarifa basica.',
-  norwegian: 'Solo incluye un bolso pequeno bajo el asiento en la tarifa basica ("LowFare").'
+export type BaggageInfo = { note: string; freeBagCm: string; freeBagKg: string | null };
+
+const BAGGAGE_INFO: Record<string, BaggageInfo> = {
+  ryanair: {
+    note: 'Solo incluye el bolso pequeno bajo el asiento. La maleta de cabina grande (con Priority) y la facturada se pagan aparte.',
+    freeBagCm: '40 x 20 x 25 cm',
+    freeBagKg: 'sin limite de peso indicado'
+  },
+  'wizz air': {
+    note: 'Solo incluye el bolso pequeno bajo el asiento. La maleta de cabina grande (con WIZZ Priority) y la facturada se pagan aparte.',
+    freeBagCm: '40 x 30 x 20 cm',
+    freeBagKg: 'hasta 10 kg'
+  },
+  easyjet: {
+    note: 'Incluye un bolso pequeno bajo el asiento. La maleta de cabina grande (con ruedas, para el maletero superior) normalmente se paga aparte.',
+    freeBagCm: '45 x 36 x 20 cm',
+    freeBagKg: 'sin limite de peso indicado'
+  },
+  vueling: {
+    note: 'Incluye un bolso pequeno bajo el asiento. La maleta de cabina grande (55x40x20cm, hasta 10kg) depende de la tarifa elegida.',
+    freeBagCm: '40 x 30 x 20 cm',
+    freeBagKg: 'sin limite de peso indicado'
+  },
+  volotea: {
+    note: 'Solo incluye un bolso pequeno bajo el asiento en la tarifa basica.',
+    freeBagCm: '40 x 30 x 20 cm',
+    freeBagKg: null
+  },
+  norwegian: {
+    note: 'Solo incluye un bolso pequeno bajo el asiento en la tarifa basica ("LowFare").',
+    freeBagCm: '40 x 30 x 20 cm',
+    freeBagKg: null
+  }
 };
 
-/** Aviso de equipaje para una aerolinea, o null si no hay nota conocida (aerolineas de red tradicionales suelen incluir cabina sin coste aparte). */
 export function getBaggageNote(airlineName: string): string | null {
+  return getBaggageInfo(airlineName)?.note ?? null;
+}
+
+export function getBaggageInfo(airlineName: string): BaggageInfo | null {
   const key = airlineName.trim().toLowerCase();
-  if (BAGGAGE_NOTES[key]) return BAGGAGE_NOTES[key];
-  for (const [name, note] of Object.entries(BAGGAGE_NOTES)) {
-    if (key.includes(name)) return note;
+  if (BAGGAGE_INFO[key]) return BAGGAGE_INFO[key];
+  for (const [name, info] of Object.entries(BAGGAGE_INFO)) {
+    if (key.includes(name)) return info;
   }
   return null;
 }

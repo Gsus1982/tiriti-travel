@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import type { LiveItinerary } from '@/lib/live-engine';
 import { getCityImageUrl } from '@/lib/city-images';
 import { getAirlineBadge } from '@/lib/airline-badge';
-import { getBaggageNote } from '@/lib/airline-baggage-notes';
+import { getBaggageInfo } from '@/lib/airline-baggage-notes';
 import { IconPlaneTakeoff, IconPlaneLanding, IconSparkles } from './Icons';
 import PriceHistoryChart from './PriceHistoryChart';
 import DestinationTipsButton from './DestinationTipsButton';
@@ -218,10 +218,15 @@ export default function FlightResultCard({
               <div className="flex flex-wrap items-center gap-1.5"><IconPlaneTakeoff className="w-3.5 h-3.5 text-indigo shrink-0" /><span className="font-medium text-slate-700 dark:text-slate-300">{result.outbound.origin_iata}</span><span>{formatDateTime(result.outbound.departure_at)}</span><span className="text-slate-300 dark:text-slate-500">→</span><span className="font-medium text-slate-700 dark:text-slate-300">{result.outbound.destination_iata}</span><AirlineBadge name={result.outbound.airline} /><span className="text-slate-400 dark:text-slate-500">{result.outbound.airline}</span></div>
               <div className="flex flex-wrap items-center gap-1.5"><IconPlaneLanding className="w-3.5 h-3.5 text-indigo shrink-0" /><span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.origin_iata}</span><span>{formatDateTime(result.inbound.departure_at)}</span><span className="text-slate-300 dark:text-slate-500">→</span><span className="font-medium text-slate-700 dark:text-slate-300">{result.inbound.destination_iata}</span><AirlineBadge name={result.inbound.airline} /><span className="text-slate-400 dark:text-slate-500">{result.inbound.airline}</span></div>
               {Array.from(
-                new Set([getBaggageNote(result.outbound.airline), getBaggageNote(result.inbound.airline)].filter(Boolean) as string[])
-              ).map((note, i) => (
+                new Set(
+                  [getBaggageInfo(result.outbound.airline), getBaggageInfo(result.inbound.airline)].filter(Boolean) as ReturnType<
+                    typeof getBaggageInfo
+                  >[]
+                )
+              ).map((info, i) => (
                 <p key={i} className="text-[10px] text-amber-700 dark:text-amber-300 mt-0.5">
-                  🧳 {note}
+                  🧳 {info!.note} Bolso gratis: {info!.freeBagCm}
+                  {info!.freeBagKg ? `, ${info!.freeBagKg}` : ''} (aproximado, comprueba antes de viajar).
                 </p>
               ))}
             </div>

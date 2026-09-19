@@ -22,7 +22,7 @@ export async function GET(request: Request, { params }: { params: { origin: stri
   }
 
   try {
-    const dests = await fetchAenaDestinations(origin, 5000);
+    const dests = await fetchAenaDestinations(origin, 8000);
     await upsertDestinations(origin, dests);
     await logSync([origin], dests.length, true);
     return NextResponse.json({ ok: true, origin, destinations_found: dests.length, synced_at: new Date().toISOString() });

@@ -11,7 +11,14 @@ const DEST_PATH_BY_ORIGIN: Record<string, string> = {
   ALC: 'aerolineas-y-destinos/destinos-aeropuerto.html',
   MAD: 'aerolineas-y-destinos/destinos-aeropuerto.html',
   VLC: 'aerolineas-destinos/destinos-aeropuerto.html',
-  RMU: 'aerolineas-y-destinos/destinos-del-aeropuerto.html',
+  // FIX real (sesion 12): esta ruta tenia un "del" de mas ("destinos-del-aeropuerto")
+  // que no existe en la web real de Aena -- verificado contra
+  // aena.es/en/internacional-region-de-murcia/airlines-and-destinations/airport-destinations.html,
+  // cuyo equivalente en español es "aerolineas-y-destinos/destinos-aeropuerto.html",
+  // igual que ALC y MAD. Con la ruta mal escrita, Aena devolvia 404 y el origen RMU
+  // nunca llegaba a tener NINGUN destino sincronizado -- de ahi el "0 destinos" real
+  // reportado, no un hueco de datos que hiciera falta rellenar a mano.
+  RMU: 'aerolineas-y-destinos/destinos-aeropuerto.html',
 };
 
 export interface ParsedDestination {

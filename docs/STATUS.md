@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.21.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.22.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,70 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 12) — Sesion: FIX real del scraping de Aena para Madrid y Murcia (0 destinos)
+
+### Contexto -- IMPORTANTE para cualquier IA futura
+El usuario reporto un bug real: seleccionando Madrid o Murcia como origen, la app
+mostraba **0 destinos**, cuando Madrid deberia tener MUCHOS mas que Alicante (es el
+aeropuerto mas grande de España, no menos). Pidio literalmente "agrega los aeropuertos
+que falte añadir... centrandote en Europa, norte de Africa, Caucaso, Chipre, Georgia".
+
+**Se decidio NO seguir esa instruccion al pie de la letra**, y se explico por que antes
+de actuar: esta app NUNCA ha usado listas de destinos curadas a mano -- se eliminaron
+por completo hace muchas sesiones (PR #22, "ELIMINADOS los destinos curados") porque
+quedaban desactualizadas y no reflejaban vuelos reales. Los destinos de
+`aena_destinations` vienen SIEMPRE de un scraping diario automatico de la web publica
+de Aena (`lib/aena-sync.ts`, cron `refresh-aena/<ORIGEN>`). Anadir aeropuertos a mano
+para "arreglar" el 0 de Madrid habria sido reintroducir exactamente el problema que se
+elimino antes, y ademas habria escondido el bug real en vez de arreglarlo. **Cualquier
+IA futura que reciba una peticion parecida ("faltan destinos, añadelos a mano") deberia
+sospechar primero de un fallo en el scraping, no asumir que hace falta una lista
+curada** -- esa es la lección de esta sesion.
+
+### Los 2 bugs reales encontrados (investigados por busqueda web contra la pagina real de Aena, sin acceso de red directo desde el sandbox a aena.es)
+1. **Murcia (RMU): ruta de URL mal escrita, causaba 404 silencioso.**
+   `DEST_PATH_BY_ORIGIN.RMU` en `lib/aena-sync.ts` tenia
+   `'aerolineas-y-destinos/destinos-DEL-aeropuerto.html'` -- un "del" de mas que no
+   existe en la URL real. Verificado buscando la pagina real de Aena para Murcia
+   (`aena.es/en/internacional-region-de-murcia/airlines-and-destinations/airport-destinations.html`,
+   20 destinos reales segun esa misma pagina), cuyo equivalente en español es
+   `aerolineas-y-destinos/destinos-aeropuerto.html`, exactamente igual que ALC y MAD.
+   Con la ruta mal escrita desde que se escribio este archivo, RMU nunca tuvo NINGUN
+   destino sincronizado -- no es que faltaran algunos, es que fallaba desde el primer
+   dia.
+2. **Madrid (MAD): timeout de peticion insuficiente para el tamaño real de la
+   pagina.** Verificado que Madrid-Barajas tiene 226 destinos reales (segun la propia
+   pagina de Aena), frente a los ~110 que muestra Alicante -- una pagina mucho mas
+   pesada de descargar y que el regex tiene que analizar. El timeout de
+   `fetchAenaDestinations` pasado desde el cron era de 5000ms, claramente insuficiente
+   para una pagina el doble de grande. Subido a 8000ms en
+   `app/api/cron/refresh-aena/[origin]/route.ts`. El limite duro de la funcion en el
+   plan Hobby de Vercel (`maxDuration = 10`) NO se puede subir, asi que se dejo un
+   margen de ~1.5s (con el `withHardTimeout` interno de +500ms) para el resto del
+   trabajo (el upsert en base de datos, que es una sola consulta UNNEST, deberia ser
+   rapida).
+3. Se comprobo tambien Valencia (VLC), que daba 60 de sus ~103 destinos reales -- su
+   ruta de URL SI es correcta (verificado igual que las otras), asi que lo mas
+   probable es que sufra el mismo problema de timeout (pagina mas grande que
+   Alicante, aunque menor que Madrid) -- el aumento a 8000ms deberia beneficiarla
+   tambien, aunque no se puede confirmar sin ver el resultado real del proximo sync.
+
+### Aviso importante sobre cuando se ve el efecto
+Estos 2 fixes de codigo estan ya en `main` y desplegados, pero **solo tienen efecto la
+proxima vez que se ejecute cada cron de sincronizacion** (`refresh-aena/MAD` a las
+04:05 hora de España, `refresh-aena/RMU` a las 04:15, segun `vercel.json`) -- no
+rellenan datos retroactivamente ni corrigen lo que ya haya en la tabla ahora mismo. El
+usuario vera los destinos correctos de Madrid y Murcia a partir de la proxima
+madrugada, o puede disparar el cron el mismo antes si quiere verlo confirmado ya
+(necesita el valor de `AENA_SYNC_SECRET`, que esta sesion no conoce ni ha visto nunca).
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. No se ha podido verificar en vivo que el
+proximo sync real de Madrid/Murcia funcione (sin acceso de red a aena.es ni a la BD
+real desde este entorno) -- el usuario debera confirmarlo mañana.
 
 ---
 

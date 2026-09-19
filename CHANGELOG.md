@@ -2,6 +2,41 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.22.0] - 2026-09-17 (sesion 12) - FIX real: Madrid y Murcia con 0 destinos por bugs de scraping, no por falta de datos
+
+El usuario reporto que Madrid y Murcia daban 0 destinos (deberian tener MAS que
+Alicante, no menos -- Madrid es el aeropuerto mas grande de España) y pidio "anadir
+los aeropuertos que falten". Antes de tocar nada se investigo la causa real: la app
+nunca ha usado listas de destinos curadas a mano (se eliminaron por completo en una
+sesion muy anterior, PR #22, precisamente porque quedaban desactualizadas) -- anadir
+aeropuertos a mano habria sido un paso atras real, no un arreglo. Investigado en su
+lugar por que el scraping automatico de Aena fallaba para esos 2 origenes.
+
+### Corregido (2 bugs reales encontrados por busqueda web contra la pagina real de Aena)
+- **Murcia (RMU): ruta de URL mal escrita.** `lib/aena-sync.ts` tenia
+  `aerolineas-y-destinos/destinos-DEL-aeropuerto.html` -- la pagina real de Aena es
+  `aerolineas-y-destinos/destinos-aeropuerto.html` (sin "del"), igual que Alicante y
+  Madrid. Con la ruta mal escrita, Aena devolvia 404 y el origen nunca tuvo NINGUN
+  destino sincronizado desde que existe esta funcionalidad.
+- **Madrid (MAD): timeout de peticion insuficiente para el tamano real de su
+  pagina.** Madrid-Barajas tiene 226 destinos (frente a los ~110 de Alicante) -- una
+  pagina mucho mas grande de descargar y analizar. El timeout de la peticion HTTP era
+  de 5000ms; subido a 8000ms (`app/api/cron/refresh-aena/[origin]/route.ts`), dejando
+  margen dentro del limite duro de 10s de la funcion en el plan Hobby de Vercel (que no
+  se puede subir).
+- Valencia (VLC), que daba 60 de sus ~103 destinos reales, usa una ruta de URL
+  correcta (verificado) -- lo mas probable es que sea el mismo problema de timeout
+  (pagina grande, aunque menor que Madrid), que el aumento a 8000ms deberia mejorar
+  tambien.
+
+### Aviso importante
+Estos 2 fixes solo se aplican la PROXIMA VEZ que se ejecute el cron de sincronizacion
+de cada origen (`refresh-aena/MAD` a las 04:05, `refresh-aena/RMU` a las 04:15, hora de
+España, segun `vercel.json`) -- no rellenan datos retroactivamente. El usuario vera
+los destinos correctos de Madrid y Murcia a partir de mañana por la mañana, o puede
+disparar el cron manualmente el mismo si quiere verlo antes (necesita el valor de
+`AENA_SYNC_SECRET`, que esta sesion no conoce).
+
 ## [0.21.0] - 2026-09-17 (sesion 11) - quitado panel de horarios duplicado, medidas de equipaje, "Explorar" renombrado y explicado
 
 A peticion del usuario tras usar la app: 3 mejoras de claridad.

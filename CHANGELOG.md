@@ -2,6 +2,35 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.23.0] - 2026-09-17 (sesion 13) - Sorpréndeme rediseñado en 2 fases, FIX destinos inventados por la IA, orden de campos
+
+Feedback de la esposa del usuario tras probar la app.
+
+### Cambiado
+- **"Sorpréndeme" rediseñado como flujo en 2 fases** (`lib/ai-surprise.ts`,
+  `handleSurpriseMe`/`handlePickSurpriseCandidate` en `app/page.tsx`): antes elegia
+  EXACTAMENTE el numero de destinos que cabian en el limite de combinaciones (1-2 con
+  un solo origen) y lanzaba una busqueda real de inmediato -- decepcionante frente al
+  "a cualquier parte" de Skyscanner. Ahora, fase 1 (gratis, sin gastar cuota de Ignav):
+  la IA propone hasta 6 ideas de destino DISTINTAS con una razon breve cada una,
+  mostradas como tarjetas. Fase 2: el usuario elige UNA, y solo entonces se lanza la
+  busqueda real de Ignav para esa ruta concreta.
+- **Adultos/Niños movidos a antes del calendario** de fechas, orden mas logico
+  (primero cuantos viajais, luego cuando).
+
+### Corregido (bug real: la IA sugeria destinos sin vuelo directo)
+La esposa del usuario probo la busqueda en lenguaje natural con "viaje para 3 personas
+desde Alicante en tales fechas con mercadillo navideño" y la IA propuso 2 destinos en
+Alemania sin vuelo directo real desde Alicante -- la busqueda no encontraba nada porque
+esas rutas no existen. Causa raiz: el esquema JSON de `lib/ai-parse.ts` solo obliga a
+que `destinationIatas` sea un array de textos, NUNCA a que esos textos pertenezcan a la
+lista de destinos reales que se le pasa en el prompt -- un modelo puede ignorar esa
+instruccion aunque este escrita claramente. `lib/ai-surprise.ts` YA tenia esta misma
+red de seguridad (un filtro despues de la respuesta); a `ai-parse.ts` le faltaba.
+Añadido el mismo filtro: cualquier destino que la IA proponga fuera de la lista real se
+descarta automaticamente, con un aviso visible explicando que se ha descartado y por
+que.
+
 ## [0.22.0] - 2026-09-17 (sesion 12) - FIX real: Madrid y Murcia con 0 destinos por bugs de scraping, no por falta de datos
 
 El usuario reporto que Madrid y Murcia daban 0 destinos (deberian tener MAS que

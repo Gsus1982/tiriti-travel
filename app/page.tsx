@@ -118,7 +118,7 @@ export default function HomePage() {
   const [nlpUsedAI, setNlpUsedAI] = useState(false);
   const [nlpInterpreting, setNlpInterpreting] = useState(false);
   const [surprisePicking, setSurprisePicking] = useState(false);
-  const [surpriseExplanation, setSurpriseExplanation] = useState<string | null>(null);
+  const [surpriseCandidates, setSurpriseCandidates] = useState<{ destIata: string; name: string; reason: string }[] | null>(null);
   const [aiRecommendation, setAiRecommendation] = useState<{ rowKey: string; explanation: string } | null>(null);
   const [recommending, setRecommending] = useState(false);
   const [comboLimit, setComboLimit] = useState(6);
@@ -542,12 +542,14 @@ export default function HomePage() {
       );
       return;
     }
-    const maxDestinations = Math.max(1, Math.floor(6 / originIatas.length));
     setError(null);
-    setSurpriseExplanation(null);
+    setSurpriseCandidates(null);
     setSurprisePicking(true);
 
-    let iatas: string[];
+    // FASE 1 (gratis, no gasta cuota de Ignav): pedir VARIAS ideas de destino con una
+    // razon breve cada una -- como el "a cualquier parte" de Skyscanner, pero
+    // razonado por la IA en vez de una lista plana. Solo cuando el usuario elige UNA
+    // (fase 2, handlePickSurpriseCandidate) se lanza la busqueda real.
     try {
       const res = await fetch('/api/ai-surprise', {
         method: 'POST',
@@ -558,26 +560,38 @@ export default function HomePage() {
           outboundDateTo,
           inboundDateFrom,
           inboundDateTo,
-          maxDestinations,
           realDestinations: pool.map((d) => ({ dest_iata: d.dest_iata, dest_name: d.dest_name, country: d.country }))
         })
       });
       if (!res.ok) throw new Error('IA no disponible');
       const ai = await res.json();
-      if (!ai.destinationIatas?.length) throw new Error('Sin destinos validos de la IA');
-      iatas = ai.destinationIatas;
-      setSurpriseExplanation(typeof ai.explanation === 'string' ? ai.explanation : null);
+      if (!ai.candidates?.length) throw new Error('Sin destinos validos de la IA');
+      const byIata = new Map(pool.map((d) => [d.dest_iata, d.dest_name]));
+      setSurpriseCandidates(
+        ai.candidates.map((c: { destIata: string; reason: string }) => ({
+          destIata: c.destIata,
+          name: byIata.get(c.destIata) ?? c.destIata,
+          reason: c.reason
+        }))
+      );
     } catch {
-      iatas = [...pool].sort(() => Math.random() - 0.5).slice(0, maxDestinations).map((d) => d.dest_iata);
-      setSurpriseExplanation(null);
+      // Sin IA disponible: 6 al azar (siguen siendo REALES, solo sin razonamiento).
+      const randomPicks = [...pool].sort(() => Math.random() - 0.5).slice(0, 6);
+      setSurpriseCandidates(randomPicks.map((d) => ({ destIata: d.dest_iata, name: d.dest_name, reason: '' })));
     } finally {
       setSurprisePicking(false);
     }
-
-    setSelectedDestIatas(iatas);
-    setSortBy('price');
-    await runSearch(iatas, 'price');
   }
+
+  async function handlePickSurpriseCandidate(destIata: string) {
+    // FASE 2: aqui SI se gasta cuota real -- una unica ruta, la que el usuario eligio
+    // tras ver las ideas gratis de la fase 1.
+    setSurpriseCandidates(null);
+    setSelectedDestIatas([destIata]);
+    setSortBy('price');
+    await runSearch([destIata], 'price');
+  }
+
 
   function handleReSort(newSortBy: 'checkout_time' | 'price' | 'duration') {
     setSortBy(newSortBy);
@@ -724,7 +738,7 @@ export default function HomePage() {
               <div className="text-left min-w-0">
                 <p className="font-display text-lg md:text-xl">¿No sabes a donde ir?</p>
                 <p className="text-xs md:text-sm text-white/80 truncate">
-                  La IA estudia tus destinos reales y elige los mas favorables para tus fechas, ordenados por precio.
+                  La IA te propone varias ideas de destino con su razon, gratis -- eliges una y ahí se busca de verdad.
                 </p>
               </div>
               <span className="flex items-center gap-2 bg-white/15 rounded-full pl-4 pr-5 py-3 font-semibold shrink-0 whitespace-nowrap">
@@ -732,11 +746,26 @@ export default function HomePage() {
                 {surprisePicking ? 'Pensando...' : loading ? 'Buscando...' : 'Sorprendeme'}
               </span>
             </button>
-            {surpriseExplanation && (
-              <p className="text-xs text-white/90 bg-black/10 px-5 py-2.5 md:px-8 flex items-center gap-1.5">
-                <IconSparkles className="w-3.5 h-3.5 shrink-0" />
-                {surpriseExplanation}
-              </p>
+            {surpriseCandidates && surpriseCandidates.length > 0 && (
+              <div className="bg-black/10 px-5 py-3 md:px-8 space-y-2">
+                <p className="text-xs text-white/90 flex items-center gap-1.5">
+                  <IconSparkles className="w-3.5 h-3.5 shrink-0" />
+                  Ideas gratis (no gastan tu cuota) -- elige una para buscar vuelos reales:
+                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {surpriseCandidates.map((c) => (
+                    <button
+                      key={c.destIata}
+                      type="button"
+                      onClick={() => handlePickSurpriseCandidate(c.destIata)}
+                      className="text-left bg-white/10 hover:bg-white/20 rounded-lg p-2.5 transition-colors"
+                    >
+                      <p className="text-sm font-semibold text-white">{c.name}</p>
+                      {c.reason && <p className="text-[11px] text-white/80 mt-0.5">{c.reason}</p>}
+                    </button>
+                  ))}
+                </div>
+              </div>
             )}
           </div>
           <p className="text-[11px] text-slate-400 dark:text-slate-500 -mt-2">
@@ -934,6 +963,29 @@ export default function HomePage() {
                   </div>
                 </div>
 
+                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
+                    Adultos
+                    <input
+                      type="number"
+                      min={1}
+                      className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                      value={adults}
+                      onChange={(e) => setAdults(Number(e.target.value))}
+                    />
+                  </label>
+                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
+                    Ninos
+                    <input
+                      type="number"
+                      min={0}
+                      className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
+                      value={children}
+                      onChange={(e) => setChildren(Number(e.target.value))}
+                    />
+                  </label>
+                </div>
+
                 <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
@@ -963,29 +1015,6 @@ export default function HomePage() {
                     Las horas son opcionales -- si las dejas vacias, se usa la franja general del panel de "Horarios" en el
                     lateral (o ninguna restriccion si tampoco esta puesta ahi).
                   </p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4 pt-2 border-t border-slate-100 dark:border-slate-800">
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
-                    Adultos
-                    <input
-                      type="number"
-                      min={1}
-                      className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                      value={adults}
-                      onChange={(e) => setAdults(Number(e.target.value))}
-                    />
-                  </label>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 min-w-0">
-                    Ninos
-                    <input
-                      type="number"
-                      min={0}
-                      className="mt-1 w-full min-w-0 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100"
-                      value={children}
-                      onChange={(e) => setChildren(Number(e.target.value))}
-                    />
-                  </label>
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400">

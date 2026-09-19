@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.22.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.23.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,74 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 13) — Sesion: Sorpréndeme en 2 fases, FIX destinos inventados, orden de campos
+
+### Contexto
+Feedback de la esposa del usuario tras probar la app: (1) esperaba que "Sorpréndeme"
+fuera como el "a cualquier parte" de Skyscanner (muchas opciones, ordenables), no una
+busqueda real inmediata de 1-2 destinos; (2) probo la busqueda en lenguaje natural con
+"viaje para 3 personas... mercadillo navideño" y la IA propuso 2 destinos en Alemania
+sin vuelo directo real, sin encontrar nada; (3) pidio mover adultos/niños antes del
+calendario. El usuario tambien pidio forzar la sincronizacion de Aena ahora mismo.
+
+### 1. Sincronizacion de Aena forzada -- no se pudo hacer desde aqui
+Explicado honestamente: la app tiene "Vercel Authentication (SSO) activada para todos
+los entornos" (confirmado por busqueda web del propio README del repo) -- cualquier
+peticion desde este sandbox se queda bloqueada en esa capa antes de llegar al codigo,
+sin forma de autenticarse desde aqui. Se le dieron al usuario las 4 URLs exactas de los
+crons (`/api/cron/refresh-aena/<ORIGEN>`) para que las visite el mismo desde su propio
+navegador (ya autenticado), con la indicacion de añadir `?secret=...` si tiene
+`AENA_SYNC_SECRET` configurado.
+
+### 2. Sorpréndeme rediseñado en 2 fases
+Diagnostico: `handleSurpriseMe` elegia EXACTAMENTE `Math.floor(6 / origenes)` destinos
+(tipicamente 1-2 con un solo origen) y llamaba a `runSearch` de inmediato -- ningun
+"explorar" real, solo una busqueda con destino ya decidido por la IA. Rediseño:
+- `lib/ai-surprise.ts`: ya no recibe `maxDestinations` (ligado al limite de
+  combinaciones de Ignav) -- ahora SIEMPRE pide hasta 6 candidatos (constante
+  `MAX_CANDIDATES`), cada uno con una `reason` (razon breve) ademas del `destIata`.
+  Esta llamada NO gasta cuota de Ignav (es solo texto de la IA), asi que desacoplarla
+  del limite de combinaciones es seguro.
+- `app/page.tsx`: `handleSurpriseMe` ahora solo llama a la IA y guarda los candidatos
+  en `surpriseCandidates` (fase 1, gratis) -- ya NO llama a `runSearch`. Nueva funcion
+  `handlePickSurpriseCandidate(destIata)` (fase 2): se dispara cuando el usuario elige
+  UNA tarjeta, y ahi SI se lanza la busqueda real para esa unica ruta.
+- UI: las tarjetas de candidatos se muestran justo debajo del boton "Sorprendeme",
+  mismo patron visual que "Ideas de destino" (Travelpayouts) -- consistencia entre las
+  2 funciones de exploracion gratuita que tiene la app.
+- Fallback sin IA: en vez de elegir aleatoriamente solo `maxDestinations` (1-2), ahora
+  elige 6 al azar de la lista real -- mismo numero que con IA, solo sin razonamiento.
+
+### 3. FIX real: la IA de lenguaje natural podia inventar destinos
+Diagnostico exacto: el `RESPONSE_SCHEMA` de `lib/ai-parse.ts` (json_schema de OpenAI)
+define `destinationIatas` como `{ type: 'array', items: { type: 'string' } }` -- esto
+SOLO obliga a que sea un array de texto, nunca a que esos textos sean, en concreto, los
+IATA de la lista de destinos reales que se le pasa en el prompt. El prompt SI incluye
+la instruccion ("No inventes destinos que no estén en la lista..."), pero un modelo
+puede ignorar una instruccion de texto libre aunque el schema la deje pasar sin
+problema -- el schema no la hace cumplir. `lib/ai-surprise.ts` YA tenia el filtro
+correcto tras la respuesta (`validIatas`/`filtered`, ver commit de la sesion de
+"Sorprendeme con criterio"); a `ai-parse.ts` (usado por la busqueda en lenguaje natural
+completa, no solo Sorprendeme) le faltaba ese mismo filtro -- ahi estaba el bug real
+que vio la esposa del usuario. Añadido: cualquier `destinationIata` fuera de
+`context.realDestinations` se descarta tras la respuesta, con un aviso añadido a
+`parsed.warnings` (que ya se mostraba en la interfaz via `nlpWarnings`, sin cambios
+necesarios ahi).
+
+### 4. Adultos/Niños movidos antes del calendario
+Simple reordenacion de bloques JSX en `app/page.tsx`, sin cambios de logica.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que el
+texto nuevo de Sorpréndeme aparece en el HTML.
+
+### Aviso
+Como siempre con las llamadas a OpenAI, no se ha podido verificar el nuevo
+`ai-surprise.ts` (esquema con `reason` por candidato) contra la API real desde esta
+sesion.
 
 ---
 

@@ -7,7 +7,7 @@ export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { originLabels, outboundDateFrom, outboundDateTo, inboundDateFrom, inboundDateTo, maxDestinations, realDestinations } = body;
+    const { originLabels, outboundDateFrom, outboundDateTo, inboundDateFrom, inboundDateTo, realDestinations } = body;
 
     if (!process.env.OPENAI_API_KEY) {
       return NextResponse.json({ error: 'IA no configurada (falta OPENAI_API_KEY)' }, { status: 503 });
@@ -22,7 +22,6 @@ export async function POST(req: NextRequest) {
       outboundDateTo,
       inboundDateFrom,
       inboundDateTo,
-      maxDestinations: Math.max(1, Number(maxDestinations) || 1),
       realDestinations
     });
 

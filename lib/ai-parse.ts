@@ -123,6 +123,22 @@ Reglas:
   const raw = JSON.parse(content) as AIRawResponse;
   const parsed: AIParsedFilters = { ...raw, warnings: [] };
 
+  // FIX real (bug reportado: la IA sugirio destinos sin vuelo directo real, p.ej.
+  // ciudades en Alemania para "mercadillos navidenos" que no estaban en la lista de
+  // destinos reales ofrecida): el esquema JSON solo obliga a que destinationIatas sea
+  // un array de strings, nunca a que esos strings pertenezcan a la lista de destinos
+  // reales pasada en el prompt -- un modelo puede ignorar esa instruccion. Filtro
+  // duro aqui, mismo patron que ya tenia ai-surprise.ts (que si lo llevaba) y que a
+  // este archivo le faltaba.
+  const validIatas = new Set(context.realDestinations.map((d) => d.dest_iata));
+  const invalidCount = parsed.destinationIatas.filter((i) => !validIatas.has(i)).length;
+  parsed.destinationIatas = parsed.destinationIatas.filter((i) => validIatas.has(i));
+  if (invalidCount > 0) {
+    parsed.warnings.push(
+      `La IA propuso ${invalidCount} destino(s) sin vuelo directo confirmado desde tus origenes -- se han descartado automaticamente para no lanzar una busqueda que nunca encontraria resultados.`
+    );
+  }
+
   // FIX (bug real reportado -- la misma frase exacta encontraba vuelos unas veces y
   // otras no): pedirle el limite a la IA en el prompt no basta -- los modelos no
   // siempre obedecen un numero exacto, y ademas con temperature > 0 el ORDEN en que la

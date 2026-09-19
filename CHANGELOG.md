@@ -2,6 +2,16 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.26.0] - 2026-09-17 (sesion 17) - pastilla de duracion en destino
+
+A peticion del usuario: cada resultado de vuelo ahora muestra una pastilla con los
+dias y horas en destino (desde que aterrizas hasta que sale el vuelo de vuelta),
+calculado a partir de `outbound.arrival_at` e `inbound.departure_at` (datos que ya
+tenia cada resultado, sin ninguna peticion nueva). Formato "Xd Yh" (o solo "Xh" si es
+menos de un dia); tooltip con las horas exactas de llegada y salida. Anadida tambien
+en la vista compacta/lista, integrada en la linea de fechas para no romper el diseño
+denso de esa vista.
+
 ## [0.25.1] - 2026-09-17 (sesion 16) - FIX: regresion propia, "Sorprendeme" seguia proponiendo ciudades descartadas
 
 El usuario reporto que, con ciudades excluidas, "Sorprendeme" las seguia proponiendo.

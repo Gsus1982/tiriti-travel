@@ -26,6 +26,16 @@ function formatPrice(total: number, currency: string, paxCount: number | undefin
   return { main: `${total.toFixed(2)} ${currency}` };
 }
 
+function formatStayDuration(arrivalIso: string, departureIso: string): string {
+  const totalMinutes = Math.round((new Date(departureIso).getTime() - new Date(arrivalIso).getTime()) / 60000);
+  if (totalMinutes <= 0) return '0h';
+  const days = Math.floor(totalMinutes / 1440);
+  const hours = Math.floor((totalMinutes % 1440) / 60);
+  if (days === 0) return `${hours}h`;
+  if (hours === 0) return `${days}d`;
+  return `${days}d ${hours}h`;
+}
+
 function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
@@ -178,7 +188,7 @@ export default function FlightResultCard({
           <img src={imageUrl} alt={destinationLabel} className="w-10 h-10 rounded-lg object-cover shrink-0" loading="lazy" />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium text-ink dark:text-slate-100 truncate">{result.originIata} → {destinationLabel}{isRecommended && <IconSparkles className="w-3.5 h-3.5 text-indigo inline ml-1.5 -mt-0.5" />}</p>
-            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{formatDateTime(result.outbound.departure_at)} → {formatDateTime(result.inbound.departure_at)} · Salida hotel {formatDateTime(result.hotelCheckoutAt)}</p>
+            <p className="text-[11px] text-slate-400 dark:text-slate-500 truncate">{formatDateTime(result.outbound.departure_at)} → {formatDateTime(result.inbound.departure_at)} · {formatStayDuration(result.outbound.arrival_at, result.inbound.departure_at)} en destino · Salida hotel {formatDateTime(result.hotelCheckoutAt)}</p>
           </div>
           {saving !== null && <span className="text-[10px] bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-1.5 py-0.5 rounded-full shrink-0">-{saving.toFixed(0)}€ casi igual</span>}
           <p className="text-sm font-semibold text-ink dark:text-slate-100 shrink-0 whitespace-nowrap">{formatPrice(result.totalPrice, result.currency, paxCount, !!perPerson).main}</p>
@@ -210,6 +220,12 @@ export default function FlightResultCard({
             <div className="flex flex-wrap gap-1.5 mb-1.5">
               <span className="text-[10px] font-medium uppercase tracking-wide bg-indigo-pale dark:bg-indigo-950 text-indigo-dark px-2 py-0.5 rounded-full">Directo</span>
               <span className={`text-[10px] font-medium uppercase tracking-wide px-2 py-0.5 rounded-full ${result.source === 'skyscanner' ? 'bg-sky-50 text-sky-600' : 'bg-slate-100 text-slate-500'}`}>{result.source === 'skyscanner' ? 'Sky Scrapper' : 'Ignav'}</span>
+              <span
+                title={`En destino desde ${formatDateTime(result.outbound.arrival_at)} hasta ${formatDateTime(result.inbound.departure_at)}`}
+                className="text-[10px] font-medium uppercase tracking-wide bg-violet-50 dark:bg-violet-950 text-violet-700 dark:text-violet-300 px-2 py-0.5 rounded-full"
+              >
+                🕐 {formatStayDuration(result.outbound.arrival_at, result.inbound.departure_at)} en destino
+              </span>
               {result.isOpenJaw && <span className="text-[10px] font-medium uppercase tracking-wide bg-amber-50 dark:bg-amber-950 text-amber-700 dark:text-amber-300 px-2 py-0.5 rounded-full">Open-jaw</span>}
               {saving !== null && <span title={`Hay otra opcion ${saving.toFixed(0)} EUR mas barata, saliendo del hotel poco antes`} className="text-[10px] font-medium uppercase tracking-wide bg-emerald-50 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300 px-2 py-0.5 rounded-full">-{saving.toFixed(0)}€ casi igual</span>}
             </div>

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.25.1. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.26.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,30 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 17) — Sesion: pastilla de duracion en destino
+
+### Contexto
+El usuario pidio anadir una pastilla en cada resultado mostrando dias y horas en
+destino, desde que aterrizas hasta que sale el vuelo de vuelta.
+
+### Implementacion
+`components/FlightResultCard.tsx`: nueva funcion `formatStayDuration(arrivalIso,
+departureIso)` -- calcula minutos totales entre `outbound.arrival_at` (llegada de la
+ida) e `inbound.departure_at` (salida de la vuelta), ambos datos que YA tenia cada
+resultado (sin ninguna peticion nueva, es aritmetica pura sobre datos existentes).
+Formato "Xd Yh" (o solo "Xh" si dura menos de un dia, o solo "Xd" si son dias exactos).
+
+- **Vista completa (tarjetas)**: nueva insignia junto a "Directo"/"Ignav"/"Open-jaw",
+  con tooltip mostrando las horas exactas de llegada y salida al pasar el cursor/dedo.
+- **Vista compacta (lista)**: integrada en la linea de fechas existente (no como
+  pastilla aparte, para no romper el diseño denso de esa vista), entre las fechas y
+  la hora de salida del hotel.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios.
 
 ---
 

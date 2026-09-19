@@ -11,6 +11,7 @@ export type TravelProfile = {
   children: number;
   requireCabinBaggage: boolean;
   allowOpenJaw: boolean;
+  excludeCitiesText?: string;
 };
 
 export function getTravelProfile(): TravelProfile | null {

@@ -2,6 +2,33 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.25.0] - 2026-09-17 (sesion 15) - FIX real: "Ciudades a descartar" no funcionaba con nombres de ciudad
+
+El usuario reporto que escribiendo "Berlín" (con tilde, puesta por el autocorrector
+del iPhone) en "Ciudades a descartar", Berlín seguia apareciendo en destinos.
+
+### Corregido (bug real, no solo el problema de la tilde)
+El campo se llama "Ciudades a descartar" pero por dentro SOLO comparaba contra codigos
+IATA de 3 letras exactos (`d.dest_iata`) -- el propio placeholder decia "Ej: LHR, CDG,
+FCO". Escribir un nombre de ciudad como "Berlin" (con o sin tilde, daba igual) nunca
+podia coincidir con un codigo de aeropuerto como "TXL" o "BER" -- el filtro no hacia
+nada en absoluto para nombres de ciudad, solo para codigos IATA exactos.
+
+### Anadido
+- **El campo ahora acepta nombre de ciudad (con o sin tildes) O codigo IATA**,
+  indistintamente -- normaliza el texto (quita tildes, minusculas) antes de comparar,
+  asi que "Berlin", "Berlín" o "BERLIN" dan el mismo resultado.
+- **Los destinos descartados ya no desaparecen de la lista -- se quedan visibles,
+  en rojo, tachados y desactivados**, con un aviso al pasar el cursor/dedo. Antes
+  desaparecian del todo, lo que parecia un fallo de carga en vez de un filtro
+  aplicado a proposito.
+- **Si un destino ya seleccionado pasa a estar descartado, se quita automaticamente
+  de la seleccion** (antes podia quedar "fantasma": desactivado en la lista pero
+  seleccionado por dentro, y por tanto incluido en la busqueda real).
+- **El campo ahora se recuerda entre sesiones** (`lib/travel-profile.ts`, campo nuevo
+  `excludeCitiesText`), igual que origenes/pasajeros -- se mantiene hasta que el
+  usuario lo vacie a mano.
+
 ## [0.24.0] - 2026-09-17 (sesion 14) - Wikipedia y destinos visitados, mas visibles
 
 El usuario reporto no encontrar 2 funciones que ya estaban implementadas (destinos

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.24.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.25.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,49 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 15) — Sesion: FIX real de "Ciudades a descartar"
+
+### Contexto
+El usuario reporto que su iPhone corregia "Berlin" a "Berlín" (con tilde) al escribir
+en "Ciudades a descartar", y que independientemente de eso, Berlín seguia apareciendo
+en destinos. Tambien pidio que las descartadas se vieran en rojo/desactivadas en vez
+de desaparecer, y que el campo se recordara entre sesiones.
+
+### El bug real (no era solo la tilde)
+`app/page.tsx`: el campo se llama "Ciudades a descartar" en la interfaz, pero por
+dentro (`excludeIatas`, ahora `excludeTerms`) SOLO comparaba el texto introducido
+contra `d.dest_iata` -- un codigo IATA de 3 letras EXACTO. El propio placeholder
+("Ej: LHR, CDG, FCO") delataba que estaba pensado para codigos, no para nombres de
+ciudad, pero la etiqueta visible decia "ciudades". Escribir "Berlin" o "Berlín" -- con
+o sin tilde, daba exactamente igual -- NUNCA podia coincidir con un codigo de 3 letras
+como "TXL" o "BER": el filtro simplemente no hacia nada para nombres de ciudad, desde
+que existe este campo.
+
+### Los 4 cambios
+1. **Coincidencia por nombre de ciudad (normalizado) O codigo IATA**: nueva funcion
+   `normalizeText()` (quita tildes via `.normalize('NFD')` + regex, minusculas) --
+   compara el termino introducido contra `dest_name` normalizado (substring) Y contra
+   `dest_iata` (coincidencia exacta), asi que "Berlin", "Berlín", "BERLIN" o "TXL"
+   funcionan todos igual.
+2. **Los destinos descartados ya no se quitan de `filteredRealDestinations`** --
+   se mantienen visibles, con estilo rojo/tachado/desactivado
+   (`isExcludedDestination(d)` calculado en el render), en vez de desaparecer del
+   todo (que el usuario podia confundir con un fallo de carga en vez de un filtro
+   intencionado).
+3. **Nuevo `useEffect` que limpia `selectedDestIatas`** de cualquier IATA que pase a
+   estar descartado -- evita el caso "fantasma" (desactivado visualmente pero
+   seleccionado por dentro, y por tanto buscado igualmente).
+4. **Persistencia entre sesiones**: nuevo campo opcional `excludeCitiesText` en
+   `lib/travel-profile.ts` (backward-compatible, un perfil guardado sin ese campo
+   simplemente lo trata como vacio), cargado al iniciar y guardado en el mismo
+   `useEffect` que ya persiste origenes/pasajeros.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que el
+texto nuevo de ayuda del campo aparece en el HTML.
 
 ---
 

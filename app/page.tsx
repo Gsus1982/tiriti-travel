@@ -45,6 +45,14 @@ function localDateToIso(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
+function normalizeText(s: string): string {
+  return s
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
 function toggle(arr: string[], value: string): string[] {
   return arr.includes(value) ? arr.filter((v) => v !== value) : [...arr, value];
 }
@@ -83,7 +91,7 @@ export default function HomePage() {
   const [meta, setMeta] = useState<Meta | null>(null);
   const [originIatas, setOriginIatas] = useState<string[]>(() => getTravelProfile()?.originIatas ?? ['ALC']);
   const [selectedDestIatas, setSelectedDestIatas] = useState<string[]>([]);
-  const [excludeIatasText, setExcludeIatasText] = useState('');
+  const [excludeIatasText, setExcludeIatasText] = useState(() => getTravelProfile()?.excludeCitiesText ?? '');
   const [airlinesIncludeText, setAirlinesIncludeText] = useState('');
   const [airlinesExcludeText, setAirlinesExcludeText] = useState('');
   const [outboundDateFrom, setOutboundDateFrom] = useState('2026-12-04');
@@ -177,8 +185,8 @@ export default function HomePage() {
   }, []);
 
   useEffect(() => {
-    saveTravelProfile({ originIatas, adults, children, requireCabinBaggage, allowOpenJaw });
-  }, [originIatas, adults, children, requireCabinBaggage, allowOpenJaw]);
+    saveTravelProfile({ originIatas, adults, children, requireCabinBaggage, allowOpenJaw, excludeCitiesText: excludeIatasText });
+  }, [originIatas, adults, children, requireCabinBaggage, allowOpenJaw, excludeIatasText]);
 
   useEffect(() => {
     if (!loading) {
@@ -221,13 +229,31 @@ export default function HomePage() {
 
   const combos = originIatas.length * selectedDestIatas.length;
 
-  const excludeIatas = useMemo(
+  const excludeTerms = useMemo(
     () =>
       excludeIatasText
         .split(',')
-        .map((s) => s.trim().toUpperCase())
+        .map((s) => normalizeText(s))
         .filter(Boolean),
     [excludeIatasText]
+  );
+
+  function isExcludedDestination(d: { dest_iata: string; dest_name: string }): boolean {
+    if (excludeTerms.length === 0) return false;
+    const normName = normalizeText(d.dest_name);
+    const normIata = d.dest_iata.toLowerCase();
+    return excludeTerms.some((term) => normIata === term || normName.includes(term));
+  }
+
+  // Ya NO se quitan de la lista los destinos descartados (antes desaparecian del todo,
+  // lo que parecia un fallo de carga en vez de un filtro aplicado a proposito --
+  // reportado por el usuario). Se mantienen visibles pero marcados/desactivados en el
+  // propio render (isExcludedDestination), y se siguen excluyendo de verdad de las
+  // busquedas (Sorprendeme, seleccion) via excludeIatas.
+  const excludeIatas = useMemo(
+    () => realDestinations.filter((d) => isExcludedDestination(d)).map((d) => d.dest_iata),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [realDestinations, excludeTerms]
   );
 
   const airlinesInclude = useMemo(
@@ -241,16 +267,22 @@ export default function HomePage() {
 
   const filteredRealDestinations = useMemo(() => {
     const q = realDestFilter.trim().toLowerCase();
-    const base = excludeIatas.length
-      ? realDestinations.filter((d) => !excludeIatas.includes(d.dest_iata))
-      : realDestinations;
-    if (!q) return base;
-    return base.filter(
+    if (!q) return realDestinations;
+    return realDestinations.filter(
       (d) => d.dest_name.toLowerCase().includes(q) || d.country.toLowerCase().includes(q) || d.dest_iata.toLowerCase().includes(q)
     );
-  }, [realDestinations, realDestFilter, excludeIatas]);
+  }, [realDestinations, realDestFilter]);
 
   const cityGroups = useMemo(() => groupByCity(filteredRealDestinations), [filteredRealDestinations]);
+
+  useEffect(() => {
+    if (excludeIatas.length === 0) return;
+    setSelectedDestIatas((prev) => {
+      const next = prev.filter((i) => !excludeIatas.includes(i));
+      return next.length === prev.length ? prev : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [excludeIatas]);
 
   const originLabels = useMemo(
     () => originIatas.map((iata) => (meta?.origins ?? []).find((o) => o.iata === iata)?.city ?? iata),
@@ -924,25 +956,32 @@ export default function HomePage() {
                               {city} (todos)
                             </label>
                           )}
-                          {airports.map((d) => (
-                            <label
-                              key={d.dest_iata}
-                              className={`text-xs px-2.5 py-1.5 rounded-lg border cursor-pointer transition-colors ${
-                                selectedDestIatas.includes(d.dest_iata)
-                                  ? 'bg-ink text-white border-ink'
-                                  : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400'
-                              }`}
-                            >
-                              <input
-                                type="checkbox"
-                                className="hidden"
-                                checked={selectedDestIatas.includes(d.dest_iata)}
-                                onChange={() => setSelectedDestIatas((prev) => toggle(prev, d.dest_iata))}
-                              />
-                              {d.dest_name} ({d.dest_iata})
-                              <span className="ml-1 text-[10px] opacity-60">{countries}</span>
-                            </label>
-                          ))}
+                          {airports.map((d) => {
+                            const excluded = isExcludedDestination(d);
+                            return (
+                              <label
+                                key={d.dest_iata}
+                                className={`text-xs px-2.5 py-1.5 rounded-lg border transition-colors ${
+                                  excluded
+                                    ? 'bg-red-50 dark:bg-red-950 border-red-200 dark:border-red-800 text-red-400 dark:text-red-500 line-through cursor-not-allowed opacity-70'
+                                    : selectedDestIatas.includes(d.dest_iata)
+                                    ? 'bg-ink text-white border-ink cursor-pointer'
+                                    : 'bg-white border-slate-200 text-slate-600 hover:border-slate-400 cursor-pointer'
+                                }`}
+                                title={excluded ? 'Descartada -- quitala del campo "Ciudades a descartar" para poder elegirla' : undefined}
+                              >
+                                <input
+                                  type="checkbox"
+                                  className="hidden"
+                                  disabled={excluded}
+                                  checked={!excluded && selectedDestIatas.includes(d.dest_iata)}
+                                  onChange={() => !excluded && setSelectedDestIatas((prev) => toggle(prev, d.dest_iata))}
+                                />
+                                {d.dest_name} ({d.dest_iata})
+                                <span className="ml-1 text-[10px] opacity-60">{countries}</span>
+                              </label>
+                            );
+                          })}
                         </div>
                       );
                     })}
@@ -1128,13 +1167,17 @@ export default function HomePage() {
                       Ciudades a descartar
                       <input
                         type="text"
-                        placeholder="Ej: LHR, CDG, FCO"
+                        placeholder="Ej: Berlin, Londres, LHR"
                         className="mt-1 w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-2 text-sm text-ink dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500"
                         value={excludeIatasText}
                         onChange={(e) => setExcludeIatasText(e.target.value)}
                       />
                     </label>
-                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">Se quitan del selector y de los resultados.</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-1">
+                      Nombre de ciudad (con o sin tildes) o codigo IATA, separados por comas. Se quedan en rojo y
+                      desactivadas en el listado de abajo -- no desaparecen, para que veas que se han descartado a
+                      proposito. Se recuerdan aunque cierres la app, hasta que las quites de aqui.
+                    </p>
                   </div>
                   <div>
                     <label className="text-xs font-medium text-slate-600 dark:text-slate-300">

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.27.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.27.1. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,56 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 19) — Sesion: FIX real del scraper de Aena (tildes UTF-8 literales)
+
+### Contexto
+El usuario reporto que, pese a los 2 fixes de la sesion 12 (ruta de URL de Murcia
+corregida, timeout de Madrid subido a 8000ms) y a que ya habia pasado tiempo de sobra
+para que el cron se ejecutara, Madrid y Murcia seguian en 0 destinos. Pidio investigar
+a fondo y, si hacia falta, buscar una fuente de datos alternativa.
+
+### Investigacion (por que los fixes anteriores no fueron suficientes)
+Busqueda web contra el texto real que devuelve la pagina de destinos de Madrid --
+encontrado literalmente: "... (LCG) País ESPAÑA · Aerolíneas · IBERIA...", con el
+caracter UTF-8 real "í" (no una entidad HTML `&iacute;`). El patron de
+`lib/aena-sync.ts` (`parseDestinationsHtml`) esperaba "Pais"/"Aerolineas" en ASCII
+puro, y su lista de limpieza de acentos SOLO cubria entidades HTML concretas
+(`&iacute;` etc.) -- nunca convertia un caracter UTF-8 literal como "í" a "i". Esto
+explica el patron exacto observado: si la plantilla de pagina de Madrid/Murcia sirve
+el acento como caracter real (a diferencia de la de Alicante, que aparentemente si
+funciona con el patron anterior -- posiblemente por usar una plantilla mas antigua o
+distinta que sirve entidades), el patron NUNCA reconocia ninguna fila en esas 2
+paginas, sea cual sea el timeout o la URL usada. Es decir: el timeout y la URL de RMU
+eran bugs reales y necesarios de arreglar (sin ellos, ni siquiera se llegaba a
+intentar el analisis), pero HABIA UN TERCER BUG detras que impedia que el analisis
+funcionara aunque la peticion llegase bien.
+
+### Fix
+En vez de añadir mas entidades sueltas a la lista de limpieza (parche fragil, un
+caracter a la vez), se aplica la funcion `stripAccents()` (ya existia en el archivo,
+antes solo se usaba para limpiar los datos de SALIDA una vez capturados) al TEXTO
+ENTERO de la pagina ANTES de correr el patron de reconocimiento -- asi el
+reconocimiento funciona igual si el acento llega como entidad HTML o como caracter
+UTF-8 literal, en esta pagina de Aena o en cualquier otra que se añada en el futuro.
+
+### Verificado
+Con un caso de prueba simulado en Node (`/tmp/test_parse.mjs`, no forma parte del
+repo) reproduciendo el texto real encontrado ("País ESPAÑA", "Aerolíneas ETIHAD
+AIRWAYS" con tildes UTF-8 literales): el analizador corregido reconoce las 2 filas
+correctamente (antes del fix, 0). `npx tsc --noEmit` y `npm run build` limpios.
+
+### Aviso importante sobre cuando se vera el efecto
+Igual que los fixes de la sesion 12, este cambio de codigo solo tiene efecto la
+PROXIMA VEZ que se ejecute el cron de cada origen -- no corrige retroactivamente lo
+que ya haya en la tabla. El usuario puede disparar los cron manualmente el mismo
+(visitando las URLs de `/api/cron/refresh-aena/<ORIGEN>` desde su propio navegador, ya
+autenticado con Vercel SSO) para verlo confirmado antes de la proxima madrugada -- la
+respuesta de ese endpoint ya devuelve `destinations_found: N` en exito o un `error`
+especifico en fallo, asi que si algo sigue sin funcionar, el propio mensaje de error
+deberia decir por que.
 
 ---
 

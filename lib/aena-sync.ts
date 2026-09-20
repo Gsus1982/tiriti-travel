@@ -33,15 +33,26 @@ function stripAccents(s: string): string {
 }
 
 export function parseDestinationsHtml(html: string): ParsedDestination[] {
-  const text = html
+  const withoutTags = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
     .replace(/<style[\s\S]*?<\/style>/gi, ' ')
     .replace(/<[^>]+>/g, '\n')
     .replace(/&amp;/g, '&')
     .replace(/&aacute;/g, 'a').replace(/&eacute;/g, 'e').replace(/&iacute;/g, 'i')
     .replace(/&oacute;/g, 'o').replace(/&uacute;/g, 'u').replace(/&ntilde;/g, 'n')
-    .replace(/&Ntilde;/g, 'N')
-    .replace(/[ \t]+/g, ' ');
+    .replace(/&Ntilde;/g, 'N');
+
+  // FIX real (sesion 19): la lista de arriba solo cubre ENTIDADES HTML concretas
+  // (&iacute; etc). La pagina real de Aena usa el caracter UTF-8 literal "í" en
+  // "País" -- verificado por busqueda web contra la pagina real de Madrid, que
+  // devuelve textualmente "... (LCG) País ESPAÑA · Aerolíneas · IBERIA...". El patron
+  // de mas abajo esperaba "Pais" en ASCII puro (Pa[i]s, donde [i] es solo una 'i'
+  // normal) y nunca podia reconocer "País" con tilde real. En vez de anadir mas
+  // entidades sueltas a la lista de arriba (fragil, un parche por caracter), se quitan
+  // TODOS los acentos del texto entero de una vez con el mismo stripAccents() que ya
+  // se usaba solo para limpiar la salida -- asi da igual si Aena sirve el acento como
+  // entidad HTML o como caracter UTF-8 literal, en esta pagina o en cualquier otra.
+  const text = stripAccents(withoutTags).replace(/[ \t]+/g, ' ');
 
   const results: ParsedDestination[] = [];
   const pattern = /([A-Z0-9/.,'\- ]{3,80}?)\s*\(([A-Z]{3})\)\s*\n(?:\s*\n)*\s*Pa[i]s\s+([A-Z /]+?)\s*\n(?:\s*\n)*\s*Aerol[i]neas\s+([^\n]+)/g;
@@ -51,9 +62,9 @@ export function parseDestinationsHtml(html: string): ParsedDestination[] {
     if (!/^[A-Z]{3}$/.test(iata)) continue;
     results.push({
       destIata: iata.trim(),
-      destName: stripAccents(name.trim()),
-      country: stripAccents(country.trim()),
-      airlinesRaw: stripAccents(airlines.trim()).slice(0, 500),
+      destName: name.trim(),
+      country: country.trim(),
+      airlinesRaw: airlines.trim().slice(0, 500),
     });
   }
   return results;

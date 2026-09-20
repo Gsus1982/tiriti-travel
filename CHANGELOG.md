@@ -2,6 +2,33 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.27.1] - 2026-09-17 (sesion 19) - FIX real: el scraper de Aena no reconocia tildes reales ("País")
+
+El usuario reporto que Madrid y Murcia seguian en 0 destinos pese a los fixes
+anteriores (ruta de URL de Murcia, timeout de Madrid). Investigado de nuevo por
+busqueda web, esta vez contra el texto real devuelto por la pagina de Madrid.
+
+### Encontrado (bug real, credible como causa de fondo)
+La pagina real de Aena para Madrid devuelve literalmente "... (LCG) País ESPAÑA ·
+Aerolíneas · IBERIA..." -- con el caracter UTF-8 real "í" (no una entidad HTML como
+`&iacute;`). El patron de `lib/aena-sync.ts` esperaba "Pais"/"Aerolineas" en ASCII
+puro (`Pa[i]s`, donde `[i]` es solo una letra "i" normal, nunca "í") y solo convertia a
+ASCII una lista fija de ENTIDADES HTML concretas (`&iacute;` etc.) -- nunca el
+caracter UTF-8 literal. Si la plantilla de la pagina de Madrid/Murcia sirve el acento
+como caracter real (mientras que la de Alicante, mas antigua o distinta, podria
+servirlo como entidad), esto explica EXACTAMENTE el patron visto: Alicante funciona,
+Madrid y Murcia dan 0 -- no por falta de destinos ni por el timeout, sino porque el
+patron nunca reconocia ninguna fila en esas 2 paginas.
+
+### Corregido
+En vez de añadir mas entidades sueltas a la lista (un parche fragil, por caracter),
+se aplica `stripAccents()` (ya existente, antes solo se usaba para limpiar la salida)
+al TEXTO ENTERO antes de analizar el patron -- asi da igual si Aena sirve el acento
+como entidad HTML o como caracter UTF-8 literal, en esta pagina o en cualquier otra
+futura. Probado con un caso simulado que reproduce el texto real encontrado ("País",
+"Aerolíneas" con tildes UTF-8 literales): el analizador ahora los reconoce
+correctamente.
+
 ## [0.27.0] - 2026-09-17 (sesion 18) - circuito de varias ciudades
 
 A peticion del usuario, inspirado en Kiwi Nomad: planear un viaje por varias ciudades

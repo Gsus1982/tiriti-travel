@@ -2,6 +2,23 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.7] - 2026-09-17 (sesion 27) - diagnostico de codigos de caracter exactos (Unicode hex)
+
+El usuario probo el diagnostico "antes de guardar"/"leido de vuelta" de la sesion
+anterior: ambos salieron IDENTICOS (con el mismo galimatias) -- descarta por completo
+que el problema este en la base de datos, y confirma que `fixDoubleEncodedUtf8()` no
+esta corrigiendo nada, ni siquiera antes de guardar, pese a funcionar en todas las
+pruebas locales de esta sesion con datos simulados.
+
+### Anadido
+Diagnostico de precision: en vez de fiarse de como se VE el texto en la respuesta JSON
+(que puede ocultar detalles de representacion Unicode), `fetchAndStoreRawPage()` ahora
+extrae los codigos de caracter EXACTOS (numero Unicode en hexadecimal, via
+`charCodeAt`) de los caracteres alrededor de "rez" (de "Suarez"/"SuArez") -- asi se
+sabra con total certeza, sin ninguna ambiguedad de representacion visual, exactamente
+que caracteres hay ahi de verdad en el texto real de produccion, para poder comparar
+con precision contra lo que se ha estado simulando en las pruebas locales.
+
 ## [0.28.6] - 2026-09-17 (sesion 26) - metodo algoritmico + diagnostico antes/despues de guardar (localizar el fallo con certeza)
 
 El usuario repitio descarga+analisis por CUARTA vez, confirmando incluso que la URL

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.6. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.7. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,37 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 27) — Sesion: diagnostico de codigos de caracter exactos
+
+### Contexto
+El usuario probo el diagnostico "antes de guardar"/"leido de vuelta" de la sesion
+anterior: **ambos salieron identicos**, con el mismo galimatias de siempre. Esto
+descarta definitivamente que el problema este en la base de datos (guardar/leer) --
+`fixDoubleEncodedUtf8()` simplemente no esta corrigiendo nada, ni siquiera en el primer
+paso, pese a que el mismo codigo (verificado caracter por caracter) funciona en todas
+las pruebas locales de esta sesion con datos simulados. Esto es genuinamente extraño y
+merece una investigacion mas precisa antes de seguir cambiando el metodo de arreglo a
+ciegas por quinta vez.
+
+### Diagnostico anadido
+En vez de fiarse de como se VE el texto en la respuesta JSON (la representacion visual
+de un caracter puede ocultar detalles reales de que codepoint Unicode es exactamente),
+se extraen los codigos de caracter EXACTOS (numero Unicode en hexadecimal) de los
+caracteres alrededor de "rez" (de "Suarez"). Esto eliminara cualquier ambiguedad: se
+sabra con precision absoluta que codepoints hay realmente en el texto de produccion, y
+se podra comparar directamente contra lo que se ha estado asumiendo y probando en local
+durante las ultimas 3 sesiones.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Sin cambios en la logica de negocio --
+solo instrumentacion de diagnostico.
+
+### Pendiente
+Resultado del proximo intento del usuario contra `/api/cron/refresh-aena/MAD`, con los
+codigos de caracter exactos en la respuesta.
 
 ---
 

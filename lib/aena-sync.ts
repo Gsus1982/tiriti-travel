@@ -156,7 +156,10 @@ function stripUnneededHtml(html: string): string {
 export async function fetchAndStoreRawPage(
   origin: string,
   timeoutMs = 6000
-): Promise<{ bytes: number; diagnostico?: { antes_de_guardar: string; leido_de_vuelta: string } }> {
+): Promise<{
+  bytes: number;
+  diagnostico?: { antes_de_guardar: string; leido_de_vuelta: string; alrededor_de_rez: string; codigos_de_caracter_hex: string };
+}> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];
   if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
@@ -179,6 +182,14 @@ export async function fetchAndStoreRawPage(
     const html = stripUnneededHtml(rawHtml);
     const plainBeforeSave = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
 
+    // Diagnostico de precision (sesion 27): en vez de fiarse de como se VE el texto en
+    // el JSON (que puede ocultar detalles de representacion), se sacan los codigos de
+    // caracter EXACTOS (numero Unicode) alrededor de "rez" de "Suarez/SuArez" -- asi se
+    // sabe con total certeza que caracteres hay ahi, byte a byte, sin ambiguedad.
+    const idx = rawHtml.indexOf('rez');
+    const around = idx >= 0 ? rawHtml.slice(Math.max(0, idx - 6), idx + 3) : '(no se encontro "rez" en el texto)';
+    const codePoints = idx >= 0 ? [...around].map((c) => c.charCodeAt(0).toString(16).padStart(4, '0')).join(' ') : 'n/a';
+
     await sql`
       INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
       VALUES (${origin}, ${html}, now())
@@ -197,7 +208,15 @@ export async function fetchAndStoreRawPage(
       .trim()
       .slice(0, 200);
 
-    return { bytes: html.length, diagnostico: { antes_de_guardar: plainBeforeSave, leido_de_vuelta: plainAfterReadback } };
+    return {
+      bytes: html.length,
+      diagnostico: {
+        antes_de_guardar: plainBeforeSave,
+        leido_de_vuelta: plainAfterReadback,
+        alrededor_de_rez: around,
+        codigos_de_caracter_hex: codePoints
+      }
+    };
   };
 
   // Limite duro sobre la funcion ENTERA (descarga + limpieza + escritura), no solo

@@ -142,7 +142,17 @@ export async function fetchAndStoreRawPage(origin: string, timeoutMs = 6000): Pr
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
-    const rawHtml = await res.text();
+    // FIX real (sesion 23): res.text() dejaba que fetch() adivinara la codificacion de
+    // caracteres -- y la adivinaba mal (probablemente por una cabecera Content-Type de
+    // Aena con un charset incorrecto), decodificando bytes UTF-8 reales como si fueran
+    // latin1/windows-1252. Confirmado con una prueba exacta: los bytes UTF-8 de "á"
+    // (0xC3 0xA1) decodificados como latin1 dan literalmente "Ã¡" -- que es
+    // EXACTAMENTE lo que aparecio en el diagnostico real ("SuÃ¡rez" en vez de
+    // "Suárez", "CORUÃ‘A" en vez de "CORUÑA"). Se fuerza UTF-8 explicitamente leyendo
+    // los bytes crudos y decodificando con TextDecoder, sin dejarle a fetch() ninguna
+    // oportunidad de adivinar mal.
+    const buffer = await res.arrayBuffer();
+    const rawHtml = new TextDecoder('utf-8').decode(buffer);
     const html = stripUnneededHtml(rawHtml);
     await sql`
       INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
@@ -212,7 +222,7 @@ export async function fetchAenaDestinations(origin: string, timeoutMs = 5000): P
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
-    const html = await res.text();
+    const html = new TextDecoder('utf-8').decode(await res.arrayBuffer());
     const parsed = parseDestinationsHtml(html);
     if (parsed.length < 5) {
       throw new Error(`Parseo sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena).`);

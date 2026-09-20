@@ -2,6 +2,39 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.3] - 2026-09-17 (sesion 23) - FIX real, confirmado: decodificacion UTF-8 forzada (Madrid ya sin timeout, causa de "0 destinos" encontrada)
+
+El usuario probo el fix de la sesion anterior: el 504 de Madrid **desaparecio** (el
+metodo lineal de analisis funciono), pero ahora daba "0 destinos" con un extracto de
+diagnostico muy revelador: "SuÃ¡rez" en vez de "Suárez", "CORUÃ‘A" en vez de "CORUÑA".
+
+### Causa real, confirmada con una prueba exacta
+Ese patron ("Ã¡" en vez de "á", "Ã‘" en vez de "Ñ") es la firma exacta de bytes UTF-8
+genuinos decodificados como si fueran latin1/windows-1252. Confirmado con Node: los
+bytes UTF-8 reales de "á" (0xC3 0xA1) decodificados como latin1 dan literalmente "Ã¡"
+-- identico a lo que aparecio en el diagnostico real. La causa: `res.text()` dejaba
+que `fetch()` adivinara la codificacion de caracteres (probablemente a partir de una
+cabecera Content-Type de Aena con un charset incorrecto o ausente), y la adivinaba
+mal, aunque el contenido real es UTF-8 genuino (ya confirmado por busqueda web en
+sesiones anteriores).
+
+### Corregido
+`res.text()` sustituido por lectura de bytes crudos (`res.arrayBuffer()`) + decodificacion
+EXPLICITA forzada a UTF-8 (`new TextDecoder('utf-8').decode(...)`), sin dejarle a
+`fetch()` ninguna oportunidad de adivinar mal. Aplicado tanto en la funcion de
+produccion (`fetchAndStoreRawPage`) como en la version original mantenida para pruebas
+locales (`fetchAenaDestinations`).
+
+### Verificado con una prueba end-to-end completa
+Se reprodujo el bug exacto: un texto real con "Suárez"/"País"/"Aerolíneas" (UTF-8
+genuino) codificado a bytes UTF-8 y luego decodificado mal como latin1 -- al pasar ese
+texto mal decodificado por `parseDestinationsHtml`, el resultado fue **0 destinos
+encontrados, reproduciendo el bug real reportado con precision**. Con la decodificacion
+correcta (`TextDecoder('utf-8')`) sobre los mismos bytes, el analisis encontro los 2
+destinos de prueba correctamente. Esta es la primera vez en esta cadena de fixes que se
+reproduce el bug exacto reportado por el usuario en un entorno controlado, no solo una
+hipotesis razonable.
+
 ## [0.28.2] - 2026-09-17 (sesion 22) - Murcia: pagina de Aena en mantenimiento (no arreglable); Madrid: analisis reescrito sin regex de riesgo
 
 El usuario probo el diagnostico de la sesion anterior con datos reales muy utiles.

@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.2. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.3. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,70 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 23) — Sesion: FIX confirmado con prueba exacta -- decodificacion UTF-8 forzada
+
+### Contexto
+El fix de la sesion 22 (metodo lineal en vez de regex) funciono a medias: el 504 de
+Madrid desaparecio por completo (confirmado: la fase de analisis ya no supera el
+limite de 10s), pero el resultado paso a ser "0 destinos" en vez de un timeout -- con
+un extracto de diagnostico que esta vez SI dio la respuesta definitiva.
+
+### La pista que resolvio el caso
+El extracto mostraba literalmente "SuÃ¡rez" en vez de "Suárez" y "CORUÃ‘A" en vez de
+"CORUÑA". Este patron -- letras acentuadas convertidas en 2 caracteres raros que
+empiezan por "Ã" -- es la firma exacta y muy conocida de "bytes UTF-8 genuinos
+decodificados como si fueran latin1/windows-1252". Confirmado con una prueba directa
+en Node en esta misma sesion: `Buffer.from('á', 'utf-8').toString('latin1')` da
+literalmente `'Ã¡'` -- identico, caracter por caracter, a lo que aparecio en el
+diagnostico real de Madrid.
+
+### Causa raiz
+`res.text()` (usado tanto en `fetchAndStoreRawPage` como en la version original
+`fetchAenaDestinations`) deja que la implementacion de `fetch()` ADIVINE la
+codificacion de caracteres de la respuesta, normalmente a partir de la cabecera
+`Content-Type` (o de un BOM, si lo hay). Si Aena declara un charset incorrecto (o
+ausente, cayendo a un valor por defecto equivocado) en esa cabecera para esta pagina en
+concreto, aunque el contenido real sean bytes UTF-8 genuinos (confirmado por busqueda
+web en sesiones anteriores: "País", "Aerolíneas" con tildes reales), `res.text()` los
+decodifica mal, produciendo el galimatias visto.
+
+### Fix
+Sustituido `res.text()` por lectura de bytes crudos (`res.arrayBuffer()`) +
+decodificacion EXPLICITA y forzada a UTF-8 (`new TextDecoder('utf-8').decode(...)`),
+en las 2 funciones que hacen fetch a Aena (`fetchAndStoreRawPage`, la de produccion, y
+`fetchAenaDestinations`, la original mantenida para pruebas locales). Asi no importa lo
+que declare o deje de declarar la cabecera `Content-Type` de Aena -- siempre se
+interpreta como UTF-8, que es lo que realmente es.
+
+### Verificacion -- la mas solida de toda esta cadena de fixes
+A diferencia de los intentos anteriores (que se basaban en analisis de codigo,
+busquedas web de la pagina real, o pruebas de estres sinteticas sin garantia de
+reproducir el caso exacto), esta vez se reprodujo el BUG EXACTO en un entorno
+controlado: un texto real con acentos genuinos, codificado a bytes UTF-8 y luego
+decodificado mal como latin1 (simulando exactamente lo que hacia `res.text()` antes
+del fix), dio **0 destinos** al pasarlo por `parseDestinationsHtml` -- reproduciendo el
+sintoma real con precision. Con la decodificacion corregida sobre los mismos bytes, el
+analisis encontro los destinos de prueba correctamente. Esta es la primera vez que se
+consigue reproducir el problema real reportado, no solo razonar sobre una causa
+plausible.
+
+### Leccion metodologica para sesiones futuras (importante)
+Esta cadena de intentos (URL mal escrita -> timeout de descarga -> timeout de analisis
+por regex costoso -> decodificacion de caracteres) muestra el valor de PEDIR AL USUARIO
+QUE DISPARE LOS ENDPOINTS DE DIAGNOSTICO Y PEGUE LA RESPUESTA EXACTA, en vez de seguir
+razonando a ciegas sobre el codigo sin datos reales -- cada vuelta con datos reales del
+usuario acerco mas la causa real, y la ultima (con el extracto de texto real) la dio
+del todo. Cuando esta sesion no tiene acceso de red a la fuente del problema (aqui,
+Aena bloquea la IP del sandbox), el dato mas valioso no es el que la IA pueda producir
+por si sola, sino el diagnostico que se le pide al usuario que ejecute y pegue de
+vuelta.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Prueba end-to-end completa descrita
+arriba, ejecutada directamente contra el codigo real del archivo (`npx tsx`).
 
 ---
 

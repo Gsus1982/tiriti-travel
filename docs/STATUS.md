@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.5. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.6. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,45 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 26) — Sesion: metodo algoritmico + diagnostico antes/despues de guardar
+
+### Contexto -- señal importante que motivo el cambio de estrategia
+El usuario repitio descarga+analisis DESDE CERO por cuarta vez, con la URL verificada
+correcta, y el mismo galimatias EXACTO seguia apareciendo. Se comprobo con una prueba
+directa que el TEXTO REAL reportado por el usuario SI contenia el patron
+`\u00c3\u00a1` que el fix de la sesion 25 (lista fija de 16 pares) buscaba -- es decir,
+el patron deberia haber coincidido, pero el sintoma en produccion no cambiaba. Esto
+descarta que el problema sea "el patron no coincide" y apunta a que el fallo esta en
+OTRO punto de la cadena (el guardado o la lectura de la base de datos, por ejemplo) que
+las pruebas locales de esta sesion no pueden reproducir directamente.
+
+### Cambio de estrategia: diagnostico en vez de otro parche a ciegas
+En vez de seguir ajustando el metodo de arreglo sin saber si el problema esta ahi,
+`fetchAndStoreRawPage()` ahora devuelve en su respuesta un extracto del texto justo
+ANTES de guardarlo en la BD y otro leyendolo DE VUELTA justo despues -- con un solo
+intento mas del usuario se podra distinguir con certeza si el arreglo de codificacion
+funciona pero algo lo corrompe al guardar/leer (el driver HTTP de Neon, la
+codificacion de la columna), o si por alguna razon no se esta aplicando de verdad en
+produccion pese a funcionar en las pruebas locales de esta sesion.
+
+De paso, se sustituyo la lista fija de 16 pares por un metodo ALGORITMICO mas general
+(reconoce el patron estructural de cualquier caracter del bloque Latin-1 Supplement
+mal codificado, no solo los 16 casos previstos a mano), por si la causa fuera una
+letra especial no cubierta por la lista anterior.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios, mas una prueba end-to-end con `npx tsx`
+confirmando que el nuevo metodo algoritmico arregla correctamente el mismo caso de
+prueba que las sesiones anteriores.
+
+### Pendiente
+Resultado del proximo intento del usuario, con el nuevo diagnostico "antes de
+guardar"/"leido de vuelta" en la respuesta de `/api/cron/refresh-aena/MAD` -- deberia
+decir de una vez por todas en que punto exacto de la cadena se esta perdiendo el
+arreglo.
 
 ---
 

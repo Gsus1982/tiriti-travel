@@ -28,8 +28,15 @@ export async function GET(request: Request, { params }: { params: { origin: stri
   }
 
   try {
-    const { bytes } = await fetchAndStoreRawPage(origin, 6000);
-    return NextResponse.json({ ok: true, origin, phase: 'fetch', bytes_downloaded: bytes, fetched_at: new Date().toISOString() });
+    const { bytes, diagnostico } = await fetchAndStoreRawPage(origin, 6000);
+    return NextResponse.json({
+      ok: true,
+      origin,
+      phase: 'fetch',
+      bytes_downloaded: bytes,
+      diagnostico,
+      fetched_at: new Date().toISOString()
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     try {

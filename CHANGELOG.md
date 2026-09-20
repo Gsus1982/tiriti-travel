@@ -2,6 +2,35 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.6] - 2026-09-17 (sesion 26) - metodo algoritmico + diagnostico antes/despues de guardar (localizar el fallo con certeza)
+
+El usuario repitio descarga+analisis por CUARTA vez, confirmando incluso que la URL
+estaba bien escrita (fallo previo por URL cortada descartado), y el mismo galimatias
+exacto seguia apareciendo -- pese a que una prueba directa confirmo que el texto real
+SI contenia el patron que el fix de la sesion 25 buscaba.
+
+### Cambiado
+- **`fixDoubleEncodedUtf8()` reescrito de lista fija a metodo ALGORITMICO**: en vez de
+  16 pares exactos, reconoce el patron ESTRUCTURAL de cualquier secuencia UTF-8 de 2
+  bytes (todo el bloque Latin-1 Supplement, no solo las letras españolas) mal
+  interpretada como latin1, y la decodifica correctamente byte a byte -- mas general y
+  robusto frente a cualquier diferencia sutil no contemplada en la lista fija anterior.
+  Sigue con salvaguarda POR COINCIDENCIA INDIVIDUAL (no global): una coincidencia que
+  no decodifique a un unico caracter valido se deja intacta, sin afectar al resto.
+
+### Anadido -- diagnostico para localizar el fallo con certeza
+Dado que 2 metodos distintos (reinterpretacion global, reemplazo quirurgico) no han
+resuelto el problema en produccion pese a funcionar en pruebas locales, se añadio
+diagnostico directo en `fetchAndStoreRawPage()`: ahora la respuesta de
+`/api/cron/refresh-aena/[origin]` incluye un extracto del texto justo ANTES de
+guardarlo en la base de datos, y otro leyendolo DE VUELTA inmediatamente despues de
+guardarlo. Esto permite, con un solo intento mas, distinguir con certeza entre 2
+posibilidades: (a) el arreglo de codificacion no se esta aplicando de verdad en
+produccion (en cuyo caso "antes de guardar" ya saldria con el galimatias), o (b) el
+arreglo funciona pero algo en el guardado o la lectura de la base de datos (el driver
+HTTP de Neon, la codificacion de la columna) esta corrompiendo el texto por el camino
+(en cuyo caso "antes de guardar" saldria bien pero "leido de vuelta" saldria mal).
+
 ## [0.28.5] - 2026-09-17 (sesion 25) - FIX real: reemplazo quirurgico en vez de reinterpretacion global (la salvaguarda del fix anterior se autodescartaba)
 
 El usuario repitio descarga+analisis desde cero y el mismo galimatias exacto seguia

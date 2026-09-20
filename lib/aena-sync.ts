@@ -120,34 +120,29 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
 // generados a partir de sus bytes UTF-8 reales reinterpretados como latin1 (verificado
 // programaticamente, no adivinado a mano). Cubre minusculas, mayusculas, dieresis y
 // los signos de apertura ¿¡.
-const MOJIBAKE_PAIRS: [string, string][] = [
-  ['\u00c3\u00a1', 'á'], ['\u00c3\u00a9', 'é'], ['\u00c3\u00ad', 'í'],
-  ['\u00c3\u00b3', 'ó'], ['\u00c3\u00ba', 'ú'], ['\u00c3\u00b1', 'ñ'],
-  ['\u00c3\u0081', 'Á'], ['\u00c3\u0089', 'É'], ['\u00c3\u008d', 'Í'],
-  ['\u00c3\u0093', 'Ó'], ['\u00c3\u009a', 'Ú'], ['\u00c3\u0091', 'Ñ'],
-  ['\u00c3\u00bc', 'ü'], ['\u00c3\u009c', 'Ü'],
-  ['\u00c2\u00bf', '¿'], ['\u00c2\u00a1', '¡'],
-];
 
 /**
- * FIX real (sesion 25, tercer intento): la reinterpretacion GLOBAL del texto entero
- * como latin1 (sesion 24) tenia una salvaguarda que descartaba el arreglo entero en
- * cuanto aparecia UN SOLO caracter de reemplazo (U+FFFD) en cualquier parte de la
- * pagina -- y en una pagina real de 457 KB es muy probable que exista al menos un
- * fragmento (un script residual, una entidad rara, algun simbolo) que no este
- * doblemente codificado, invalidando el arreglo para TODA la pagina de golpe (esto
- * explica por que el fix anterior no funciono aunque estaba bien planteado en
- * principio). Sustituido por reemplazo QUIRURGICO: solo los pares mojibake conocidos y
- * exactos de arriba, uno por uno -- el resto del texto queda completamente intacto, sin
- * ninguna salvaguarda global que pueda descartar el arreglo por un problema en una
- * parte no relacionada de la pagina.
+ * FIX real (sesion 26, cuarto intento): la lista fija de 16 pares (sesion 25) deberia
+ * haber coincidido con el texto real reportado por el usuario (verificado que
+ * `textoReal.includes('\u00c3\u00a1')` daba `true` en una prueba directa), pero el
+ * problema seguia sin resolverse en produccion -- señal de que el fallo no estaba en
+ * el PATRON en si, sino en algun otro punto de la cadena (por eso esta sesion añade
+ * tambien diagnostico de "antes de guardar" vs "leido de vuelta" en
+ * `fetchAndStoreRawPage`, para localizarlo con certeza). Aun así, se sustituye la
+ * lista fija por un metodo ALGORITMICO mas robusto y general: en vez de una lista
+ * cerrada de pares exactos, reconoce el PATRON ESTRUCTURAL de cualquier secuencia de 2
+ * caracteres que sea una secuencia UTF-8 de 2 bytes (bloque Latin-1 Supplement
+ * completo, no solo las letras españolas) mal interpretada como latin1 -- byte lider
+ * UTF-8 (0xC2 o 0xC3) seguido de un byte de continuacion (0x80-0xBF) -- y la decodifica
+ * correctamente byte a byte. Con salvaguarda POR COINCIDENCIA INDIVIDUAL (no global):
+ * si una coincidencia concreta no produce un unico caracter valido al decodificar, esa
+ * coincidencia en concreto se deja intacta, sin afectar al resto del texto.
  */
 function fixDoubleEncodedUtf8(text: string): string {
-  let result = text;
-  for (const [mojibake, correct] of MOJIBAKE_PAIRS) {
-    result = result.split(mojibake).join(correct);
-  }
-  return result;
+  return text.replace(/[\u00c2\u00c3][\u0080-\u00bf]/g, (match) => {
+    const decoded = Buffer.from(match, 'latin1').toString('utf-8');
+    return decoded.length === 1 && decoded !== '\uFFFD' ? decoded : match;
+  });
 }
 
 function stripUnneededHtml(html: string): string {
@@ -158,7 +153,10 @@ function stripUnneededHtml(html: string): string {
     .replace(/<(header|footer|nav)\b[\s\S]*?<\/\1>/gi, ' ');
 }
 
-export async function fetchAndStoreRawPage(origin: string, timeoutMs = 6000): Promise<{ bytes: number }> {
+export async function fetchAndStoreRawPage(
+  origin: string,
+  timeoutMs = 6000
+): Promise<{ bytes: number; diagnostico?: { antes_de_guardar: string; leido_de_vuelta: string } }> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];
   if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
@@ -179,12 +177,27 @@ export async function fetchAndStoreRawPage(origin: string, timeoutMs = 6000): Pr
     const buffer = await res.arrayBuffer();
     const rawHtml = fixDoubleEncodedUtf8(new TextDecoder('utf-8').decode(buffer));
     const html = stripUnneededHtml(rawHtml);
+    const plainBeforeSave = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+
     await sql`
       INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
       VALUES (${origin}, ${html}, now())
       ON CONFLICT (origin_iata) DO UPDATE SET html = EXCLUDED.html, fetched_at = EXCLUDED.fetched_at
     `;
-    return { bytes: html.length };
+
+    // Diagnostico (sesion 26): leer INMEDIATAMENTE de vuelta lo que se acaba de
+    // guardar, para saber con certeza si el problema esta en el arreglo de
+    // codificacion en si (no se aplicaria y "antes de guardar" ya saldria mal) o en
+    // algo que ocurre al guardar/leer de la base de datos (en cuyo caso "antes de
+    // guardar" saldria bien pero "leido de vuelta" saldria mal).
+    const readBackRows = (await sql`SELECT html FROM aena_raw_pages WHERE origin_iata = ${origin}`) as { html: string }[];
+    const plainAfterReadback = (readBackRows[0]?.html ?? '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 200);
+
+    return { bytes: html.length, diagnostico: { antes_de_guardar: plainBeforeSave, leido_de_vuelta: plainAfterReadback } };
   };
 
   // Limite duro sobre la funcion ENTERA (descarga + limpieza + escritura), no solo

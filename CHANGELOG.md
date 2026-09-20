@@ -2,6 +2,47 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.1] - 2026-09-17 (sesion 21) - diagnostico para Murcia (0 destinos) + segundo intento de fix para Madrid
+
+El usuario probo la separacion en 2 fases de la sesion anterior: Murcia dio "0
+destinos" en la fase de analisis, y Madrid **seguia dando 504 incluso en la fase de
+descarga sola**.
+
+### Murcia: 0 destinos -- anadido diagnostico, no un fix a ciegas
+Investigada la pagina real de Murcia por busqueda web: usa exactamente la misma
+estructura ("País ESPAÑA · Aerolíneas · VOLOTEA...") que ya se arreglo para el problema
+de tildes -- la URL y el patron deberian funcionar. Sin poder investigar mas sin
+acceso de red propio a Aena, se añadio diagnostico real en vez de otro parche a
+ciegas: `parseStoredPage()` ahora incluye, cuando encuentra sospechosamente pocos
+destinos, un extracto de los primeros 400 caracteres de texto (sin etiquetas) de lo
+que se descargo de verdad -- para saber si Aena esta devolviendo una pagina de bloqueo/
+verificacion (que daria "200 OK" pero no el contenido real) o algo distinto,
+directamente desde la respuesta del endpoint, sin depender de que esta sesion tenga
+acceso de red a Aena (que no lo tiene, confirmado en la sesion anterior).
+
+### Madrid: segundo intento de fix del timeout
+Diagnostico revisado: el timeout anterior (8000ms) solo cubria la DESCARGA, no la
+escritura posterior en la base de datos -- si Madrid tarda cerca de 8s en descargar Y
+ademas hay que escribir varios MB de HTML en Postgres, el total seguia superando los
+10s duros de Vercel, matando la funcion ANTES de que el propio codigo pudiera devolver
+un error limpio (de ahi el 504 en bruto, sin JSON). Cambios en
+`fetchAndStoreRawPage()`:
+- Timeout de descarga reducido de 8000 a 6000ms, dejando mas margen.
+- **Limpieza del HTML antes de guardar** (scripts, estilos, comentarios,
+  header/footer/nav quitados): reduce el tamaño a escribir en base de datos, y de paso
+  adelanta trabajo que la fase de analisis tendria que hacer de todas formas.
+- **Toda la funcion (descarga + limpieza + escritura), no solo la descarga, envuelta
+  en un unico limite duro de 9000ms** -- deja 1s de margen bajo el limite de Vercel
+  para que el codigo pueda devolver un error diagnosticable en vez de que Vercel mate
+  la funcion en crudo.
+
+### Aviso honesto
+Si Madrid sigue fallando tras este segundo intento, seria una señal fuerte de que el
+cuello de botella real es el propio TIEMPO DE RESPUESTA de Aena para esa pagina
+(genuinamente lenta, o un "tarpit" anti-bot deliberado) y no algo que se pueda arreglar
+solo optimizando el codigo de este lado -- en ese caso, el siguiente paso razonable
+seria investigar un servicio de terceros que haga la descarga por nosotros.
+
 ## [0.28.0] - 2026-09-17 (sesion 20) - FIX real: sincronizacion de Aena separada en 2 fases (504 confirmado)
 
 El usuario disparo el cron de Madrid a mano y obtuvo un error real y concreto: `504

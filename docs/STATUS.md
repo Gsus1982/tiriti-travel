@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.1. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,36 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 21) — Sesion: diagnostico Murcia + segundo intento Madrid
+
+El usuario probo la separacion en 2 fases: Murcia -> 0 destinos en el analisis; Madrid
+-> 504 incluso en la fase de descarga sola (el primer intento no fue suficiente).
+
+**Murcia**: investigada su pagina real por busqueda web -- misma estructura
+("País ESPAÑA · Aerolíneas ...") que ya se arreglo, URL correcta. Sin poder investigar
+mas sin acceso de red propio a Aena, se añadio DIAGNOSTICO real en vez de otro parche a
+ciegas: el error de "pocos destinos" ahora incluye un extracto de 400 caracteres del
+texto realmente descargado, para saber si Aena esta sirviendo una pagina de bloqueo
+(200 OK pero sin contenido real) sin depender de acceso de red propio.
+
+**Madrid**: el timeout anterior (8000ms) solo cubria la descarga, no la escritura
+posterior en Postgres -- el total seguia superando los 10s de Vercel, matando la
+funcion antes de que el codigo devolviera un error limpio (de ahi el 504 en bruto).
+Fix: timeout de descarga bajado a 6000ms, HTML limpiado (scripts/estilos/comentarios/
+header/footer/nav fuera) ANTES de guardar para reducir lo que hay que escribir, y TODA
+la funcion (no solo la descarga) envuelta en un unico limite duro de 9000ms.
+
+**Aviso honesto documentado**: si Madrid sigue fallando tras este segundo intento, es
+señal fuerte de que el cuello de botella real es el tiempo de respuesta de Aena en si
+(pagina genuinamente lenta o "tarpit" anti-bot), no algo arreglable solo optimizando
+este lado -- el siguiente paso razonable seria un servicio de terceros que haga la
+descarga por nosotros.
+
+Verificado con `npx tsc --noEmit` y `npm run build` limpios. Sin poder probar en vivo
+(la IP de esta sesion sigue bloqueada por Aena, confirmado en la sesion anterior).
 
 ---
 

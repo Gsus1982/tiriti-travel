@@ -88,13 +88,21 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
  * FUNCTION_INVOCATION_TIMEOUT real, reportado por el usuario). Separar en 2
  * invocaciones distintas le da a CADA fase sus propios 10s completos.
  */
-export async function fetchAndStoreRawPage(origin: string, timeoutMs = 8000): Promise<{ bytes: number }> {
+function stripUnneededHtml(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(/<(header|footer|nav)\b[\s\S]*?<\/\1>/gi, ' ');
+}
+
+export async function fetchAndStoreRawPage(origin: string, timeoutMs = 6000): Promise<{ bytes: number }> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];
   if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
   const url = `https://www.aena.es/es/${slug}/${path}`;
 
-  const doFetch = async () => {
+  const doFetchAndStore = async () => {
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'Mozilla/5.0 (compatible; TiritiTravelSyncBot/1.0; +uso personal)',
@@ -106,16 +114,21 @@ export async function fetchAndStoreRawPage(origin: string, timeoutMs = 8000): Pr
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
-    return res.text();
+    const rawHtml = await res.text();
+    const html = stripUnneededHtml(rawHtml);
+    await sql`
+      INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
+      VALUES (${origin}, ${html}, now())
+      ON CONFLICT (origin_iata) DO UPDATE SET html = EXCLUDED.html, fetched_at = EXCLUDED.fetched_at
+    `;
+    return { bytes: html.length };
   };
 
-  const html = await withHardTimeout(doFetch(), timeoutMs + 500, `fetch Aena ${origin}`);
-  await sql`
-    INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
-    VALUES (${origin}, ${html}, now())
-    ON CONFLICT (origin_iata) DO UPDATE SET html = EXCLUDED.html, fetched_at = EXCLUDED.fetched_at
-  `;
-  return { bytes: html.length };
+  // Limite duro sobre la funcion ENTERA (descarga + limpieza + escritura), no solo
+  // sobre la descarga -- 9000ms deja 1s de margen bajo el limite de 10s de Vercel para
+  // que el catch de la ruta pueda devolver un JSON de error limpio en vez de que
+  // Vercel mate la funcion en crudo (504 sin cuerpo, como le paso al usuario).
+  return withHardTimeout(doFetchAndStore(), 9000, `fetch+guardar Aena ${origin}`);
 }
 
 /**
@@ -125,13 +138,26 @@ export async function fetchAndStoreRawPage(origin: string, timeoutMs = 8000): Pr
  * es trabajo de CPU puro, mucho mas rapido que descargar la pagina.
  */
 export async function parseStoredPage(origin: string): Promise<ParsedDestination[]> {
-  const rows = (await sql`SELECT html FROM aena_raw_pages WHERE origin_iata = ${origin}`) as { html: string }[];
+  const rows = (await sql`SELECT html, length(html) AS len FROM aena_raw_pages WHERE origin_iata = ${origin}`) as {
+    html: string;
+    len: number;
+  }[];
   if (rows.length === 0) {
     throw new Error(`No hay ninguna pagina descargada todavia para ${origin} -- espera a que corra la fase de descarga.`);
   }
   const parsed = parseDestinationsHtml(rows[0].html);
   if (parsed.length < 5) {
-    throw new Error(`Analisis sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena).`);
+    // Diagnostico (sesion 20, tras un fallo real con 0 destinos en Murcia que no se
+    // pudo investigar por falta de acceso de red propio a Aena): en vez de solo decir
+    // "posible bloqueo", se incluye un extracto real de lo que se descargo -- asi el
+    // usuario puede copiarlo y pegarlo para diagnosticar sin que haga falta acceso de
+    // red directo a Aena desde ningun otro sitio.
+    const plainText = rows[0].html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    const snippet = plainText.slice(0, 400);
+    throw new Error(
+      `Analisis sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena). ` +
+        `Se descargaron ${rows[0].len} caracteres de HTML. Extracto del contenido real (primeros 400 caracteres de texto, sin etiquetas): "${snippet}"`
+    );
   }
   return parsed;
 }

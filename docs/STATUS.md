@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.3. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.4. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,66 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 24) — Sesion: doble codificacion UTF-8 de Aena, verificada end-to-end
+
+### Contexto
+Se le pidio al usuario repetir descarga+analisis DESDE CERO (por si el fallo anterior
+era solo una descarga vieja reutilizada) -- lo hizo correctamente, y el mismo
+galimatias exacto ("SuÃ¡rez", "CORUÃ‘A") seguia apareciendo. Esto descarto la
+hipotesis de datos viejos y confirmo que el fix de la sesion 23 (forzar
+`TextDecoder('utf-8')`) era necesario pero NO suficiente.
+
+### La causa real, esta vez si (verificada, no solo razonada)
+El fix anterior no estaba mal -- decodificar como UTF-8 es lo correcto -- pero el
+problema real esta en el lado de AENA: su propio servidor envia el contenido con
+**doble codificacion UTF-8**. Es decir: el texto correcto ("á") se codifico una vez a
+bytes UTF-8 en algun punto de la infraestructura de Aena, esos bytes se
+reinterpretaron por error como latin1/windows-1252 (dando "Ã¡"), y ESE resultado se
+volvio a codificar como UTF-8 antes de enviarlo por la red -- un fallo clasico de
+mezclar una base de datos en latin1 con una salida en UTF-8 sin convertir bien en algun
+paso intermedio. Decodificar bien como UTF-8 (lo que ya hacia el fix anterior) da
+CORRECTAMENTE "Ã¡", porque esos son literalmente, byte a byte, los datos reales que
+Aena envia -- el problema no estaba en como esta sesion decodificaba la respuesta, sino
+en lo que Aena mandaba de origen.
+
+### Fix
+Nueva funcion `fixDoubleEncodedUtf8()` en `lib/aena-sync.ts`: reinterpreta el texto ya
+decodificado como si sus caracteres fueran bytes latin1 (`Buffer.from(text, 'latin1')`)
+y decodifica esos bytes como UTF-8 otra vez -- deshaciendo exactamente la
+transformacion que hace Aena. Con salvaguarda: si el resultado contiene caracteres de
+reemplazo (`\uFFFD`, señal de que la transformacion no era valida para ese texto
+concreto), se descarta y se devuelve el texto original sin tocar. Aplicado en las 2
+funciones que hacen fetch a Aena (`fetchAndStoreRawPage`, la de produccion, y
+`fetchAenaDestinations`, la original mantenida para pruebas locales).
+
+### Verificacion -- la mas rigurosa de toda esta cadena de fixes
+Dos pruebas distintas, ambas con exito:
+1. Se probo `fixDoubleEncodedUtf8` (via el equivalente `Buffer.from(text,
+   'latin1').toString('utf-8')`) directamente contra el TEXTO EXACTO que el usuario
+   pego del diagnostico real de Madrid -- "SuÃ¡rez" se convirtio correctamente en
+   "Suárez", caracter por caracter.
+2. Se reprodujo el PIPELINE COMPLETO de principio a fin: una pagina de ejemplo con
+   acentos correctos ("Suárez", "CORUÑA", "País", "Aerolíneas"), codificada a UTF-8,
+   con la MISMA doble codificacion que aplica Aena simulada encima (reproduciendo sus
+   bytes reales tal como viajarian por la red), decodificada con
+   `TextDecoder('utf-8')`, corregida con `fixDoubleEncodedUtf8()`, y analizada con
+   `parseDestinationsHtml()` -- resultado: destinos encontrados correctamente, con
+   nombres y paises exactos, sin ningun caracter mal formado.
+
+### Aviso pendiente de confirmar
+No se ha podido probar contra la respuesta REAL de Aena en produccion desde esta
+sesion (sin acceso de red propio, confirmado en sesiones anteriores) -- la
+verificacion de arriba es una simulacion fiel del bug real (basada en el texto exacto
+que devolvio el usuario), pero la confirmacion definitiva la tiene que dar el proximo
+intento real del usuario contra `/api/cron/refresh-aena/MAD` +
+`/api/cron/parse-aena/MAD`.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios, ademas de las 2 pruebas end-to-end
+descritas arriba, ejecutadas con `npx tsx` contra el codigo real del archivo.
 
 ---
 

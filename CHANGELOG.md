@@ -2,6 +2,38 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.4] - 2026-09-17 (sesion 24) - FIX real, verificado end-to-end: Aena envia el contenido DOBLEMENTE codificado en UTF-8
+
+El usuario, siguiendo la indicacion de repetir descarga+analisis desde cero, confirmo
+que el fix de la sesion 23 (forzar TextDecoder utf-8) no era suficiente: exactamente el
+mismo galimatias ("SuÃ¡rez", "CORUÃ‘A") seguia apareciendo.
+
+### Causa real (verdadera esta vez, confirmada con una prueba exacta)
+El fix anterior no estaba mal -- decodificar como UTF-8 es lo correcto -- pero era
+insuficiente porque el problema esta en el lado de Aena: su servidor envia el
+contenido con **doble codificacion UTF-8** (un fallo tipico de mezclar una base de
+datos en latin1/windows-1252 con una salida en UTF-8 sin convertir bien en algun punto
+intermedio de su propia infraestructura). Decodificar bien como UTF-8 (lo que ya se
+hacia) da CORRECTAMENTE "Ã¡" para lo que deberia ser "á", porque esos son literalmente
+los bytes reales que Aena manda por la red.
+
+### Corregido
+Nueva funcion `fixDoubleEncodedUtf8()`: reinterpreta el texto ya decodificado como si
+sus caracteres fueran bytes latin1, y decodifica esos bytes como UTF-8 otra vez --
+deshaciendo la doble codificacion. Con salvaguarda: si el resultado contiene
+caracteres de reemplazo (U+FFFD, señal de una transformacion invalida para ese texto),
+se descarta y se devuelve el texto original sin tocar, para no arriesgarse a corromper
+contenido que no estuviera realmente doblemente codificado.
+
+### Verificacion end-to-end completa (la mas rigurosa de toda esta cadena de fixes)
+Se reprodujo el pipeline completo: una pagina de ejemplo con acentos correctos, se
+codifico a UTF-8, se le aplico la MISMA doble codificacion que hace Aena (simulando sus
+bytes reales por la red), se decodifico con `TextDecoder('utf-8')`, se le aplico
+`fixDoubleEncodedUtf8()`, y se analizo con `parseDestinationsHtml()` -- resultado:
+destinos encontrados correctamente, con nombres y paises exactos. Ademas, se probo la
+funcion de arreglo directamente contra el TEXTO EXACTO que el usuario pego del
+diagnostico real ("SuÃ¡rez" -> "Suárez", confirmado caracter por caracter).
+
 ## [0.28.3] - 2026-09-17 (sesion 23) - FIX real, confirmado: decodificacion UTF-8 forzada (Madrid ya sin timeout, causa de "0 destinos" encontrada)
 
 El usuario probo el fix de la sesion anterior: el 504 de Madrid **desaparecio** (el

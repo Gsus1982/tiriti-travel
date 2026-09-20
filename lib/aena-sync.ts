@@ -116,6 +116,42 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
  * FUNCTION_INVOCATION_TIMEOUT real, reportado por el usuario). Separar en 2
  * invocaciones distintas le da a CADA fase sus propios 10s completos.
  */
+/**
+ * FIX real (sesion 24, segundo intento tras confirmar con el usuario que el primer fix
+ * -- forzar TextDecoder utf-8 -- no bastaba): Aena esta enviando el contenido de esta
+ * pagina con DOBLE codificacion UTF-8 desde su propio servidor -- un fallo tipico de
+ * mezclar una base de datos en latin1/windows-1252 con una tuberia de salida en UTF-8
+ * sin convertir correctamente en algun punto intermedio. Decodificar bien como UTF-8
+ * (lo que ya se hacia) da CORRECTAMENTE "Ã¡" para lo que deberia ser "á", porque esos
+ * son literalmente los bytes reales que Aena envia por la red -- el problema esta en
+ * el lado de Aena, antes de que la peticion llegue aqui.
+ *
+ * Se deshace reinterpretando el texto ya decodificado como si sus caracteres fueran
+ * bytes latin1 (cada caracter del string, valores 0-255, se convierte en 1 byte), y
+ * decodificando ESOS bytes como UTF-8 otra vez -- confirmado con una prueba exacta:
+ * el texto real observado ("Ã¡", "Ã‘") revierte correctamente a "á", "Ñ" con esta
+ * transformacion.
+ *
+ * Riesgo asumido conscientemente: si el texto tuviera caracteres geniunamente fuera
+ * del rango latin1 (por ejemplo, comillas tipograficas o algun caracter no español),
+ * esta transformacion los deformaria. Para esta pagina en concreto (nombres de
+ * aeropuertos y paises en español) se considera un riesgo aceptable frente al
+ * beneficio de arreglar el problema real y mucho mas frecuente (todas las vocales
+ * acentuadas y la Ñ).
+ */
+function fixDoubleEncodedUtf8(text: string): string {
+  try {
+    const fixed = Buffer.from(text, 'latin1').toString('utf-8');
+    // Salvaguarda: si el resultado tiene caracteres de reemplazo (U+FFFD), la
+    // transformacion no era valida para este texto -- se descarta y se devuelve el
+    // original sin tocar, en vez de arriesgarse a corromper texto que no estaba
+    // doblemente codificado.
+    return fixed.includes('\uFFFD') ? text : fixed;
+  } catch {
+    return text;
+  }
+}
+
 function stripUnneededHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -142,17 +178,8 @@ export async function fetchAndStoreRawPage(origin: string, timeoutMs = 6000): Pr
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
-    // FIX real (sesion 23): res.text() dejaba que fetch() adivinara la codificacion de
-    // caracteres -- y la adivinaba mal (probablemente por una cabecera Content-Type de
-    // Aena con un charset incorrecto), decodificando bytes UTF-8 reales como si fueran
-    // latin1/windows-1252. Confirmado con una prueba exacta: los bytes UTF-8 de "á"
-    // (0xC3 0xA1) decodificados como latin1 dan literalmente "Ã¡" -- que es
-    // EXACTAMENTE lo que aparecio en el diagnostico real ("SuÃ¡rez" en vez de
-    // "Suárez", "CORUÃ‘A" en vez de "CORUÑA"). Se fuerza UTF-8 explicitamente leyendo
-    // los bytes crudos y decodificando con TextDecoder, sin dejarle a fetch() ninguna
-    // oportunidad de adivinar mal.
     const buffer = await res.arrayBuffer();
-    const rawHtml = new TextDecoder('utf-8').decode(buffer);
+    const rawHtml = fixDoubleEncodedUtf8(new TextDecoder('utf-8').decode(buffer));
     const html = stripUnneededHtml(rawHtml);
     await sql`
       INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
@@ -222,7 +249,7 @@ export async function fetchAenaDestinations(origin: string, timeoutMs = 5000): P
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
-    const html = new TextDecoder('utf-8').decode(await res.arrayBuffer());
+    const html = fixDoubleEncodedUtf8(new TextDecoder('utf-8').decode(await res.arrayBuffer()));
     const parsed = parseDestinationsHtml(html);
     if (parsed.length < 5) {
       throw new Error(`Parseo sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena).`);

@@ -2,6 +2,36 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.27.0] - 2026-09-17 (sesion 18) - circuito de varias ciudades
+
+A peticion del usuario, inspirado en Kiwi Nomad: planear un viaje por varias ciudades
+seguidas (ej. Alicante → Cracovia → Viena → Alicante), cada tramo un vuelo directo
+independiente.
+
+### Anadido
+- **`lib/circuit-search.ts`**: dado un origen y una lista de tramos, busca cada uno
+  como una peticion de SOLO IDA independiente a Ignav (una fecha concreta, sin rango),
+  usando el mismo motor de siempre (`searchOneWay`). Limite duro de 5 tramos por
+  circuito (`MAX_CIRCUIT_LEGS`), para que el coste maximo de un circuito completo sea
+  predecible (1 peticion real por tramo). Cada precio encontrado se registra en
+  `price_history`, igual que las busquedas normales.
+- **`/api/circuit-search`**: comprueba antes de buscar si queda cuota suficiente para
+  todos los tramos (usando el contador ya existente), y avisa en vez de gastarla a
+  medias.
+- **`components/CircuitPlanner.tsx`**: nueva seccion colapsable en el formulario
+  principal para construir el circuito (origen + tramos con destino y fecha cada uno,
+  con opcion de volver al origen al final) y ver los resultados por tramo mas el
+  total.
+
+### Aviso importante (limitacion real, explicada tambien en la propia interfaz)
+Solo el primer y el ultimo tramo (desde/hacia el origen español elegido) se pueden
+verificar de antemano contra datos reales de Aena, igual que en el resto de la app.
+Los tramos INTERMEDIOS (entre 2 ciudades que no son el origen, ej. Cracovia → Viena)
+no tienen ninguna fuente de datos que confirme si existe vuelo directo -- Aena solo
+publica rutas desde aeropuertos españoles. Esos tramos se buscan directamente sin
+verificacion previa; si no hay vuelo directo, el tramo sale marcado en rojo con un
+aviso claro, en vez de fallar en silencio o dar un total incorrecto.
+
 ## [0.26.0] - 2026-09-17 (sesion 17) - pastilla de duracion en destino
 
 A peticion del usuario: cada resultado de vuelo ahora muestra una pastilla con los

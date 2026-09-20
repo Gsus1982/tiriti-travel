@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.26.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.27.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,59 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 18) — Sesion: circuito de varias ciudades
+
+### Contexto
+Sesion anterior de analisis: se propusieron varias mejoras inspiradas en Skyscanner,
+Kiwi, Momondo, Kayak, Flighty, Travala, Airhopping y Exprime Viajes, con honestidad
+sobre cuales encajaban y cuales no (Airhopping y Travala descartadas por no encajar
+con el diseño de la app; Flighty aparcada por necesitar una API de pago; Exprime
+Viajes no tiene nada programatico que integrar). El usuario eligio implementar la
+mejor encajada: el "circuito de varias ciudades" al estilo Kiwi Nomad.
+
+### Diseño y limitacion real (importante para sesiones futuras)
+El reto de fondo: `aena_destinations` (la fuente de "destinos reales verificados" de
+toda la app) SOLO cubre rutas DESDE los 4 aeropuertos españoles -- no tiene ningun dato
+sobre si existe vuelo directo entre 2 ciudades NO españolas (ej. Cracovia -> Viena).
+No hay ninguna fuente de datos gratuita equivalente para eso. Decision tomada, explicada
+tambien al usuario: los tramos intermedios de un circuito se buscan DIRECTAMENTE sin
+verificacion previa (a diferencia del resto de la app, que siempre verifica antes de
+buscar) -- si no hay vuelo directo, ese tramo simplemente sale vacio con un aviso claro,
+en vez de intentar adivinar o bloquear la funcionalidad entera por esta limitacion.
+
+### Implementacion
+- `lib/circuit-search.ts`: cada tramo es una llamada independiente a `searchOneWay`
+  (solo ida, una fecha concreta, sin rango) -- reutiliza el mismo cliente de Ignav de
+  siempre. `MAX_CIRCUIT_LEGS = 5`: limite duro para que el coste maximo de cuota de un
+  circuito sea predecible (1 peticion real por tramo, sin multiplicar por dias de
+  rango como la busqueda principal). Cada precio encontrado se registra en
+  `price_history` via `logPriceObservation`, igual que el resto de busquedas -- asi
+  tambien alimenta la tendencia de precio y el detector de chollos con el tiempo.
+- `/api/circuit-search`: comprueba la cuota restante ANTES de lanzar las busquedas
+  (usando `getIgnavUsageSummary`, ya existente) y avisa si no alcanza para todos los
+  tramos, en vez de gastarla a medias y dejar el circuito incompleto.
+- `components/CircuitPlanner.tsx`: seccion colapsable nueva en el formulario
+  principal. Construccion del circuito: origen (de los origenes reales del usuario) +
+  N tramos (destino en codigo IATA de 3 letras + fecha cada uno, ya que los tramos
+  intermedios no tienen un selector verificado como el resto de la app) + opcion de
+  volver al origen al final (fecha sugerida automaticamente, 3 dias despues del
+  ultimo tramo, editable). Resultados: una tarjeta por tramo (encontrado/no
+  encontrado, precio, aerolinea) y el total solo si TODOS los tramos tuvieron
+  resultado.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que la
+seccion aparece en el HTML y que el endpoint responde con un error controlado (400)
+ante una peticion sin tramos.
+
+### Aviso
+Como con cualquier llamada real a Ignav en esta sesion, no se ha podido verificar el
+comportamiento real de `searchOneWay` para pares origen-destino que no sean los 4
+aeropuertos españoles habituales -- deberia funcionar igual (el cliente no distingue
+el origen), pero no hay confirmacion en vivo.
 
 ---
 

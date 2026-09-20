@@ -17,6 +17,7 @@ import ResultsSection from '@/components/ResultsSection';
 import FilterAccordion from '@/components/FilterAccordion';
 import SearchHistoryPanel from '@/components/SearchHistoryPanel';
 import ExploreDestinations from '@/components/ExploreDestinations';
+import CircuitPlanner from '@/components/CircuitPlanner';
 import { IconSliders, IconMapPin, IconShare, IconSparkles, IconChevronDown, IconWhatsApp, IconX } from '@/components/Icons';
 
 type Meta = {
@@ -1214,6 +1215,8 @@ export default function HomePage() {
                 originIatas={originIatas.length > 0 ? originIatas : ['ALC']}
                 onUseDestination={(iata) => setSelectedDestIatas((prev) => (prev.includes(iata) ? prev : [...prev, iata]))}
               />
+
+              <CircuitPlanner originIatas={originIatas.length > 0 ? originIatas : ['ALC']} adults={adults} children={children} />
 
               <SearchHistoryPanel onRestore={handleRestoreFromHistory} />
 

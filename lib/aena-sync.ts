@@ -158,7 +158,7 @@ export async function fetchAndStoreRawPage(
   timeoutMs = 6000
 ): Promise<{
   bytes: number;
-  diagnostico?: { antes_de_guardar: string; leido_de_vuelta: string; alrededor_del_caracter_problematico: string; codigos_de_caracter_hex_ahi: string };
+  diagnostico?: { contexto_html_crudo_alrededor_de_LCG: string; lineas_alrededor_de_LCG: string[] };
 }> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];
@@ -180,17 +180,29 @@ export async function fetchAndStoreRawPage(
     const buffer = await res.arrayBuffer();
     const rawHtml = fixDoubleEncodedUtf8(new TextDecoder('utf-8').decode(buffer));
     const html = stripUnneededHtml(rawHtml);
-    const plainBeforeSave = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
 
-    // Diagnostico de precision (sesion 27, corregido): buscar 'rez' encontraba la
-    // ocurrencia EQUIVOCADA (una URL interna en minusculas sin tilde,
-    // "adolfo-suarez", que aparece ANTES en el HTML crudo que el titulo visible con
-    // el problema real). Se busca en su lugar el propio caracter mojibake U+00C3
-    // directamente -- solo puede aparecer en una ocurrencia real del problema, nunca
-    // en una URL/slug ASCII normal.
-    const idx = rawHtml.indexOf('\u00c3');
-    const around = idx >= 0 ? rawHtml.slice(Math.max(0, idx - 15), idx + 15) : '(no se encontro ningun caracter U+00C3 en todo el texto)';
-    const codePoints = idx >= 0 ? [...around].map((c) => c.charCodeAt(0).toString(16).padStart(4, '0')).join(' ') : 'n/a';
+    // Diagnostico (sesion 29): el diagnostico de la sesion 27 (buscar el caracter
+    // mojibake U+00C3) devolvio "no encontrado" -- es decir, el texto NUNCA tuvo el
+    // problema de codificacion que se llevaba investigando desde la sesion 23 (lo que
+    // se veia como "SuÃ¡rez" en las respuestas JSON probablemente era solo el
+    // navegador del usuario mostrando mal el JSON en pantalla, no un problema real en
+    // los datos). Pivote de investigacion: si la codificacion esta bien, el "0
+    // destinos" real tiene que ser un problema de ESTRUCTURA -- el patron esperado
+    // (Nombre (IATA) / Pais X / Aerolineas Y en lineas separadas) puede no encajar con
+    // la disposicion real del HTML de Madrid. Se busca un destino que SI sabemos que
+    // esta ahi ("(LCG)", A Coruña, visto en busquedas anteriores) y se muestra el
+    // contexto real, con etiquetas y ya convertido a lineas, para ver la estructura
+    // de verdad en vez de seguir suponiendo.
+    const marker = '(LCG)';
+    const rawIdx = rawHtml.indexOf(marker);
+    const rawContext = rawIdx >= 0 ? rawHtml.slice(Math.max(0, rawIdx - 300), rawIdx + 100) : `(no se encontro "${marker}" en el HTML crudo)`;
+
+    const lines = html
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean);
+    const lineIdx = lines.findIndex((l) => l.includes(marker.replace(/[()]/g, '')));
+    const linesContext = lineIdx >= 0 ? lines.slice(Math.max(0, lineIdx - 3), lineIdx + 6) : [`(no se encontro "LCG" en ninguna linea, hay ${lines.length} lineas en total)`];
 
     await sql`
       INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
@@ -198,25 +210,11 @@ export async function fetchAndStoreRawPage(
       ON CONFLICT (origin_iata) DO UPDATE SET html = EXCLUDED.html, fetched_at = EXCLUDED.fetched_at
     `;
 
-    // Diagnostico (sesion 26): leer INMEDIATAMENTE de vuelta lo que se acaba de
-    // guardar, para saber con certeza si el problema esta en el arreglo de
-    // codificacion en si (no se aplicaria y "antes de guardar" ya saldria mal) o en
-    // algo que ocurre al guardar/leer de la base de datos (en cuyo caso "antes de
-    // guardar" saldria bien pero "leido de vuelta" saldria mal).
-    const readBackRows = (await sql`SELECT html FROM aena_raw_pages WHERE origin_iata = ${origin}`) as { html: string }[];
-    const plainAfterReadback = (readBackRows[0]?.html ?? '')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 200);
-
     return {
       bytes: html.length,
       diagnostico: {
-        antes_de_guardar: plainBeforeSave,
-        leido_de_vuelta: plainAfterReadback,
-        alrededor_del_caracter_problematico: around,
-        codigos_de_caracter_hex_ahi: codePoints
+        contexto_html_crudo_alrededor_de_LCG: rawContext,
+        lineas_alrededor_de_LCG: linesContext
       }
     };
   };

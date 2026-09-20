@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.8. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.29.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,72 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 29) — Sesion: PIVOTE -- la codificacion nunca fue el problema real
+
+### LO MAS IMPORTANTE DE ESTA ENTRADA, PARA CUALQUIER IA FUTURA
+Tras 6 sesiones (23 a 28) investigando y "arreglando" un supuesto problema de doble
+codificacion UTF-8 en la pagina de Madrid, el diagnostico de la sesion 28 (buscar el
+caracter mojibake `\u00c3` directamente en el texto, DENTRO del propio proceso del
+servidor, antes de cualquier serializacion JSON) dio como resultado: **"no se encontro
+ningun caracter U+00C3 en todo el texto"**. Esto, combinado con que las respuestas JSON
+SEGUIAN mostrando visualmente "SuÃ¡rez" en pantalla, solo admite una explicacion
+coherente: **el texto real, tal como lo procesa el codigo de esta aplicacion, nunca
+tuvo el problema de codificacion**. Lo que parecia mojibake en las respuestas JSON era,
+con toda probabilidad, un artefacto de como el NAVEGADOR del usuario renderiza una
+respuesta JSON cruda al visitar la URL directamente -- los navegadores no siempre
+declaran o respetan el charset UTF-8 de la misma manera que lo haria un cliente HTTP
+programatico (como `fetch()` o `curl`), y visitar una URL de API directamente en un
+navegador movil es precisamente ese caso limite.
+
+**Leccion critica**: cuando un usuario reporta un problema pegando el CONTENIDO VISUAL
+de una respuesta (por ejemplo, texto copiado de lo que ve en su navegador tras visitar
+una URL), ese texto puede estar ya corrompido por el PROPIO ACTO DE VISUALIZARLO, sin
+que eso diga nada sobre si los datos subyacentes en el servidor estan bien o mal. La
+unica forma fiable de confirmar un problema de codificacion es un diagnostico que
+compruebe los datos DENTRO del propio proceso del servidor (como se hizo aqui, buscando
+el caracter directamente en la variable de JavaScript antes de que salga por HTTP), no
+fiarse de como se ve una respuesta en pantalla. Esta sesion deberia haberse hecho en la
+sesion 23, no en la 29 -- habria ahorrado 5 sesiones enteras de trabajo sobre una pista
+falsa.
+
+### Pivote de investigacion
+Si la codificacion esta bien, el "0 destinos" real de Madrid tiene que ser un problema
+de ESTRUCTURA: el patron que espera `parseDestinationsHtml` (nombre y codigo IATA en
+una linea, "Pais X" y "Aerolineas Y" en las lineas siguientes, generado a partir de
+saltos de linea que produce el codigo al quitar las etiquetas HTML) puede
+sencillamente no coincidir con como esta organizado de verdad el HTML de la pagina de
+Madrid -- una hipotesis que nunca se habia probado directamente porque toda la
+atencion estaba puesta en la codificacion.
+
+### Diagnostico nuevo (sesion 29)
+Sustituido el diagnostico de codificacion por uno de ESTRUCTURA: se busca "(LCG)" (el
+codigo de A Coruña, un destino que se sabe con certeza que aparece en la pagina real de
+Madrid, confirmado por busqueda web en sesiones anteriores) y se muestra el contexto
+real que lo rodea de 2 formas: (1) en el HTML CRUDO, con etiquetas incluidas, para ver
+la disposicion real de las etiquetas; (2) ya convertido a lineas (tal como lo veria
+`parseDestinationsHtml`), para ver si el patron de lineas esperado realmente se
+produce ahi.
+
+### Que NO se ha hecho (importante)
+El fix de codificacion de las sesiones 23-28 (decodificacion UTF-8 forzada,
+`fixDoubleEncodedUtf8`) NO se ha revertido -- es inofensivo aunque no fuera la causa
+real (si el texto ya esta bien codificado, esa funcion simplemente no encuentra nada
+que corregir y no hace nada, ver la logica de "solo reemplaza si decodifica a un unico
+caracter valido"), y podria ser util en el futuro si Aena cambiara de verdad su
+codificacion en algun momento real. Se mantiene como una capa de seguridad inofensiva,
+no como codigo muerto a eliminar.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Sin cambios de logica de negocio salvo el
+diagnostico -- la causa real del "0 destinos" de Madrid sigue sin identificarse tras 6
+sesiones, pendiente del resultado de este nuevo diagnostico de estructura.
+
+### Pendiente
+Resultado del proximo intento del usuario, con el contexto real (HTML crudo + lineas)
+alrededor de "(LCG)" en la pagina real de Madrid.
 
 ---
 

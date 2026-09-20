@@ -2,6 +2,44 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.29.0] - 2026-09-17 (sesion 29) - PIVOTE: la codificacion nunca fue el problema real -- diagnostico de estructura
+
+El usuario probo el diagnostico corregido de la sesion 28 (buscar el caracter mojibake
+`\u00c3` directamente): resultado **"no se encontro ningun caracter U+00C3 en todo el
+texto"**.
+
+### Revelacion importante: 6 sesiones investigando la pista equivocada
+Este resultado, combinado con que `antes_de_guardar` SEGUIA mostrando visualmente
+"SuÃ¡rez" en la respuesta JSON, solo tiene una explicacion coherente: **el texto real,
+tal como lo procesa el codigo, nunca tuvo el problema de doble codificacion UTF-8** que
+se ha estado investigando desde la sesion 23. Lo que se veia como "SuÃ¡rez" en las
+respuestas JSON era, con toda probabilidad, un artefacto de como el NAVEGADOR del
+usuario renderiza el JSON en pantalla al visitar la URL directamente (los navegadores
+no siempre respetan el charset UTF-8 de una respuesta JSON cruda de la misma manera
+que lo haria un cliente HTTP programatico) -- no un problema real en los datos que
+maneja esta aplicacion. Es decir: las sesiones 23 a 28 diagnosticaron y arreglaron un
+problema que, muy probablemente, nunca fue la causa real del "0 destinos".
+
+### Pivote de investigacion
+Si la codificacion esta bien, el "0 destinos" real tiene que ser un problema de
+ESTRUCTURA: el patron esperado por el analizador (nombre y codigo IATA en una linea,
+"Pais X" y "Aerolineas Y" en las lineas siguientes) puede no coincidir con la
+disposicion real del HTML de la pagina de Madrid. Sustituido el diagnostico de
+codificacion por uno de estructura: se busca un destino que se sabe con certeza que
+esta en la pagina ("(LCG)", A Coruña) y se muestra el contexto real que lo rodea, tanto
+en el HTML crudo (con etiquetas) como ya convertido a lineas -- para ver la disposicion
+real en vez de seguir suponiendo.
+
+### Aviso honesto
+El fix de codificacion de las sesiones 23-28 (decodificacion UTF-8 forzada, deshacer
+doble codificacion) no se revierte -- es inofensivo aunque no fuera la causa real (si
+el texto ya estaba bien, estas funciones simplemente no encuentran nada que corregir y
+no hacen nada), y podria ser util en el futuro si Aena cambia de verdad su
+codificacion en algun momento. Pero la causa real del "0 destinos" de Madrid sigue sin
+identificarse con certeza tras 6 sesiones -- este cambio de rumbo, basado en evidencia
+directa del propio sistema (no en suposiciones), es el primer paso para encontrarla de
+verdad.
+
 ## [0.28.8] - 2026-09-17 (sesion 28) - FIX del diagnostico: buscaba la 'rez' equivocada (una URL, no el titulo real)
 
 El usuario probo el diagnostico de codigos de caracter de la sesion anterior:

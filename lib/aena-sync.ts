@@ -158,7 +158,7 @@ export async function fetchAndStoreRawPage(
   timeoutMs = 6000
 ): Promise<{
   bytes: number;
-  diagnostico?: { antes_de_guardar: string; leido_de_vuelta: string; alrededor_de_rez: string; codigos_de_caracter_hex: string };
+  diagnostico?: { antes_de_guardar: string; leido_de_vuelta: string; alrededor_del_caracter_problematico: string; codigos_de_caracter_hex_ahi: string };
 }> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];
@@ -182,12 +182,14 @@ export async function fetchAndStoreRawPage(
     const html = stripUnneededHtml(rawHtml);
     const plainBeforeSave = html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
 
-    // Diagnostico de precision (sesion 27): en vez de fiarse de como se VE el texto en
-    // el JSON (que puede ocultar detalles de representacion), se sacan los codigos de
-    // caracter EXACTOS (numero Unicode) alrededor de "rez" de "Suarez/SuArez" -- asi se
-    // sabe con total certeza que caracteres hay ahi, byte a byte, sin ambiguedad.
-    const idx = rawHtml.indexOf('rez');
-    const around = idx >= 0 ? rawHtml.slice(Math.max(0, idx - 6), idx + 3) : '(no se encontro "rez" en el texto)';
+    // Diagnostico de precision (sesion 27, corregido): buscar 'rez' encontraba la
+    // ocurrencia EQUIVOCADA (una URL interna en minusculas sin tilde,
+    // "adolfo-suarez", que aparece ANTES en el HTML crudo que el titulo visible con
+    // el problema real). Se busca en su lugar el propio caracter mojibake U+00C3
+    // directamente -- solo puede aparecer en una ocurrencia real del problema, nunca
+    // en una URL/slug ASCII normal.
+    const idx = rawHtml.indexOf('\u00c3');
+    const around = idx >= 0 ? rawHtml.slice(Math.max(0, idx - 15), idx + 15) : '(no se encontro ningun caracter U+00C3 en todo el texto)';
     const codePoints = idx >= 0 ? [...around].map((c) => c.charCodeAt(0).toString(16).padStart(4, '0')).join(' ') : 'n/a';
 
     await sql`
@@ -213,8 +215,8 @@ export async function fetchAndStoreRawPage(
       diagnostico: {
         antes_de_guardar: plainBeforeSave,
         leido_de_vuelta: plainAfterReadback,
-        alrededor_de_rez: around,
-        codigos_de_caracter_hex: codePoints
+        alrededor_del_caracter_problematico: around,
+        codigos_de_caracter_hex_ahi: codePoints
       }
     };
   };

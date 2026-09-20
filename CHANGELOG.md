@@ -2,6 +2,30 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.8] - 2026-09-17 (sesion 28) - FIX del diagnostico: buscaba la 'rez' equivocada (una URL, no el titulo real)
+
+El usuario probo el diagnostico de codigos de caracter de la sesion anterior:
+`alrededor_de_rez` devolvio literalmente `"fo-suarez"` con codigos ASCII puros (0066
+006f 002d 0073 0075 0061 0072 0065 007a) -- sin ningun acento ni mojibake.
+
+### La pista real: el diagnostico buscaba en el sitio equivocado, no el arreglo estaba mal
+`rawHtml.indexOf('rez')` encontro la PRIMERA ocurrencia de esas 3 letras en todo el
+HTML -- y resulta que Aena tiene una URL interna tipo
+"adolfo-suarez-madrid-barajas" (en minusculas, sin tilde, formato de slug de URL
+normal) que aparece en el `<head>` de la pagina (probablemente un `<link
+rel="canonical">` o similar) ANTES que el titulo visible con el problema real. El
+diagnostico se engancho a esa ocurrencia inocente en vez de a la del titulo, dando la
+falsa impresion de que no habia ningun caracter mal codificado cerca -- cuando en
+realidad simplemente se estaba mirando en el sitio equivocado del documento.
+
+### Corregido
+Buscar directamente el caracter mojibake `\u00c3` en si (que solo puede aparecer en
+una ocurrencia REAL del problema, nunca en una URL/slug ASCII normal como
+"adolfo-suarez"), en vez de buscar la secuencia de letras "rez" que puede aparecer en
+muchos sitios inocentes de una pagina real. Campos de diagnostico renombrados
+(`alrededor_del_caracter_problematico`, `codigos_de_caracter_hex_ahi`) para reflejar
+lo que buscan de verdad.
+
 ## [0.28.7] - 2026-09-17 (sesion 27) - diagnostico de codigos de caracter exactos (Unicode hex)
 
 El usuario probo el diagnostico "antes de guardar"/"leido de vuelta" de la sesion

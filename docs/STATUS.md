@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.7. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.8. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,47 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 28) — Sesion: FIX del diagnostico -- buscaba la 'rez' equivocada
+
+### Contexto e IMPORTANTE leccion metodologica
+El resultado del diagnostico de la sesion 27 fue `alrededor_de_rez: "fo-suarez"`, con
+codigos EXCLUSIVAMENTE ASCII (0066 006f 002d 0073 0075 0061 0072 0065 007a = "f o - s u
+a r e z"). Esto parecia sugerir, a primera vista, que no habia ningun caracter mal
+codificado -- pero la explicacion real era mucho mas simple y mundana: `indexOf('rez')`
+encuentra la PRIMERA ocurrencia de esas 3 letras en TODO el documento, y Aena tiene una
+URL interna con el formato de slug "adolfo-suarez-madrid-barajas" (minusculas, sin
+tilde, como es normal en una URL) que aparece en el `<head>` de la pagina (muy
+probablemente un `<link rel="canonical">` o similar) ANTES en el orden del HTML crudo
+que el titulo visible con el problema real. El diagnostico se engancho a esa ocurrencia
+completamente inocente, dando una pista FALSA de que "no hay nada raro por aqui" cuando
+en realidad simplemente se estaba mirando en el lugar equivocado del documento -- el
+mismo texto que se muestra en "antes_de_guardar" (que SI mostraba el galimatias)
+demuestra que el problema seguia estando presente, solo que en otra posicion del texto.
+
+**Leccion importante**: al diseñar un diagnostico de "buscar el patron X en el texto",
+hay que asegurarse de que el patron de busqueda sea lo bastante ESPECIFICO como para no
+enganchar coincidencias inocentes en otras partes de un documento real y complejo
+(URLs, atributos HTML, metadatos) que puedan parecerse superficialmente al problema
+real pero no tener nada que ver con el.
+
+### Corregido (el diagnostico, no la logica de negocio)
+Cambiado `rawHtml.indexOf('rez')` por `rawHtml.indexOf('\u00c3')` -- buscar
+directamente el propio caracter mojibake (que por definicion SOLO puede aparecer en
+una ocurrencia real del problema, nunca en una URL o slug ASCII normal como
+"adolfo-suarez"). Esto deberia llevar, por fin, directamente a una ocurrencia real del
+problema con sus codigos de caracter exactos alrededor.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. Sin cambios en `fixDoubleEncodedUtf8()`
+en si -- la incognita de por que no corrige el texto real sigue abierta, pendiente de
+un diagnostico que apunte al sitio correcto esta vez.
+
+### Pendiente
+Resultado del proximo intento del usuario, con los codigos de caracter de una
+ocurrencia REAL del problema esta vez.
 
 ---
 

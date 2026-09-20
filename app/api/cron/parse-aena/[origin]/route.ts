@@ -28,10 +28,23 @@ export async function GET(request: Request, { params }: { params: { origin: stri
   }
 
   try {
+    console.log(`[parse-aena ${origin}] empezando lectura+analisis...`);
+    const t0 = Date.now();
     const dests = await parseStoredPage(origin);
+    const t1 = Date.now();
+    console.log(`[parse-aena ${origin}] lectura+analisis: ${t1 - t0}ms, ${dests.length} destinos -- empezando upsert...`);
     await upsertDestinations(origin, dests);
+    const t2 = Date.now();
+    console.log(`[parse-aena ${origin}] upsert: ${t2 - t1}ms -- terminado`);
     await logSync([origin], dests.length, true);
-    return NextResponse.json({ ok: true, origin, phase: 'parse', destinations_found: dests.length, synced_at: new Date().toISOString() });
+    return NextResponse.json({
+      ok: true,
+      origin,
+      phase: 'parse',
+      destinations_found: dests.length,
+      timing_ms: { read_and_parse: t1 - t0, upsert: t2 - t1 },
+      synced_at: new Date().toISOString()
+    });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     try {

@@ -54,18 +54,46 @@ export function parseDestinationsHtml(html: string): ParsedDestination[] {
   // entidad HTML o como caracter UTF-8 literal, en esta pagina o en cualquier otra.
   const text = stripAccents(withoutTags).replace(/[ \t]+/g, ' ');
 
+  // FIX real (sesion 22): antes habia un UNICO regex con cuantificadores perezosos
+  // anidados (`{3,80}?`, `+?`, `(?:\s*\n)*`) aplicado a todo el texto de una vez --
+  // con una pagina grande (Madrid, 457 KB reales) esto causaba que el analisis por si
+  // solo (CPU pura, sin red de por medio) superase el limite duro de 10s de Vercel,
+  // aunque una prueba de estres sintetica no llego a reproducir el caso exacto. En vez
+  // de seguir ajustando ese regex a ciegas, se sustituye por un metodo LINEAL:
+  // dividir por lineas y mirar solo unas pocas lineas siguientes a cada candidato --
+  // O(n) real, sin ningun cuantificador perezoso anidado, mucho mas predecible.
+  const lines = text.split('\n').map((l) => l.trim()).filter(Boolean);
   const results: ParsedDestination[] = [];
-  const pattern = /([A-Z0-9/.,'\- ]{3,80}?)\s*\(([A-Z]{3})\)\s*\n(?:\s*\n)*\s*Pa[i]s\s+([A-Z /]+?)\s*\n(?:\s*\n)*\s*Aerol[i]neas\s+([^\n]+)/g;
-  let m: RegExpExecArray | null;
-  while ((m = pattern.exec(text)) !== null) {
-    const [, name, iata, country, airlines] = m;
+  const nameIataRe = /^(.{1,80}?)\s*\(([A-Z]{3})\)$/;
+
+  for (let i = 0; i < lines.length; i++) {
+    const m = nameIataRe.exec(lines[i]);
+    if (!m) continue;
+    const [, name, iata] = m;
     if (!/^[A-Z]{3}$/.test(iata)) continue;
-    results.push({
-      destIata: iata.trim(),
-      destName: name.trim(),
-      country: country.trim(),
-      airlinesRaw: airlines.trim().slice(0, 500),
-    });
+
+    let country: string | null = null;
+    let airlines: string | null = null;
+    for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+      const pm = /^Pa[i]s\s+([A-Z /]+)$/.exec(lines[j]);
+      if (pm) {
+        country = pm[1].trim();
+        continue;
+      }
+      const am = /^Aerol[i]neas\s+(.+)$/.exec(lines[j]);
+      if (am) {
+        airlines = am[1].trim();
+        break;
+      }
+    }
+    if (country && airlines) {
+      results.push({
+        destIata: iata.trim(),
+        destName: name.trim(),
+        country: country.trim(),
+        airlinesRaw: airlines.trim().slice(0, 500),
+      });
+    }
   }
   return results;
 }

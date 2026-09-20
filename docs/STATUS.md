@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.1. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.2. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,58 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 22) — Sesion: Murcia en mantenimiento (Aena), Madrid con analisis reescrito
+
+### Murcia -- causa real encontrada, IMPORTANTE: no es un bug de esta app
+El diagnostico añadido en la sesion anterior dio fruto inmediato: el extracto de texto
+real descargado fue literalmente "Pagina en mantenimiento ... Esta pagina esta en
+mantenimiento. En estos momentos estamos trabajando en nuestra web." -- la propia Aena
+tiene esa pagina de destinos de Murcia caida en este momento. **No hay nada que
+arreglar en el codigo de esta app** -- se resolvera solo cuando Aena restaure esa
+pagina en su lado. Confirmacion de que el diseño defensivo ya existente funciono como
+estaba pensado: el codigo detecto la anomalia (0 destinos, sospechoso) y NO borro
+ningun dato existente de Murcia en `aena_destinations` (la funcion `upsertDestinations`
+nunca llego a ejecutarse porque `parseStoredPage` lanzo el error antes). Cualquier IA
+futura que vea "RMU en mantenimiento" en los logs deberia simplemente reintentar mas
+adelante, no rediseñar nada.
+
+### Madrid -- causa real distinta a las 2 anteriores: el ANALISIS, no la descarga
+Con los datos del usuario: la descarga tuvo exito real (457.202 bytes), pero el 504
+aparecio en la llamada a `/api/cron/parse-aena/MAD` -- que NO hace ninguna peticion de
+red (lee de Postgres, analiza en memoria, escribe en Postgres). Un timeout de exactos
+10s en una operacion sin red es la firma tipica de un problema de CPU/algoritmo, no de
+lentitud externa. Diagnostico: el regex de `parseDestinationsHtml` tenia
+cuantificadores perezosos anidados (`{3,80}?` combinado con grupos repetidos
+`(?:\s*\n)*`) que, aplicados de una sola vez a un texto de cientos de KB, tienen riesgo
+real de coste computacional alto (aunque una prueba de estres sintetica de 5000 lineas
+no llego a reproducir el caso exacto -- puede que la pagina real de Madrid tenga alguna
+combinacion especifica de espacios en blanco o texto que si dispara el problema, sin
+poder confirmarlo con precision sin acceso directo al HTML real).
+
+**Fix**: sustituido el regex monolitico por un metodo LINEAL -- dividir el texto en
+lineas, y para cada linea que parezca "NOMBRE (IATA)", mirar solo las siguientes 5
+lineas buscando "Pais X" y "Aerolineas Y". Esto es O(n) real, sin ningun cuantificador
+perezoso anidado, y por tanto sin el riesgo de coste alto del metodo anterior.
+Verificado: (1) sigue dando el resultado correcto en el caso de prueba real conocido
+(texto con tildes UTF-8 literales de la sesion 19), (2) una prueba de estres con 5000
+lineas disenadas para forzar el peor caso completa en 8ms.
+
+**Instrumentacion añadida para el futuro**: `/api/cron/parse-aena/[origin]` ahora
+cronometra por separado la fase de "leer+analizar" y la de "escribir en BD"
+(devueltas en la respuesta JSON como `timing_ms`), y ademas registra estos mismos
+tiempos con `console.log` en cada paso -- asi, si la funcion llegara a agotar el
+tiempo de nuevo, los "VIEW LOGS" de Vercel (que el usuario ya sabe consultar, aparecen
+en la propia pantalla de error 504) mostrarian hasta donde llego exactamente, en vez
+de tener que adivinar una tercera vez.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. La funcion `parseDestinationsHtml` se
+probo directamente (via `npx tsx`) contra el archivo real del repositorio, no solo
+contra una copia en un script aparte, para asegurar que el codigo realmente desplegado
+se comporta como se probo.
 
 ---
 

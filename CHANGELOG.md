@@ -2,6 +2,28 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.2] - 2026-09-17 (sesion 22) - Murcia: pagina de Aena en mantenimiento (no arreglable); Madrid: analisis reescrito sin regex de riesgo
+
+El usuario probo el diagnostico de la sesion anterior con datos reales muy utiles.
+
+### Murcia: causa real encontrada, no arreglable desde el codigo
+El extracto de diagnostico mostro literalmente: "Pagina en mantenimiento ... Esta
+pagina esta en mantenimiento. En estos momentos estamos trabajando en nuestra web." --
+es la propia Aena la que tiene esa pagina concreta caida ahora mismo, no un bloqueo ni
+un fallo de analisis. Nada que corregir en el codigo; se resolvera solo cuando Aena
+restaure esa pagina. El codigo ya se comporto correctamente: detecto que algo no
+cuadraba (0 destinos) y NO borro ningun dato existente de Murcia.
+
+### Madrid: nueva causa real -- el ANALISIS timeaba, no la descarga
+Esta vez la descarga tuvo exito (457.202 bytes reales) pero el 504 aparecio en la fase
+de analisis, que no toca la red en absoluto -- señal de un problema de CPU, no de red.
+Sustituido el regex monolitico anterior (con cuantificadores perezosos anidados,
+riesgo real de coste alto en paginas grandes) por un metodo LINEAL linea a linea, sin
+ese riesgo. Probado contra el caso real conocido (funciona igual) y contra una prueba
+de estres de 5000 lineas (8ms). Añadido tambien cronometraje real (respuesta JSON +
+logs de consola en cada paso) para tener datos concretos si algo vuelve a fallar, en
+vez de tener que adivinar otra vez.
+
 ## [0.28.1] - 2026-09-17 (sesion 21) - diagnostico para Murcia (0 destinos) + segundo intento de fix para Madrid
 
 El usuario probo la separacion en 2 fases de la sesion anterior: Murcia dio "0

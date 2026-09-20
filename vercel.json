@@ -17,6 +17,22 @@
       "schedule": "15 4 * * *"
     },
     {
+      "path": "/api/cron/parse-aena/ALC",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/parse-aena/MAD",
+      "schedule": "5 5 * * *"
+    },
+    {
+      "path": "/api/cron/parse-aena/VLC",
+      "schedule": "10 5 * * *"
+    },
+    {
+      "path": "/api/cron/parse-aena/RMU",
+      "schedule": "15 5 * * *"
+    },
+    {
       "path": "/api/cron/check-alerts",
       "schedule": "0 6 */3 * *"
     }

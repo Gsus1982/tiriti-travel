@@ -2,6 +2,54 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.0] - 2026-09-17 (sesion 20) - FIX real: sincronizacion de Aena separada en 2 fases (504 confirmado)
+
+El usuario disparo el cron de Madrid a mano y obtuvo un error real y concreto: `504
+FUNCTION_INVOCATION_TIMEOUT`, "Task timed out after 10 seconds" -- confirmando que el
+fix anterior (subir el timeout de 5000 a 8000ms) no era suficiente. Investigado: el
+limite de 10s de funcion en el plan Hobby de Vercel es un techo DURO, no se puede subir
+de ninguna forma en ese plan (confirmado contra la documentacion oficial de Vercel).
+
+### Diagnostico
+Una sola invocacion tenia que DESCARGAR la pagina de Aena (mas grande para Madrid, 226
+destinos) Y analizarla Y escribir en la base de datos, todo dentro del mismo
+presupuesto de 10s. Aumentar el timeout de descarga (sesion 12) dejaba menos margen
+para el resto, y en la practica seguia sin caber.
+
+### Corregido: separacion real en 2 fases, cada una con sus propios 10s completos
+- **`lib/aena-sync.ts`**: nuevas funciones `fetchAndStoreRawPage()` (SOLO descarga y
+  guarda el HTML en bruto, sin analizar nada) y `parseStoredPage()` (SOLO lee el HTML
+  ya guardado y lo analiza -- trabajo de CPU puro, sin red de por medio, mucho mas
+  rapido). La funcion original que hacia ambas cosas juntas se mantiene por
+  compatibilidad (pruebas locales), pero los crons reales ya no la usan.
+- **Tabla nueva `aena_raw_pages`**: guarda el HTML descargado en la fase 1 para que la
+  fase 2 lo lea despues, sin volver a descargar nada.
+- **`/api/cron/refresh-aena/[origin]`** (modificado): ahora es SOLO la fase 1
+  (descarga).
+- **`/api/cron/parse-aena/[origin]`** (nuevo): SOLO la fase 2 (analisis + guardado en
+  `aena_destinations`).
+- **`vercel.json`**: 4 crons nuevos de analisis, programados 1 HORA despues de los de
+  descarga (05:xx vs 04:xx) -- no 5-10 minutos, para garantizar el orden sin depender
+  de la precision "en algun momento dentro de la hora" que tiene el plan Hobby de
+  Vercel para sus crons. Investigado y confirmado que el limite de crons por proyecto
+  en Hobby subio a 100 en enero de 2026 (antes eran solo 2) -- asi que anadir 4 crons
+  mas no tiene ningun coste ni riesgo de limite.
+
+### Investigado pero sin resultado util (transparencia)
+Se intento reproducir el 403/lentitud directamente contra Aena desde el entorno de
+esta sesion, con varias combinaciones de cabeceras -- la IP de este entorno esta
+bloqueada por completo por Aena (403 incluso en la portada y en Alicante, que funciona
+bien en produccion), asi que no representa lo que le pasa realmente a la IP de Vercel.
+No se pudo confirmar empiricamente la causa exacta de la lentitud de Aena para Madrid
+(pagina genuinamente pesada, o un posible "tarpit" anti-bot deliberado), pero el fix de
+separar en 2 fases no depende de conocer esa causa -- resuelve el problema real
+(presupuesto de tiempo compartido insuficiente) sea cual sea el motivo de fondo.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que
+ambos endpoints nuevos responden con errores controlados y con el campo `phase`
+identificando cual de las 2 fases fallo.
+
 ## [0.27.1] - 2026-09-17 (sesion 19) - FIX real: el scraper de Aena no reconocia tildes reales ("País")
 
 El usuario reporto que Madrid y Murcia seguian en 0 destinos pese a los fixes

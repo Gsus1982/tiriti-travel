@@ -1,16 +1,16 @@
 import { NextResponse } from 'next/server';
-import { AENA_AIRPORT_SLUGS, fetchAndStoreRawPage, logSync } from '@/lib/aena-sync';
+import { AENA_AIRPORT_SLUGS, parseStoredPage, upsertDestinations, logSync } from '@/lib/aena-sync';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 export const maxDuration = 10;
 
-// FASE 1 (sesion 19, FIX real de timeout): SOLO descarga y guarda el HTML en bruto --
-// ya no analiza nada aqui. Antes, esta misma funcion hacia descarga + analisis juntos,
-// lo que superaba el limite duro de 10s de Vercel Hobby para Madrid (pagina mucho mas
-// grande, 226 destinos) -- confirmado con un 504 FUNCTION_INVOCATION_TIMEOUT real. El
-// analisis ahora vive en /api/cron/parse-aena/[origin], programado 1 hora despues en
-// vercel.json para garantizar que esta fase ya termino.
+// FASE 2 (sesion 19, FIX real de timeout): lee el HTML ya descargado por
+// /api/cron/refresh-aena/[origin] (fase 1, una hora antes segun vercel.json) y SOLO lo
+// analiza + guarda -- trabajo de CPU puro, sin red de por medio, mucho mas rapido que
+// la descarga. Separar esto de la fase 1 es lo que evita el 504
+// FUNCTION_INVOCATION_TIMEOUT real que sufria Madrid al hacer descarga+analisis juntos
+// en una sola invocacion de 10s.
 export async function GET(request: Request, { params }: { params: { origin: string } }) {
   const { searchParams } = new URL(request.url);
   const secret = searchParams.get('secret') || request.headers.get('x-cron-secret');
@@ -28,15 +28,17 @@ export async function GET(request: Request, { params }: { params: { origin: stri
   }
 
   try {
-    const { bytes } = await fetchAndStoreRawPage(origin, 8500);
-    return NextResponse.json({ ok: true, origin, phase: 'fetch', bytes_downloaded: bytes, fetched_at: new Date().toISOString() });
+    const dests = await parseStoredPage(origin);
+    await upsertDestinations(origin, dests);
+    await logSync([origin], dests.length, true);
+    return NextResponse.json({ ok: true, origin, phase: 'parse', destinations_found: dests.length, synced_at: new Date().toISOString() });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     try {
-      await logSync([origin], 0, false, `[fase 1: descarga] ${message}`);
+      await logSync([origin], 0, false, `[fase 2: analisis] ${message}`);
     } catch {
       // si ni siquiera se puede loguear, no bloqueamos la respuesta de error
     }
-    return NextResponse.json({ ok: false, origin, phase: 'fetch', error: message }, { status: 500 });
+    return NextResponse.json({ ok: false, origin, phase: 'parse', error: message }, { status: 500 });
   }
 }

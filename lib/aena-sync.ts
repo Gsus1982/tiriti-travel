@@ -80,6 +80,63 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
   });
 }
 
+/**
+ * FASE 1 (sesion 19, FIX real de timeout): solo descarga el HTML en bruto de Aena y lo
+ * guarda -- NO analiza nada aqui. Antes, una sola funcion hacia descarga + analisis
+ * juntos; para Madrid (226 destinos, pagina mucho mas grande) eso superaba el limite
+ * duro de 10s de una funcion en el plan Hobby de Vercel (confirmado con un 504
+ * FUNCTION_INVOCATION_TIMEOUT real, reportado por el usuario). Separar en 2
+ * invocaciones distintas le da a CADA fase sus propios 10s completos.
+ */
+export async function fetchAndStoreRawPage(origin: string, timeoutMs = 8000): Promise<{ bytes: number }> {
+  const slug = AENA_AIRPORT_SLUGS[origin];
+  const path = DEST_PATH_BY_ORIGIN[origin];
+  if (!slug || !path) throw new Error(`Origen no soportado: ${origin}`);
+  const url = `https://www.aena.es/es/${slug}/${path}`;
+
+  const doFetch = async () => {
+    const res = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; TiritiTravelSyncBot/1.0; +uso personal)',
+        'Accept-Language': 'es-ES,es;q=0.9',
+        Accept: 'text/html',
+        'Accept-Encoding': 'gzip, br',
+      },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!res.ok) throw new Error(`Aena respondio ${res.status} para ${origin}`);
+    return res.text();
+  };
+
+  const html = await withHardTimeout(doFetch(), timeoutMs + 500, `fetch Aena ${origin}`);
+  await sql`
+    INSERT INTO aena_raw_pages (origin_iata, html, fetched_at)
+    VALUES (${origin}, ${html}, now())
+    ON CONFLICT (origin_iata) DO UPDATE SET html = EXCLUDED.html, fetched_at = EXCLUDED.fetched_at
+  `;
+  return { bytes: html.length };
+}
+
+/**
+ * FASE 2 (una hora despues de la fase 1 en el cron, para garantizar el orden sin
+ * depender de la precision de "dentro de la hora" del plan Hobby): lee el HTML ya
+ * descargado y SOLO lo analiza + guarda en aena_destinations -- sin red de por medio,
+ * es trabajo de CPU puro, mucho mas rapido que descargar la pagina.
+ */
+export async function parseStoredPage(origin: string): Promise<ParsedDestination[]> {
+  const rows = (await sql`SELECT html FROM aena_raw_pages WHERE origin_iata = ${origin}`) as { html: string }[];
+  if (rows.length === 0) {
+    throw new Error(`No hay ninguna pagina descargada todavia para ${origin} -- espera a que corra la fase de descarga.`);
+  }
+  const parsed = parseDestinationsHtml(rows[0].html);
+  if (parsed.length < 5) {
+    throw new Error(`Analisis sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena).`);
+  }
+  return parsed;
+}
+
+/** Version original (descarga + analiza en una sola llamada) -- se mantiene para quien la necesite sin el limite de 10s (pruebas locales, script manual), pero los crons reales ya usan las 2 fases de arriba. */
 export async function fetchAenaDestinations(origin: string, timeoutMs = 5000): Promise<ParsedDestination[]> {
   const slug = AENA_AIRPORT_SLUGS[origin];
   const path = DEST_PATH_BY_ORIGIN[origin];

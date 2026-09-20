@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.27.1. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,86 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 20) — Sesion: sincronizacion de Aena separada en 2 fases (504 confirmado)
+
+### Contexto
+El usuario disparo manualmente `/api/cron/refresh-aena/MAD` (siguiendo la indicacion
+de la sesion anterior) y obtuvo un error real, no una suposicion: **504
+FUNCTION_INVOCATION_TIMEOUT, "Task timed out after 10 seconds"** -- de Vercel
+directamente, con logs. Esto confirma que el fix de la sesion 12 (subir el timeout de
+peticion de 5000 a 8000ms) NO fue suficiente para Madrid.
+
+### Investigacion del limite real (por que no se puede simplemente subir el numero otra vez)
+Confirmado por busqueda web contra la documentacion oficial de Vercel: el limite de
+10s de duracion de funcion en el plan Hobby es un TECHO DURO, no configurable de
+ninguna forma en ese plan (a diferencia de Pro, que permite hasta 300s o mas). Asi que
+la solucion no podia ser "subir el timeout otra vez" -- habia que reducir el TRABAJO
+que cabe dentro de esos 10s, no pedir mas tiempo.
+
+### Diseño de la solucion: separar descarga y analisis en 2 invocaciones independientes
+Antes, una sola funcion hacia 3 cosas en la misma invocacion: descargar la pagina
+(lenta, mas para Madrid con 226 destinos), analizarla (CPU) y escribir en la base de
+datos -- las 3 compitiendo por el mismo presupuesto de 10s. Se separo en 2 fases:
+
+1. **Fase 1 -- solo descarga** (`fetchAndStoreRawPage()` en `lib/aena-sync.ts`,
+   servida por `/api/cron/refresh-aena/[origin]`, SIN cambios en su URL ni en
+   `vercel.json` para esta fase): descarga el HTML y lo guarda tal cual en una tabla
+   nueva (`aena_raw_pages`), sin analizar nada. Toda la invocacion, los 10s completos,
+   se dedican solo a la red.
+2. **Fase 2 -- solo analisis** (`parseStoredPage()`, servida por el endpoint NUEVO
+   `/api/cron/parse-aena/[origin]`): lee el HTML ya guardado por la fase 1 (sin red de
+   por medio) y hace el analisis + `upsertDestinations()`. Trabajo de CPU puro, mucho
+   mas rapido, con sus propios 10s completos.
+
+**Separacion temporal para garantizar el orden**: los 4 crons de la fase 2 en
+`vercel.json` se programaron 1 HORA despues de los de la fase 1 (05:xx en vez de
+04:05-04:20) -- no unos minutos despues. Motivo: el plan Hobby de Vercel no garantiza
+la hora exacta de un cron, solo que se ejecuta "en algun momento dentro de la hora
+programada" -- con una separacion de solo minutos, existiria un riesgo real de que la
+fase 2 se disparase ANTES de que la fase 1 hubiera terminado ese dia. Con una hora
+completa de margen, ese riesgo desaparece (las ventanas horarias de ambas fases no se
+solapan nunca).
+
+**Confirmado que anadir 4 crons mas no tiene coste**: investigado (busqueda web,
+changelog oficial de Vercel de enero de 2026) que el limite de crons por proyecto en
+el plan Hobby subio de 2 a 100 -- el viejo limite de "solo 2 crons en Hobby" que
+aparece en varios blogs de terceros esta desactualizado desde entonces. Con 9 crons en
+total (4+4+1) se sigue muy por debajo del limite real.
+
+### Investigado sin resultado util (documentado con honestidad)
+Se intento reproducir el problema directamente contra Aena desde el entorno de trabajo
+de esta sesion (que SI tiene salida de red a internet, a diferencia de lo que se penso
+en sesiones anteriores) -- probando varias combinaciones de cabeceras (user-agent de
+navegador real, Accept-Language, Referer, cabeceras Sec-Fetch-*). Resultado: **la IP de
+este entorno esta bloqueada por completo por Aena** -- devuelve 403 incluso en la
+portada de Aena y en la pagina de Alicante (que funciona bien en produccion segun el
+propio usuario), asi que estas pruebas NO son representativas de lo que le pasa a la
+IP real de Vercel. No se pudo confirmar empiricamente si la lentitud de Madrid es por
+el tamaño genuino de la pagina o por un posible "tarpit" anti-bot deliberado de Aena
+hacia trafico de datacenter -- pero el fix de separar en 2 fases no depende de conocer
+esa causa exacta.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios. `next start` + `curl` confirmando que
+ambos endpoints (`/api/cron/refresh-aena/[origin]` y el nuevo
+`/api/cron/parse-aena/[origin]`) responden con errores controlados, cada uno con un
+campo `phase` ("fetch" o "parse") identificando en cual de las 2 fases fallo algo, para
+facilitar el diagnostico si vuelve a pasar.
+
+### Pendiente (usuario)
+1. Aplicar en Neon la migracion de la tabla `aena_raw_pages` (ver `scripts/schema.sql`,
+   bloque "MIGRACION: sincronizacion de Aena en 2 fases").
+2. Sin esa migracion, la fase 1 (descarga) sigue funcionando igual, pero la fase 2
+   (analisis) fallara con un error claro ("No hay ninguna pagina descargada todavia")
+   hasta que se aplique.
+3. Los crons nuevos se ejecutan automaticamente desde la proxima madrugada -- si el
+   usuario quiere confirmarlo antes, puede disparar primero
+   `/api/cron/refresh-aena/MAD` y, una vez esa responda bien, disparar
+   `/api/cron/parse-aena/MAD` el mismo a mano (no hace falta esperar la hora completa
+   si se dispara manualmente en el orden correcto).
 
 ---
 

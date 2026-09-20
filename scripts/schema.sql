@@ -163,3 +163,21 @@ CREATE INDEX IF NOT EXISTS price_history_route_idx ON price_history (origin_iata
 --   );
 -- Sin esta migracion, el detector de chollos simplemente no hace nada (falla en
 -- silencio, ver lib/deal-detector.ts), sin afectar al resto de la app.
+
+-- ============================================================================
+-- MIGRACION: sincronizacion de Aena en 2 fases (sesion del 17 sep 2026, FIX real)
+-- ============================================================================
+-- Antes, un solo cron hacia la descarga Y el analisis de la pagina de Aena en la
+-- misma invocacion -- para Madrid (pagina mucho mas grande, 226 destinos) esto
+-- superaba el limite duro de 10s del plan Hobby de Vercel (confirmado con un 504
+-- FUNCTION_INVOCATION_TIMEOUT real). Se separa en 2 invocaciones independientes,
+-- cada una con sus propios 10s completos: una SOLO descarga y guarda el HTML en
+-- bruto aqui, y otra (una hora despues, para evitar cualquier problema de orden)
+-- SOLO lee ese HTML y lo analiza.
+--   CREATE TABLE IF NOT EXISTS aena_raw_pages (
+--     origin_iata CHAR(3) PRIMARY KEY,
+--     html TEXT NOT NULL,
+--     fetched_at TIMESTAMPTZ NOT NULL DEFAULT now()
+--   );
+-- Sin esta migracion, la fase de descarga sigue funcionando (no rompe nada), pero la
+-- fase de analisis no tiene de donde leer y falla con un aviso claro.

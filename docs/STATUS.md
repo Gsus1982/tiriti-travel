@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.28.4. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.28.5. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,76 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 25) — Sesion: reemplazo quirurgico (la salvaguarda del fix anterior se autodescartaba)
+
+### Contexto
+El usuario repitio descarga+analisis desde cero por tercera vez y el mismo galimatias
+EXACTO ("SuÃ¡rez", "CORUÃ‘A") seguia apareciendo, byte a byte identico a antes del fix
+de la sesion 24. Esto era una pista en si misma: si el fix hubiera estado simplemente
+mal, cabria esperar un resultado DISTINTO (otro tipo de corrupcion, o parcialmente
+arreglado) -- que fuera EXACTAMENTE igual sugeria que el codigo nuevo se estaba
+ejecutando pero terminando en el mismo resultado que el codigo viejo por algun motivo
+logico, no que no se hubiera desplegado.
+
+### La causa exacta del fallo del fix anterior
+`fixDoubleEncodedUtf8()` (sesion 24) hacia `Buffer.from(text, 'latin1').toString('utf-8')`
+sobre el texto ENTERO (457 KB reales), con una salvaguarda: si el resultado contenia
+algun caracter de reemplazo `\uFFFD` (señal de secuencia de bytes UTF-8 invalida tras la
+reinterpretacion), se descartaba TODO el arreglo y se devolvia el texto original tal
+cual -- precisamente para no arriesgarse a corromper texto que no estuviera realmente
+doblemente codificado. El problema: en una pagina real tan grande, es practicamente
+seguro que exista AL MENOS un fragmento (un resto de script no eliminado del todo por
+`stripUnneededHtml`, una entidad numerica rara, algun simbolo o emoji en el pie de
+pagina) que NO siga el mismo patron de doble codificacion que la tabla de destinos --
+y reinterpretar ESE fragmento como latin1 SI generaria bytes UTF-8 invalidos al
+decodificar de nuevo, dispando la salvaguarda para TODA la pagina de una vez, incluida
+la tabla de destinos que si estaba perfectamente identificable y arreglable. Es decir:
+el diagnostico de la doble codificacion (sesion 24) era CORRECTO, pero la
+implementacion del arreglo (aplicarlo globalmente con una salvaguarda de todo-o-nada)
+no lo era.
+
+### Fix
+Sustituida la reinterpretacion global por un **reemplazo quirurgico**: una lista de 16
+pares mojibake -> caracter correcto (`MOJIBAKE_PAIRS`), generados PROGRAMATICAMENTE
+(no adivinados a mano, para evitar errores de transcripcion) calculando los bytes
+UTF-8 reales de cada vocal acentuada del español, la Ñ/ñ, la ü/Ü y los signos de
+apertura ¿¡, y reinterpretando esos bytes como latin1 para obtener el patron mojibake
+exacto que hay que buscar. Se sustituyen SOLO esos 16 pares exactos en el texto (`split`
++ `join`, sin regex), dejando absolutamente todo lo demas de la pagina intacto -- sin
+ninguna salvaguarda global de todo-o-nada que pueda descartar el arreglo por un
+problema en una parte de la pagina que no tiene nada que ver con la tabla de destinos.
+
+### Verificacion -- diseñada especificamente para probar la resiliencia frente al fallo anterior
+Se construyo deliberadamente el peor caso que habria disparado la salvaguarda del fix
+anterior: una pagina con la tabla de destinos correctamente doblemente codificada (como
+hace Aena de verdad) MAS un fragmento adicional con un emoji y comillas tipograficas
+tambien mal codificados (representando cualquier parte de la pagina real que no siga
+exactamente el mismo patron). Resultado: el reemplazo quirurgico arreglo
+correctamente "Suárez", "CORUÑA", "País", "Aerolíneas", y `parseDestinationsHtml`
+encontro los 2 destinos de prueba con sus datos exactos -- sin verse afectado en
+absoluto por el fragmento de emoji/comillas, que quedo sin corregir (lo cual no importa,
+porque nunca forma parte de la tabla de destinos que realmente se analiza).
+
+### Leccion para sesiones futuras
+Cuando un arreglo de "todo o nada" con una salvaguarda de seguridad se aplica a datos
+reales grandes y heterogeneos, la salvaguarda puede terminar anulando el arreglo
+entero por un problema en una parte de los datos que ni siquiera importa para el caso
+de uso real. Cuando se conoce EXACTAMENTE que patron hay que corregir (aqui, un
+conjunto cerrado y pequeño de caracteres especiales del español), un reemplazo
+quirurgico y especifico es mas robusto que una transformacion generica con red de
+seguridad, aunque a primera vista parezca menos elegante.
+
+### Verificado
+`npx tsc --noEmit` y `npm run build` limpios, mas la prueba de resiliencia descrita
+arriba, ejecutada con `npx tsx`.
+
+### Aviso pendiente de confirmar
+Como en el intento anterior, no se ha podido probar contra la respuesta REAL de Aena en
+produccion desde esta sesion (sin acceso de red propio) -- la confirmacion definitiva
+la tiene que dar el proximo intento real del usuario.
 
 ---
 

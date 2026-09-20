@@ -2,6 +2,43 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.28.5] - 2026-09-17 (sesion 25) - FIX real: reemplazo quirurgico en vez de reinterpretacion global (la salvaguarda del fix anterior se autodescartaba)
+
+El usuario repitio descarga+analisis desde cero y el mismo galimatias exacto seguia
+apareciendo -- el fix de la sesion 24 (deshacer la doble codificacion reinterpretando
+TODO el texto como latin1) tenia la causa correcta pero una salvaguarda que lo
+invalidaba en la practica.
+
+### Causa del fallo del fix anterior
+`fixDoubleEncodedUtf8()` reinterpretaba el texto ENTERO (457 KB reales) como latin1 y
+lo volvia a decodificar como UTF-8, con una salvaguarda: si el resultado contenia algun
+caracter de reemplazo (U+FFFD, señal de bytes UTF-8 invalidos), se descartaba el
+arreglo COMPLETO y se devolvia el texto original sin tocar. En una pagina real tan
+grande, es muy probable que exista al menos un fragmento (un script residual no
+eliminado del todo, una entidad rara, algun simbolo) que NO este doblemente codificado
+-- y reinterpretarlo como latin1 SI generaria bytes UTF-8 invalidos al decodificar de
+nuevo, disparando la salvaguarda y anulando el arreglo para TODA la pagina de golpe,
+incluida la tabla de destinos que si estaba bien identificada.
+
+### Corregido
+Sustituida la reinterpretacion global por un reemplazo QUIRURGICO: una lista de 16
+pares mojibake -> caracter correcto, generados programaticamente (no adivinados a
+mano) a partir de los bytes UTF-8 reales de cada vocal acentuada, la Ñ/ñ, la ü/Ü y los
+signos ¿¡ reinterpretados como latin1. Se sustituye SOLO esos pares exactos en el
+texto, dejando absolutamente todo lo demas intacto -- sin ninguna salvaguarda global
+que pueda descartar el arreglo por un problema en una parte de la pagina que no tiene
+nada que ver con la tabla de destinos.
+
+### Verificado
+Simulado el peor caso deliberadamente: una pagina con la tabla de destinos
+correctamente doblemente codificada (como hace Aena) MAS un fragmento con emoji y
+comillas tipograficas tambien mal codificado (para representar cualquier parte de la
+pagina real que no siga el mismo patron exacto) -- el reemplazo quirurgico arreglo
+correctamente los nombres de destino y pais, encontrando los 2 destinos de prueba con
+sus datos exactos, sin verse afectado en absoluto por el fragmento de emoji/comillas
+que quedo sin corregir (y que no importa, porque nunca forma parte de la tabla de
+destinos que se analiza).
+
 ## [0.28.4] - 2026-09-17 (sesion 24) - FIX real, verificado end-to-end: Aena envia el contenido DOBLEMENTE codificado en UTF-8
 
 El usuario, siguiendo la indicacion de repetir descarga+analisis desde cero, confirmo

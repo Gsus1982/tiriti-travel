@@ -116,40 +116,38 @@ function withHardTimeout<T>(promise: Promise<T>, ms: number, label: string): Pro
  * FUNCTION_INVOCATION_TIMEOUT real, reportado por el usuario). Separar en 2
  * invocaciones distintas le da a CADA fase sus propios 10s completos.
  */
+// Pares mojibake -> caracter correcto para los caracteres especiales del español,
+// generados a partir de sus bytes UTF-8 reales reinterpretados como latin1 (verificado
+// programaticamente, no adivinado a mano). Cubre minusculas, mayusculas, dieresis y
+// los signos de apertura ¿¡.
+const MOJIBAKE_PAIRS: [string, string][] = [
+  ['\u00c3\u00a1', 'á'], ['\u00c3\u00a9', 'é'], ['\u00c3\u00ad', 'í'],
+  ['\u00c3\u00b3', 'ó'], ['\u00c3\u00ba', 'ú'], ['\u00c3\u00b1', 'ñ'],
+  ['\u00c3\u0081', 'Á'], ['\u00c3\u0089', 'É'], ['\u00c3\u008d', 'Í'],
+  ['\u00c3\u0093', 'Ó'], ['\u00c3\u009a', 'Ú'], ['\u00c3\u0091', 'Ñ'],
+  ['\u00c3\u00bc', 'ü'], ['\u00c3\u009c', 'Ü'],
+  ['\u00c2\u00bf', '¿'], ['\u00c2\u00a1', '¡'],
+];
+
 /**
- * FIX real (sesion 24, segundo intento tras confirmar con el usuario que el primer fix
- * -- forzar TextDecoder utf-8 -- no bastaba): Aena esta enviando el contenido de esta
- * pagina con DOBLE codificacion UTF-8 desde su propio servidor -- un fallo tipico de
- * mezclar una base de datos en latin1/windows-1252 con una tuberia de salida en UTF-8
- * sin convertir correctamente en algun punto intermedio. Decodificar bien como UTF-8
- * (lo que ya se hacia) da CORRECTAMENTE "Ã¡" para lo que deberia ser "á", porque esos
- * son literalmente los bytes reales que Aena envia por la red -- el problema esta en
- * el lado de Aena, antes de que la peticion llegue aqui.
- *
- * Se deshace reinterpretando el texto ya decodificado como si sus caracteres fueran
- * bytes latin1 (cada caracter del string, valores 0-255, se convierte en 1 byte), y
- * decodificando ESOS bytes como UTF-8 otra vez -- confirmado con una prueba exacta:
- * el texto real observado ("Ã¡", "Ã‘") revierte correctamente a "á", "Ñ" con esta
- * transformacion.
- *
- * Riesgo asumido conscientemente: si el texto tuviera caracteres geniunamente fuera
- * del rango latin1 (por ejemplo, comillas tipograficas o algun caracter no español),
- * esta transformacion los deformaria. Para esta pagina en concreto (nombres de
- * aeropuertos y paises en español) se considera un riesgo aceptable frente al
- * beneficio de arreglar el problema real y mucho mas frecuente (todas las vocales
- * acentuadas y la Ñ).
+ * FIX real (sesion 25, tercer intento): la reinterpretacion GLOBAL del texto entero
+ * como latin1 (sesion 24) tenia una salvaguarda que descartaba el arreglo entero en
+ * cuanto aparecia UN SOLO caracter de reemplazo (U+FFFD) en cualquier parte de la
+ * pagina -- y en una pagina real de 457 KB es muy probable que exista al menos un
+ * fragmento (un script residual, una entidad rara, algun simbolo) que no este
+ * doblemente codificado, invalidando el arreglo para TODA la pagina de golpe (esto
+ * explica por que el fix anterior no funciono aunque estaba bien planteado en
+ * principio). Sustituido por reemplazo QUIRURGICO: solo los pares mojibake conocidos y
+ * exactos de arriba, uno por uno -- el resto del texto queda completamente intacto, sin
+ * ninguna salvaguarda global que pueda descartar el arreglo por un problema en una
+ * parte no relacionada de la pagina.
  */
 function fixDoubleEncodedUtf8(text: string): string {
-  try {
-    const fixed = Buffer.from(text, 'latin1').toString('utf-8');
-    // Salvaguarda: si el resultado tiene caracteres de reemplazo (U+FFFD), la
-    // transformacion no era valida para este texto -- se descarta y se devuelve el
-    // original sin tocar, en vez de arriesgarse a corromper texto que no estaba
-    // doblemente codificado.
-    return fixed.includes('\uFFFD') ? text : fixed;
-  } catch {
-    return text;
+  let result = text;
+  for (const [mojibake, correct] of MOJIBAKE_PAIRS) {
+    result = result.split(mojibake).join(correct);
   }
+  return result;
 }
 
 function stripUnneededHtml(html: string): string {

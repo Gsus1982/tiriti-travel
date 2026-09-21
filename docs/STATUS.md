@@ -99,6 +99,33 @@ suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
 
 ---
 
+## Estado al 21 de septiembre de 2026 — CONFIRMADO EN PRODUCCION: Madrid sincroniza 236 destinos
+
+Resultado real del usuario tras la v0.30.1, via `/api/cron/parse-aena/MAD`:
+`{"ok":true,"destinations_found":236,"timing_ms":{"read_and_parse":158,"upsert":381}}`.
+Cerrado el problema de "0 destinos" de Madrid (sesiones 12-31). La pagina dice "227
+destinos"; la diferencia de 236 probablemente se debe a rutas estacionales o a destinos
+con varias entradas en el desplegable. No es un fallo.
+
+Resumen de causas reales encontradas por el camino, en orden:
+1. Timeout: descarga + analisis en una sola funcion de 10s. Resuelto separando en 2 fases.
+2. Regex con retroceso costoso. Resuelto con analisis lineal.
+3. CAUSA RAIZ: Madrid usa una plantilla sin "Pais/Aerolineas" por fila. Resuelto leyendo
+   el desplegable `<div class="option">NOMBRE (IATA)</div>`.
+Pistas falsas (no eran la causa): la doble codificacion UTF-8 (era el navegador del
+usuario pintando el JSON como windows-1252) y los enlaces `/es/*.html` (menu de
+aeropuertos de Aena).
+
+Pendiente:
+- Murcia: la pagina de Aena estaba en mantenimiento. Reintentar refresh-aena/RMU y
+  parse-aena/RMU cuando vuelva.
+- Valencia (daba ~60 de ~103): conviene relanzar refresh-aena/VLC y parse-aena/VLC, porque
+  el metodo del desplegable puede encontrar mas.
+- Seguridad: revocar el token de GitHub usado en estas sesiones y valorar hacer el repo
+  privado.
+
+---
+
 ## Estado al 17 de septiembre de 2026 (sesion 31) — Sesion: Madrid via desplegable de destinos (enlaces = pista falsa)
 
 El fix de la sesion 30 dio "0 por lineas, 0 por enlaces". Causa: el enlace

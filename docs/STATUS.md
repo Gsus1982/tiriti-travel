@@ -99,6 +99,77 @@ suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
 
 ---
 
+## Estado al 17 de septiembre de 2026 (sesion 30) — Sesion: HALLAZGO REAL -- la pagina de Madrid no tiene la estructura que se asumia
+
+### EL HALLAZGO (documentado primero, antes de implementar el fix, por peticion expresa del usuario ante posible falta de tokens)
+
+El diagnostico de estructura de la sesion 29 (buscar "(LCG)" y mostrar el contexto
+real) dio la respuesta definitiva. Contexto HTML crudo real, tal cual, alrededor de
+"(LCG)":
+
+```
+<ul class="links">
+  <li>
+    <a href="/es/a-coruna.html">A CoruÃ±a (LCG)</a>
+  </li>
+  <li>
+    ...
+```
+
+Y el contexto en lineas (de una seccion DISTINTA de la misma pagina, un desplegable de
+filtro):
+
+```
+<label for="destino">A</label>
+<input id="destino" type="text" name="aerolinea" placeholder="Todos los destinos">
+<div class="option-box">
+<div class="option">A CORUÃ‘A (LCG)</div>
+<div class="option">ABU DHABI (AUH)</div>
+<div class="option">ADDIS ABEBA/ BOLE (ADD)</div>
+...
+```
+
+**Conclusion**: la pagina de Madrid NO tiene, junto a cada destino, las etiquetas
+"Pais X" / "Aerolineas Y" que `parseDestinationsHtml` lleva 5 sesiones (23-29)
+asumiendo que existian (esa suposicion vino de fragmentos de busqueda web de sesiones
+mucho mas tempranas, que probablemente reflejaban un formato distinto, una cache
+antigua, o una mezcla de contenido que la busqueda web presento de forma enganosa).
+En Madrid, cada destino aparece de 2 formas distintas en la pagina, NINGUNA con pais
+ni aerolineas adjuntos:
+1. Como enlace simple dentro de una lista: `<a href="/es/{slug}.html">{NOMBRE}
+   ({IATA})</a>`, dentro de `<ul class="links">`.
+2. Como opcion de un desplegable de busqueda/filtro: `<div class="option">{NOMBRE}
+   ({IATA})</div>`.
+
+**Esto explica CON CERTEZA por que el analisis daba 0 destinos para Madrid**: el
+patron buscaba "Pais X" y "Aerolineas Y" en las 5 lineas siguientes a cada "NOMBRE
+(IATA)", y esas palabras simplemente no estan ahi para ningun destino de esta pagina
+-- no es un problema de codificacion (confirmado en la sesion 29 que la codificacion
+esta bien), ni de timeout (ya resuelto), ni de retroceso de regex (ya resuelto): es que
+el patron de contenido esperado NUNCA existio en esta pagina tal como se estaba
+buscando.
+
+**Nota sobre Alicante/Valencia**: si esas paginas SI dan resultados con el patron
+"Pais X / Aerolineas Y" (110 y ~60 destinos respectivamente, segun reportes anteriores
+del usuario), es probable que su plantilla de pagina sea mas antigua o distinta a la de
+Madrid, y SI tengan esa estructura repetida por fila -- Aena parece no usar una
+plantilla unica y consistente entre todos sus aeropuertos. Cualquier fix debe
+contemplar AMBAS estructuras posibles.
+
+### Plan del fix (a implementar a continuacion en esta misma sesion)
+Añadir una segunda estrategia de analisis basada en el patron de enlace real:
+`<a href="/es/[^"]+\.html">NOMBRE (IATA)</a>`, aplicada directamente sobre el HTML
+crudo (antes de quitar etiquetas). No da pais/aerolineas por cada fila (esa
+informacion no esta disponible en este formato de pagina), asi que esos campos se
+dejaran vacios o con un valor generico para los destinos capturados por esta via --
+aceptable, dado que el proposito central de `aena_destinations` es saber que destinos
+tienen vuelo directo real, no tener el pais perfecto de cada uno. Se intentara primero
+el metodo linea-a-linea existente (funciona para ALC/VLC); si encuentra pocos
+resultados, se probara este nuevo metodo de enlaces como alternativa, sin descartar
+ninguno de los 2.
+
+---
+
 ## Estado al 17 de septiembre de 2026 (sesion 29) — Sesion: PIVOTE -- la codificacion nunca fue el problema real
 
 ### LO MAS IMPORTANTE DE ESTA ENTRADA, PARA CUALQUIER IA FUTURA

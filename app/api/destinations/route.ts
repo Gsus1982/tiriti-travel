@@ -12,14 +12,27 @@ export async function GET(request: NextRequest) {
       .map((o) => o.trim().toUpperCase())
       .filter(Boolean);
 
+    // FIX (v0.30.2, bug real reportado con captura): antes se agrupaba por
+    // (dest_iata, dest_name, country). Cada origen se sincroniza con Aena en
+    // sesiones distintas y no todas las paginas de Aena traen el pais por fila --
+    // Madrid (236 destinos) y Valencia (109 destinos) se resincronizaron el 21-09
+    // con country vacio, mientras que Alicante (sincronizado el 14-09) si lo trae.
+    // Como el pais formaba parte de la clave de agrupacion, el MISMO aeropuerto (ej.
+    // KTW, servido desde ALC y desde MAD) aparecia como 2 filas distintas en el
+    // selector: una con pais y otra sin el. Confirmado contra la base de datos real
+    // (Neon): afecta a decenas de destinos, no solo a Katowice (Amsterdam, Atenas,
+    // Barcelona, Berlin, Cracovia, Dublin...). Ahora se agrupa SOLO por (dest_iata,
+    // dest_name) y se elige, de entre todas las filas del grupo, el primer valor de
+    // country que no este vacio.
     const rows = await sql`
-      SELECT dest_iata, dest_name, country,
+      SELECT dest_iata, dest_name,
+             (array_agg(country) FILTER (WHERE country IS NOT NULL AND country <> ''))[1] AS country,
              array_agg(DISTINCT origin_iata ORDER BY origin_iata) AS served_from,
              max(scraped_at) AS last_synced
       FROM aena_destinations
       WHERE origin_iata = ANY(${origins}::text[])
-      GROUP BY dest_iata, dest_name, country
-      ORDER BY country, dest_name
+      GROUP BY dest_iata, dest_name
+      ORDER BY country NULLS LAST, dest_name
     `;
 
     const lastSyncRows = await sql`

@@ -163,8 +163,17 @@ async function safeSearchOneWay(
 
 async function resolveDestinationTargets(destinationIatas: string[]): Promise<DestinationTarget[]> {
   if (destinationIatas.length === 0) return [];
+  // FIX (v0.30.2, bug real reportado con captura: aeropuertos duplicados en el
+  // selector, ej. Katowice apareciendo 2 veces): la tabla aena_destinations puede
+  // tener varias filas para el MISMO dest_iata (una por cada origen que lo sirve),
+  // y algunas sincronizaciones dejan `country` vacio mientras otras no. Sin ORDER BY,
+  // el orden de las filas devueltas por Postgres no esta garantizado, asi que el Map
+  // de abajo podia quedarse arbitrariamente con la fila SIN pais. Se ordena para que,
+  // si hay varias filas para el mismo iata, la que tiene el pais informado (no vacio)
+  // quede SIEMPRE ultima -- y por tanto sea la que sobrevive en el Map.
   const rows = (await sql`
     SELECT dest_iata, dest_name, country FROM aena_destinations WHERE dest_iata = ANY(${destinationIatas}::text[])
+    ORDER BY dest_iata, (country IS NULL OR country = '') DESC
   `) as { dest_iata: string; dest_name: string; country: string }[];
   const byIata = new Map(rows.map((r) => [r.dest_iata, r]));
 
@@ -215,11 +224,6 @@ async function searchLiveForTarget(
     airlinesExclude
   } = filters;
 
-  // Dias sueltos, NO necesariamente contiguos (peticion real: "poder elegir mas un dia
-  // o menos un dia de forma independiente") -- si el cliente manda una lista explicita
-  // de dias, se usa tal cual en vez de generar el rango completo dia a dia con
-  // datesBetween. Se mantiene datesBetween como fallback por compatibilidad con quien
-  // siga mandando solo el rango (cron de alertas, por ejemplo).
   const outboundDates = explicitOutboundDates?.length ? explicitOutboundDates : datesBetween(outboundDateFrom, outboundDateTo);
   const inboundDates = explicitInboundDates?.length ? explicitInboundDates : datesBetween(inboundDateFrom, inboundDateTo);
 
@@ -229,11 +233,6 @@ async function searchLiveForTarget(
 
   const cityByIata = new Map(groupRows.map((a) => [a.iata, a.city]));
   const minCarryOn = requireCabinBaggage ? 1 : undefined;
-  // FIX critico (bug reportado: TODAS las busquedas fallaban con error 400 de Ignav):
-  // airlinesInclude/airlinesExclude llegan como array VACIO [] (no undefined) cuando el
-  // usuario no rellena el filtro -- Ignav rechaza un array vacio explicito
-  // ("airlines_include must include at least one airline code when provided"). Se
-  // omite el campo entero cuando esta vacio, en vez de mandar [].
   const safeAirlinesInclude = airlinesInclude?.length ? airlinesInclude : undefined;
   const safeAirlinesExclude = airlinesExclude?.length ? airlinesExclude : undefined;
 
@@ -304,12 +303,6 @@ async function searchLiveForTarget(
   if (outboundLegs.length === 0) warnings.push(`[${originIata} -> ${groupName}] Ignav no devolvio vuelos de ida directos.`);
   if (inboundLegs.length === 0) warnings.push(`[${groupName} -> ${originIata}] Ignav no devolvio vuelos de vuelta directos.`);
 
-  // FIX (auditoria): antes se hacian 1-2 consultas SQL secuenciales POR CADA combinacion
-  // ida x vuelta dentro del doble bucle (clasico N+1) -- con pocos legs no se nota, pero
-  // segun crezca el numero de vuelos devueltos por Ignav esto puede sumar decenas/cientos
-  // de round-trips secuenciales y contribuir a los mismos timeouts de 10s de Vercel Hobby
-  // que ya dan problemas en el cron de Aena. Ahora se precargan en batch (maximo 2 consultas
-  // por destino, independientemente de cuantas combinaciones haya) y se consultan en memoria.
   const distinctOutboundDest = Array.from(new Set(outboundLegs.map((l) => l.destination_iata)));
   const distinctInboundOrigin = Array.from(new Set(inboundLegs.map((l) => l.origin_iata)));
 
@@ -323,7 +316,6 @@ async function searchLiveForTarget(
     `) as { origin_iata: string; destination_iata: string; mode: string; duration_min: number; price_eur: string | null }[];
     for (const row of transferRows) {
       const key = `${row.origin_iata}->${row.destination_iata}`;
-      // ORDER BY duration_min ASC + solo guardar la primera vista = la mas rapida (misma logica que el LIMIT 1 original)
       if (!transferTimesMap.has(key)) {
         transferTimesMap.set(key, { mode: row.mode, duration_min: row.duration_min, price_eur: row.price_eur ? Number(row.price_eur) : null });
       }
@@ -423,10 +415,6 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
 
   const allTargets = await resolveDestinationTargets(destinationIatas ?? []);
 
-  // Limite dinamico segun cuota restante de Ignav (en vez del fijo de 6 de siempre):
-  // generoso si queda mucha cuota, conservador si queda poca. Si el contador de cuota
-  // no esta disponible todavia (tabla ignav_usage_log sin crear -- migracion
-  // pendiente), se cae al limite fijo de 6 de toda la vida, sin romper nada.
   let comboLimit = MAX_ORIGIN_DESTINATION_COMBOS;
   try {
     const usage = await getIgnavUsageSummary();
@@ -445,13 +433,6 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     throw new Error('No hay destinos seleccionados.');
   }
 
-  // El cap de arriba NO limita el multiplicador real de
-  // peticiones a Ignav: un destino con varios aeropuertos en la misma ciudad (ej.
-  // Londres: hasta 4)
-  // dispara una peticion por aeropuerto x fecha x sentido. Con el maximo de 5 dias de
-  // rango y 6 combos, un solo click podia llegar a 4 aeropuertos x 5 dias x 2 x 6 combos
-  // = 240 peticiones de golpe contra una cuota de 1000 de por vida (no mensual). Se
-  // calcula aqui el numero real antes de lanzar nada.
   const estimatedRequests =
     originIatas.length *
     allTargets.reduce((sum, t) => sum + t.airports.length * (outboundDates.length + inboundDates.length), 0);
@@ -468,12 +449,6 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
 
   const merged = allResults.flat();
 
-  // Sky Scrapper (RapidAPI) como fuente ADICIONAL, opcional (checkbox), silenciosa si no
-  // hay key configurada. A diferencia de Ignav, aqui NO se recorre el rango de fechas
-  // completo -- solo la primera fecha de ida y la primera de vuelta -- porque su cuota es
-  // ~100/mes (no de por vida como Ignav) y una sola busqueda con rango de dias la
-  // agotaria en un instante. Los resultados se mezclan con los de Ignav y cada uno lleva
-  // su `source` para que la interfaz pueda distinguirlos, tal como se pidio.
   if (filters.includeSkyScanner && process.env.RAPIDAPI_SKY_SCRAPPER_KEY) {
     const skyPairs: { originIata: string; destIata: string; destName: string }[] = [];
     for (const originIata of originIatas) {
@@ -511,10 +486,6 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     return new Date(b.hotelCheckoutAt).getTime() - new Date(a.hotelCheckoutAt).getTime();
   });
 
-  // Tendencia de precio (bajo/normal/alto) sobre historial propio -- se calcula para
-  // cada resultado antes de devolver, en paralelo. Registrar el precio observado ahora
-  // NO se espera (fire-and-forget): alimenta las busquedas FUTURAS, no la respuesta
-  // actual, y no debe anadir latencia a la busqueda de ahora mismo.
   await Promise.all(
     merged.map(async (item) => {
       item.priceTrend = await getPriceTrend(item.originIata, item.destinationId, item.totalPrice);
@@ -522,9 +493,6 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     })
   );
 
-  // "Sale mas barato otro dia": NO gasta ninguna peticion nueva -- la propia busqueda
-  // ya prueba varias fechas dentro del rango elegido, asi que basta con comparar los
-  // resultados YA obtenidos entre si para la MISMA pareja origen-destino.
   for (const item of merged) {
     const itemDate = item.outbound.departure_at.slice(0, 10);
     let cheaperDate: string | null = null;
@@ -539,18 +507,11 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
         cheaperDate = otherDate;
       }
     }
-    // Solo se avisa si el ahorro es significativo (>= 10), para no llenar la interfaz
-    // de avisos por diferencias de 1-2 euros que no cambian ninguna decision real.
     if (cheaperDate && cheaperPrice !== null && item.totalPrice - cheaperPrice >= 10) {
       item.cheaperOtherDay = { date: cheaperDate, price: cheaperPrice, savings: Math.round(item.totalPrice - cheaperPrice) };
     }
   }
 
-  // CO2 (sin API, solo geometria), clima habitual, tipo de cambio y festivos -- una
-  // sola vez por cada pareja origen-destino UNICA (no por cada resultado individual,
-  // que podria repetir la misma pareja en varias fechas), todo en paralelo y
-  // best-effort: si una de las 3 APIs externas falla o esta lenta, el resto sigue
-  // funcionando y la busqueda nunca se rompe por esto.
   const uniquePairs = new Map<string, LiveItinerary[]>();
   for (const item of merged) {
     const key = `${item.originIata}|${item.destinationId}`;
@@ -587,14 +548,6 @@ export async function searchLiveItineraries(filters: LiveFilters): Promise<LiveS
     }
   });
 
-  // Tope duro sobre TODO el enriquecimiento externo (clima + festivos + tipo de
-  // cambio): con timeouts individuales de 3-4s por llamada, en el peor caso (varias
-  // parejas origen-destino, alguna API lenta) podia sumar varios segundos MAS al
-  // tiempo ya consumido por la busqueda real a Ignav -- arriesgando el limite de
-  // funcion de Vercel (10s en el plan Hobby) y haciendo fallar busquedas que hoy
-  // funcionan bien, solo por unos datos que son un plus, no algo critico. Si el tope
-  // salta, las parejas que no hayan terminado se quedan sin esos campos (todos
-  // opcionales en el tipo) -- la busqueda en si nunca se ve afectada.
   await Promise.race([Promise.all(enrichmentPairs), new Promise((resolve) => setTimeout(resolve, 4500))]);
 
   return { itineraries: merged, warnings };

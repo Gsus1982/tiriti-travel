@@ -119,8 +119,8 @@ aeropuertos de Aena).
 Pendiente:
 - Murcia: la pagina de Aena estaba en mantenimiento. Reintentar refresh-aena/RMU y
   parse-aena/RMU cuando vuelva.
-- Valencia (daba ~60 de ~103): conviene relanzar refresh-aena/VLC y parse-aena/VLC, porque
-  el metodo del desplegable puede encontrar mas.
+- Valencia: CONFIRMADO 21-sep, 109 destinos (antes ~60). Parse ejecutado sobre la pagina
+  del cron nocturno (el usuario lanzo el parse antes que el fetch); datos validos.
 - Seguridad: revocar el token de GitHub usado en estas sesiones y valorar hacer el repo
   privado.
 

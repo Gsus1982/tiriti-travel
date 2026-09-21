@@ -175,7 +175,7 @@ async function resolveDestinationTargets(destinationIatas: string[]): Promise<De
   const groups = new Map<string, { name: string; airports: { iata: string; city: string }[] }>();
   for (const iata of destinationIatas) {
     const row = byIata.get(iata);
-    const fullName = row ? `${row.dest_name} (${row.country})` : iata;
+    const fullName = row ? (row.country ? `${row.dest_name} (${row.country})` : row.dest_name) : iata;
     const cityKey = row ? row.dest_name.split('/')[0].trim() : iata;
     if (!groups.has(cityKey)) groups.set(cityKey, { name: fullName, airports: [] });
     groups.get(cityKey)!.airports.push({ iata, city: cityKey });

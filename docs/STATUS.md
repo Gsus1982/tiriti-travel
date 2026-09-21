@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.29.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.30.0. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -167,6 +167,21 @@ tienen vuelo directo real, no tener el pais perfecto de cada uno. Se intentara p
 el metodo linea-a-linea existente (funciona para ALC/VLC); si encuentra pocos
 resultados, se probara este nuevo metodo de enlaces como alternativa, sin descartar
 ninguno de los 2.
+
+### Implementado (mismo dia, misma sesion)
+- `lib/aena-sync.ts`: nueva funcion `parseDestinationLinksHtml()` con el patron de
+  enlace real. `parseStoredPage()` prueba los 2 metodos (lineal original + enlaces
+  nuevo) y usa el que encuentre mas resultados.
+- `lib/live-engine.ts`: el nombre completo del destino ya no muestra un parentesis
+  vacio `()` cuando no hay pais disponible (destinos via el metodo de enlaces).
+- Probado con el fragmento HTML REAL exacto del diagnostico (no un caso inventado):
+  extrae correctamente los destinos de prueba, incluida la correccion de "CoruÃ±a" a
+  "Coruna" -- confirma que el arreglo de codificacion de sesiones anteriores, aunque
+  no fuera la causa raiz del "0 destinos", sigue aportando valor donde SI hay
+  mojibake genuino (aparentemente Aena no es consistente: a veces sirve el contenido
+  bien, a veces con mojibake real, segun se vio entre distintas peticiones de esta
+  misma investigacion).
+- `npx tsc --noEmit` y `npm run build` limpios.
 
 ---
 

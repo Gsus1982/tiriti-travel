@@ -2,6 +2,59 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.30.0] - 2026-09-17 (sesion 30) - FIX REAL Y DEFINITIVO: la pagina de Madrid usa una plantilla de enlaces distinta, sin "Pais X"/"Aerolineas Y"
+
+El diagnostico de estructura de la sesion 29 (buscar "(LCG)" y mostrar el contexto
+real) revelo la causa autentica del "0 destinos" en Madrid, tras 7 sesiones (23-29)
+investigando pistas que no eran la causa real.
+
+### El hallazgo
+La pagina de Madrid muestra cada destino de 2 formas, NINGUNA con "Pais X"/"Aerolineas
+Y" adjuntos por fila:
+1. Como enlace simple: `<a href="/es/{slug}.html">NOMBRE (IATA)</a>`, dentro de una
+   lista `<ul class="links">`.
+2. Como opcion de un desplegable de busqueda/filtro: `<div class="option">NOMBRE
+   (IATA)</div>`.
+
+El metodo de analisis que se lleva usando desde el principio de este proyecto
+requiere encontrar las palabras "Pais X" y "Aerolineas Y" en las lineas siguientes a
+cada destino -- y esas palabras simplemente NO EXISTEN en la pagina de Madrid. No era
+un problema de codificacion (confirmado en la sesion 29), ni de timeout (resuelto en
+sesiones anteriores), ni de retroceso de un regex costoso (resuelto): el contenido
+esperado por el analizador nunca estuvo ahi. Alicante y Valencia, que si dan resultados
+con el metodo original, deben usar una plantilla de pagina mas antigua o distinta que
+SI repite esa informacion por fila -- Aena no usa una plantilla unica y consistente
+entre todos sus aeropuertos.
+
+### Corregido
+- **Nueva funcion `parseDestinationLinksHtml()`** en `lib/aena-sync.ts`: analiza
+  directamente el patron real de enlaces (`<a href="/es/{slug}.html">NOMBRE
+  (IATA)</a>`) descubierto en Madrid. No captura pais ni aerolineas (esa informacion
+  no esta disponible en este formato de pagina) -- se dejan como cadena vacia,
+  aceptable porque el proposito central de `aena_destinations` es saber que destinos
+  tienen vuelo directo real, no tener el pais perfecto de cada uno.
+- **`parseStoredPage()` ahora prueba AMBOS metodos** (el lineal original, basado en
+  "Pais X"/"Aerolineas Y", y el nuevo de enlaces) y se queda con el que encuentre MAS
+  resultados, en vez de asumir una unica estructura de pagina para todos los origenes
+  -- deberia seguir funcionando igual para ALC/VLC (que ya funcionaban con el metodo
+  original) y ahora tambien para MAD.
+- `lib/live-engine.ts`: el nombre completo de un destino (`"NOMBRE (PAIS)"`) ya no
+  muestra un parentesis vacio cuando el pais no esta disponible (destinos capturados
+  por el metodo de enlaces) -- simplemente se omite esa parte.
+
+### Verificado
+Probado directamente con el fragmento HTML REAL que devolvio el diagnostico de la
+sesion anterior (`<a href="/es/a-coruna.html">A CoruÃ±a (LCG)</a>` y similares): el
+nuevo metodo extrae correctamente los 3 destinos de prueba, con sus nombres limpios
+(incluida la correccion de "CoruÃ±a" a "Coruna", confirmando que el arreglo de
+codificacion, aunque no fuera la causa raiz del "0 destinos", sigue aportando valor
+real donde SI hay mojibake genuino). `npx tsc --noEmit` y `npm run build` limpios.
+
+### Aviso
+Como siempre, este fix solo tiene efecto en el proximo analisis real -- el usuario
+puede confirmarlo disparando `/api/cron/parse-aena/MAD` sobre los datos ya
+descargados (no hace falta volver a descargar).
+
 ## [0.29.0] - 2026-09-17 (sesion 29) - PIVOTE: la codificacion nunca fue el problema real -- diagnostico de estructura
 
 El usuario probo el diagnostico corregido de la sesion 28 (buscar el caracter mojibake

@@ -32,6 +32,45 @@ function stripAccents(s: string): string {
   return s.normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
 }
 
+/**
+ * Segundo metodo de analisis (sesion 30, FIX real y definitivo): descubierto por
+ * diagnostico directo que la pagina de Madrid NO tiene, junto a cada destino, las
+ * etiquetas "Pais X" / "Aerolineas Y" que `parseDestinationsHtml` (el metodo original)
+ * lleva 5 sesiones (23-29) asumiendo que existian -- esa suposicion vino de fragmentos
+ * de busqueda web de sesiones muy tempranas que reflejaban, con toda probabilidad, una
+ * plantilla distinta o una cache desactualizada. La estructura REAL de Madrid, vista
+ * directamente en su HTML: cada destino aparece como enlace simple dentro de una
+ * lista, `<a href="/es/{slug}.html">NOMBRE (IATA)</a>`, SIN pais ni aerolineas
+ * adjuntos por fila. Este metodo captura ese patron directamente. No da pais ni
+ * aerolineas (esa informacion no esta disponible en este formato de pagina) -- se
+ * dejan como cadena vacia, aceptable dado que el proposito central de
+ * `aena_destinations` es saber que destinos tienen vuelo directo real, no tener el
+ * pais perfecto de cada uno.
+ */
+export function parseDestinationLinksHtml(rawHtml: string): ParsedDestination[] {
+  const cleaned = fixDoubleEncodedUtf8(
+    rawHtml
+      .replace(/&amp;/g, '&')
+      .replace(/&aacute;/g, 'a').replace(/&eacute;/g, 'e').replace(/&iacute;/g, 'i')
+      .replace(/&oacute;/g, 'o').replace(/&uacute;/g, 'u').replace(/&ntilde;/g, 'n')
+      .replace(/&Ntilde;/g, 'N')
+  );
+  const text = stripAccents(cleaned);
+
+  const results: ParsedDestination[] = [];
+  const seen = new Set<string>();
+  const linkRe = /<a\s+href="\/es\/[^"]+\.html">\s*([^<(]{1,80}?)\s*\(([A-Z]{3})\)\s*<\/a>/g;
+  let m: RegExpExecArray | null;
+  while ((m = linkRe.exec(text)) !== null) {
+    const [, name, iata] = m;
+    if (!/^[A-Z]{3}$/.test(iata)) continue;
+    if (seen.has(iata)) continue;
+    seen.add(iata);
+    results.push({ destIata: iata.trim(), destName: name.trim(), country: '', airlinesRaw: '' });
+  }
+  return results;
+}
+
 export function parseDestinationsHtml(html: string): ParsedDestination[] {
   const withoutTags = html
     .replace(/<script[\s\S]*?<\/script>/gi, ' ')
@@ -240,7 +279,17 @@ export async function parseStoredPage(origin: string): Promise<ParsedDestination
   if (rows.length === 0) {
     throw new Error(`No hay ninguna pagina descargada todavia para ${origin} -- espera a que corra la fase de descarga.`);
   }
-  const parsed = parseDestinationsHtml(rows[0].html);
+
+  // FIX real (sesion 30): se descubrio por diagnostico directo que no todas las
+  // paginas de Aena usan la misma plantilla -- ALC/VLC parecen repetir "Pais X" /
+  // "Aerolineas Y" junto a cada destino (metodo lineal), pero Madrid usa una
+  // plantilla distinta, con cada destino como enlace simple sin esa informacion
+  // adjunta (metodo de enlaces). Se prueban los 2 metodos y se usa el que encuentre
+  // mas resultados, en vez de asumir una unica estructura para todos los origenes.
+  const byLines = parseDestinationsHtml(rows[0].html);
+  const byLinks = parseDestinationLinksHtml(rows[0].html);
+  const parsed = byLinks.length > byLines.length ? byLinks : byLines;
+
   if (parsed.length < 5) {
     // Diagnostico (sesion 20, tras un fallo real con 0 destinos en Murcia que no se
     // pudo investigar por falta de acceso de red propio a Aena): en vez de solo decir
@@ -250,7 +299,7 @@ export async function parseStoredPage(origin: string): Promise<ParsedDestination
     const plainText = rows[0].html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     const snippet = plainText.slice(0, 400);
     throw new Error(
-      `Analisis sospechoso para ${origin}: solo ${parsed.length} destinos (posible bloqueo o cambio de formato de Aena). ` +
+      `Analisis sospechoso para ${origin}: solo ${parsed.length} destinos (probados 2 metodos: ${byLines.length} por lineas, ${byLinks.length} por enlaces -- posible bloqueo real o un tercer formato de pagina no contemplado). ` +
         `Se descargaron ${rows[0].len} caracteres de HTML. Extracto del contenido real (primeros 400 caracteres de texto, sin etiquetas): "${snippet}"`
     );
   }

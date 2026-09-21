@@ -2,6 +2,31 @@
 
 Todas las fechas en hora local de España (CEST/CET), con hora cuando esta disponible desde la sesion que hizo el cambio. Formato basado en [Keep a Changelog](https://keepachangelog.com/es-ES/1.1.0/).
 
+## [0.30.1] - 2026-09-17 (sesion 31) - FIX: Madrid se lee del desplegable de destinos (el metodo de enlaces era una pista falsa)
+
+El usuario probo el fix de la v0.30.0: "0 por lineas, 0 por enlaces".
+
+### Corregido
+- **El metodo de enlaces (v0.30.0) era una pista falsa, reconocida y eliminada**: el
+  enlace `<a href="/es/a-coruna.html">A Coruña (LCG)</a>` visto en el diagnostico era
+  el menu de la RED DE AEROPUERTOS de Aena (la pagina del aeropuerto de A Coruña), no un
+  destino desde Madrid. Ademas vive en la cabecera/nav, que se elimina antes de guardar
+  (por eso daba 0). Se elimina por completo: podia colar la red de aeropuertos de Aena
+  como si fueran destinos en otras paginas.
+- **Nuevo metodo `parseDestinationOptionsHtml()`**: lee el desplegable del filtro de
+  destinos (`<div class="option">A CORUÑA (LCG)</div>`), la lista real de los 227
+  destinos de Madrid, que SI sobrevive a la limpieza. `parseStoredPage()` prueba este
+  metodo y el lineal original, y usa el que encuentre mas.
+
+### Confirmado: la codificacion esta bien
+"CORUÃ‘A" en las respuestas es exactamente como un navegador muestra una Ñ UTF-8
+correcta al abrir un JSON crudo interpretandolo como windows-1252 (0x91 = ‘). Los datos
+del servidor estan bien; es solo la visualizacion en el navegador del usuario.
+
+### Verificado
+Con el fragmento HTML REAL del diagnostico: 6/6 destinos extraidos, el menu de
+aeropuertos (BCN) no se cuela, y tolera la Ñ mal codificada. tsc y build limpios.
+
 ## [0.30.0] - 2026-09-17 (sesion 30) - FIX REAL Y DEFINITIVO: la pagina de Madrid usa una plantilla de enlaces distinta, sin "Pais X"/"Aerolineas Y"
 
 El diagnostico de estructura de la sesion 29 (buscar "(LCG)" y mostrar el contexto

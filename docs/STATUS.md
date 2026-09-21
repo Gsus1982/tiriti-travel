@@ -20,7 +20,7 @@
 
 ## 🧭 ESTADO ACTUAL / HANDOFF (leer esto primero, sea cual sea la IA que continue)
 
-**En produccion (rama `main`) ahora mismo**: v0.30.0. Incluye TODO lo de v0.12.0 (IA
+**En produccion (rama `main`) ahora mismo**: v0.30.1. Incluye TODO lo de v0.12.0 (IA
 real, destinos curados eliminados, comparador, alertas por email, contador real de
 cuota de Ignav con limite de combinaciones dinamico, explorar destinos gratis via
 Travelpayouts -- **confirmado funcionando en vivo por el usuario con datos reales**,
@@ -96,6 +96,32 @@ para archivos largos (como este) la lectura vino truncada a fragmentos de busque
 codigo, sin una forma fiable de obtener el 100% del contenido exacto; se le pidio al
 usuario que pegara el contenido cuando la reconstruccion por fragmentos no era
 suficientemente fiable, en vez de arriesgarse a sobrescribir con huecos.
+
+---
+
+## Estado al 17 de septiembre de 2026 (sesion 31) — Sesion: Madrid via desplegable de destinos (enlaces = pista falsa)
+
+El fix de la sesion 30 dio "0 por lineas, 0 por enlaces". Causa: el enlace
+`/es/a-coruna.html` del diagnostico era el MENU DE LA RED DE AEROPUERTOS de Aena, no un
+destino, y ademas vive en la nav que `stripUnneededHtml` elimina. Error de lectura del
+diagnostico por parte de la IA, reconocido: el metodo de enlaces se ELIMINO (riesgo
+real de colar aeropuertos de Aena como destinos).
+
+La fuente correcta estaba en la otra mitad del mismo diagnostico: el desplegable del
+filtro de destinos, `<div class="option">NOMBRE (IATA)</div>`, con los 227 destinos
+reales, que SI se conserva en `aena_raw_pages.html`. Nueva funcion
+`parseDestinationOptionsHtml()`; `parseStoredPage()` elige entre ella y el metodo
+lineal original (ALC/VLC) la que encuentre mas.
+
+Codificacion: confirmado que esta bien en servidor. "CORUÃ‘A"/"SuÃ¡rez" es como el
+navegador del usuario pinta UTF-8 correcto al abrir JSON crudo como windows-1252.
+
+Verificado con el fragmento HTML real (6/6, sin colarse BCN del menu). No hace falta
+re-descargar: basta con `/api/cron/parse-aena/MAD` sobre los datos ya guardados.
+
+Pendiente: confirmar con el usuario el conteo real (~227). Murcia sigue en
+mantenimiento en Aena (no es un bug de la app); reintentar mas adelante. Si RMU vuelve
+y da 0, probablemente use la misma plantilla de desplegable que Madrid (ya cubierta).
 
 ---
 
